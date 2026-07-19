@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose が全て描画するため、Activity のテーマは非常に簡素でOK。
+         Material Components への依存を発生させないため、
+         AppCompat/DayNight 系の親を参照しない。 -->
+    <style name="Theme.Encyclopedia" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>
