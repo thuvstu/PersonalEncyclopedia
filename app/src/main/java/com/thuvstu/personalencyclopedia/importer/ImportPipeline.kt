@@ -15,10 +15,6 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Common import pipeline (§12.1)
- * Source → Adapter → Normalize → entry + extension → (Phase 2: Embedding queue)
- */
 @Singleton
 class ImportPipeline @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -32,10 +28,6 @@ class ImportPipeline @Inject constructor(
         val errors: List<String> = emptyList()
     )
 
-    /**
-     * Import CSV as definitions (flashcards).
-     * Expected columns: term, reading(optional), definition, field(optional)
-     */
     suspend fun importDefinitionsCsv(uri: Uri): ImportResult {
         val errors = mutableListOf<String>()
         var success = 0
@@ -44,58 +36,61 @@ class ImportPipeline @Inject constructor(
             val inputStream = context.contentResolver.openInputStream(uri)
                 ?: return ImportResult(0, 1, listOf("Cannot open file"))
 
-            BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8)).use { reader ->
-                val header = reader.readLine() ?: return ImportResult(0, 0)
-                val columns = parseCsvLine(header).map { it.trim().lowercase() }
+            val lines = BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8)).use { reader ->
+                reader.readLines()
+            }
 
-                val termIdx = columns.indexOfFirst { it in listOf("term", "用語", "単語", "front") }
-                val readingIdx = columns.indexOfFirst { it in listOf("reading", "読み", "ふりがな") }
-                val defIdx = columns.indexOfFirst { it in listOf("definition", "定義", "意味", "back") }
-                val fieldIdx = columns.indexOfFirst { it in listOf("field", "分野", "ジャンル", "category") }
+            if (lines.isEmpty()) return ImportResult(0, 0)
 
-                if (termIdx < 0 || defIdx < 0) {
-                    return ImportResult(0, 1, listOf("CSV must have 'term' and 'definition' columns"))
-                }
+            val header = lines.first()
+            val columns = parseCsvLine(header).map { it.trim().lowercase() }
 
-                var lineNum = 1
-                reader.forEachLine { line ->
-                    lineNum++
-                    if (line.isBlank()) return@forEachLine
-                    try {
-                        val cols = parseCsvLine(line)
-                        val term = cols.getOrNull(termIdx)?.trim() ?: ""
-                        val definition = cols.getOrNull(defIdx)?.trim() ?: ""
-                        if (term.isBlank() || definition.isBlank()) {
-                            errors.add("Line $lineNum: missing term or definition")
-                            return@forEachLine
-                        }
+            val termIdx = columns.indexOfFirst { it in listOf("term", "用語", "単語", "front") }
+            val readingIdx = columns.indexOfFirst { it in listOf("reading", "読み", "ふりがな") }
+            val defIdx = columns.indexOfFirst { it in listOf("definition", "定義", "意味", "back") }
+            val fieldIdx = columns.indexOfFirst { it in listOf("field", "分野", "ジャンル", "category") }
 
-                        val id = UUID.randomUUID().toString()
-                        val now = System.currentTimeMillis()
+            if (termIdx < 0 || defIdx < 0) {
+                return ImportResult(0, 1, listOf("CSV must have 'term' and 'definition' columns"))
+            }
 
-                        entryDao.insert(
-                            EntryEntity(
-                                id = id,
-                                type = "definition",
-                                title = term,
-                                createdAt = now,
-                                updatedAt = now,
-                                accessedAt = now
-                            )
-                        )
-                        definitionDao.insert(
-                            EntryDefinitionEntity(
-                                entryId = id,
-                                term = term,
-                                reading = cols.getOrNull(readingIdx)?.trim()?.takeIf { it.isNotBlank() },
-                                definition = definition,
-                                field = cols.getOrNull(fieldIdx)?.trim()?.takeIf { it.isNotBlank() }
-                            )
-                        )
-                        success++
-                    } catch (e: Exception) {
-                        errors.add("Line $lineNum: ${e.message}")
+            for (lineNum in 1 until lines.size) {
+                val line = lines[lineNum]
+                if (line.isBlank()) continue
+                try {
+                    val cols = parseCsvLine(line)
+                    val term = cols.getOrNull(termIdx)?.trim() ?: ""
+                    val definition = cols.getOrNull(defIdx)?.trim() ?: ""
+                    if (term.isBlank() || definition.isBlank()) {
+                        errors.add("Line ${lineNum + 1}: missing term or definition")
+                        continue
                     }
+
+                    val id = UUID.randomUUID().toString()
+                    val now = System.currentTimeMillis()
+
+                    entryDao.insert(
+                        EntryEntity(
+                            id = id,
+                            type = "definition",
+                            title = term,
+                            createdAt = now,
+                            updatedAt = now,
+                            accessedAt = now
+                        )
+                    )
+                    definitionDao.insert(
+                        EntryDefinitionEntity(
+                            entryId = id,
+                            term = term,
+                            reading = cols.getOrNull(readingIdx)?.trim()?.takeIf { it.isNotBlank() },
+                            definition = definition,
+                            field = cols.getOrNull(fieldIdx)?.trim()?.takeIf { it.isNotBlank() }
+                        )
+                    )
+                    success++
+                } catch (e: Exception) {
+                    errors.add("Line ${lineNum + 1}: ${e.message}")
                 }
             }
         } catch (e: Exception) {
@@ -105,10 +100,6 @@ class ImportPipeline @Inject constructor(
         return ImportResult(success, errors.size, errors)
     }
 
-    /**
-     * Import Markdown file as thought entries.
-     * Each H1/H2 heading becomes a separate entry.
-     */
     suspend fun importMarkdown(uri: Uri): ImportResult {
         val errors = mutableListOf<String>()
         var success = 0
@@ -121,7 +112,6 @@ class ImportPipeline @Inject constructor(
                 it.readText()
             }
 
-            // Split by headings
             val sections = content.split(Regex("^#{1,2}\\s+", RegexOption.MULTILINE))
                 .filter { it.isNotBlank() }
 

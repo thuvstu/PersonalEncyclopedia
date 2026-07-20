@@ -1,6 +1,11 @@
 package com.thuvstu.personalencyclopedia.di
 
 import android.content.Context
+import com.thuvstu.personalencyclopedia.db.dao.EntryDao
+import com.thuvstu.personalencyclopedia.db.dao.EntryDefinitionDao
+import com.thuvstu.personalencyclopedia.db.dao.EntryThoughtDao
+import com.thuvstu.personalencyclopedia.db.dao.QuizDao
+import com.thuvstu.personalencyclopedia.db.dao.SrsReviewDao
 import com.thuvstu.personalencyclopedia.server.LocalServer
 import com.thuvstu.personalencyclopedia.server.TokenManager
 import dagger.Module
@@ -21,6 +26,19 @@ object ServerModule {
 
     @Provides
     @Singleton
-    fun provideLocalServer(tokenManager: TokenManager): LocalServer =
-        LocalServer(tokenManager)
+    fun provideLocalServer(
+        tokenManager: TokenManager,
+        entryDao: EntryDao,
+        thoughtDao: EntryThoughtDao,
+        definitionDao: EntryDefinitionDao,
+        srsReviewDao: SrsReviewDao,
+        quizDao: QuizDao
+    ): LocalServer = LocalServer(
+        tokenManager = tokenManager,
+        entryDao = entryDao,
+        thoughtDao = thoughtDao,
+        definitionDao = definitionDao,
+        srsReviewDao = srsReviewDao,
+        quizDao = quizDao
+    )
 }

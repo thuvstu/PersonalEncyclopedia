@@ -5,8 +5,12 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    id("androidx.room") version "2.7.1"
 }
 
+room {
+    schemaDirectory("$projectDir/schemas")
+}
 android {
     namespace = "com.thuvstu.personalencyclopedia"
     compileSdk = 35
@@ -28,7 +32,10 @@ android {
             excludes += "META-INF/NOTICE.txt"
             excludes += "META-INF/ASL2.0"
             excludes += "META-INF/compat.schemas"
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "META-INF/DEPENDENCIES"
+            excludes += "META-INF/AL2.0"
+            excludes += "META-INF/LGPL2.1"
+            excludes += "META-INF/*.kotlin_module"
         }
     }
     buildTypes {

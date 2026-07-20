@@ -8,6 +8,7 @@ import com.thuvstu.personalencyclopedia.db.dao.TopicDao
 import com.thuvstu.personalencyclopedia.db.entity.QuizAttemptEntity
 import com.thuvstu.personalencyclopedia.db.entity.QuizBankEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
@@ -23,17 +24,8 @@ class QuizRepository @Inject constructor(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    // ── Quiz Generation ──
     suspend fun generateQuizzesFromDefinitions(topicId: String? = null): Int {
-        // Get all definitions (or filtered by topic via entry_topic)
-        val allDefs = definitionDao.search("", limit = 500)
-            .let { flow ->
-                // Collect first emission
-                var result: List<com.thuvstu.personalencyclopedia.db.entity.EntryDefinitionEntity> = emptyList()
-                flow.collect { result = it; return@collect }
-                result
-            }
-
+        val allDefs = definitionDao.search("", limit = 500).first()
         if (allDefs.isEmpty()) return 0
 
         val quizzes = RuleBasedQuizGenerator.generateBatch(allDefs, topicId)
@@ -41,19 +33,16 @@ class QuizRepository @Inject constructor(
         return quizzes.size
     }
 
-    // ── Quiz Session (§8.1 flow) ──
     suspend fun getNextQuizzes(
         topicId: String? = null,
         limit: Int = 10
     ): List<QuizBankEntity> {
-        // Priority: wrong answers > unmastered > random
         val wrong = quizDao.getWrongQuizzes(limit / 3)
         val unmastered = quizDao.getUnmasteredQuizzes(limit / 3)
         val random = quizDao.getRandomQuizzes(
             types = listOf("qa", "mcq", "fill_blank"),
             limit = limit
         )
-
         return (wrong + unmastered + random)
             .distinctBy { it.id }
             .take(limit)
@@ -71,7 +60,7 @@ class QuizRepository @Inject constructor(
                 val base = 1.0f - 0.3f * hintsRevealed
                 maxOf(0f, base)
             }
-            userAnswer == "__UNLEARNED__" -> 0f  // Special "not learned yet" value
+            userAnswer == "__UNLEARNED__" -> 0f
             else -> -1.0f
         }
 
@@ -104,7 +93,6 @@ class QuizRepository @Inject constructor(
         }
     }
 
-    // ── Observables ──
     fun observeQuizCount(): Flow<Int> = quizDao.observeQuizCount()
 
     fun observeAttemptsToday(): Flow<Int> {

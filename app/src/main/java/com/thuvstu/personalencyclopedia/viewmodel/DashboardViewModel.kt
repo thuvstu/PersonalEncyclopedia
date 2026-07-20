@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
 import com.thuvstu.personalencyclopedia.repository.EntryRepository
+import com.thuvstu.personalencyclopedia.repository.SrsRepository
+import com.thuvstu.personalencyclopedia.repository.QuizRepository
 import com.thuvstu.personalencyclopedia.repository.ThoughtDraft
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -17,13 +19,20 @@ class DashboardViewModel @Inject constructor(
     private val quizRepo: QuizRepository
 ) : ViewModel() {
 
-
     val recentEntries: StateFlow<List<EntryEntity>> =
         repo.observeRecent(10)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val totalCount: StateFlow<Int> =
         repo.observeCount()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val dueCount: StateFlow<Int> =
+        srsRepo.observeDueCount()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val quizCount: StateFlow<Int> =
+        quizRepo.observeQuizCount()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     private val _quickAddTitle = MutableStateFlow("")

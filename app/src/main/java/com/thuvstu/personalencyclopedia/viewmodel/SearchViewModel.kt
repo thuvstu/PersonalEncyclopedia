@@ -7,14 +7,7 @@ import com.thuvstu.personalencyclopedia.repository.EntryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
@@ -29,24 +22,25 @@ class SearchViewModel @Inject constructor(
     private val _typeFilter = MutableStateFlow<String?>(null)
     val typeFilter: StateFlow<String?> = _typeFilter
 
-    val results: StateFlow<List<EntryEntity>> = _query
-        .distinctUntilChanged()
-        .debounce(300)
-        .combine(_typeFilter) { q, t -> q to t }
-        .distinctUntilChanged()
-        .flatMapLatest { (q, typeFilter) ->
-
-            when {
-                q.isBlank() && typeFilter == null -> repo.observeAll()
-                q.isBlank() && typeFilter != null -> repo.observeByType(typeFilter)
-                else -> repo.search(q)
-                    .map { entries ->
+    val results: StateFlow<List<EntryEntity>> =
+        combine(
+            _query.debounce(300),   // StateFlowは元々distinctなので不要
+            _typeFilter              // 同上
+        ) { q: String, t: String? ->
+            Pair(q, t)
+        }
+            .flatMapLatest { (q, typeFilter) ->
+                when {
+                    q.isBlank() && typeFilter == null -> repo.observeAll()
+                    q.isBlank() && typeFilter != null -> repo.observeByType(typeFilter)
+                    else -> repo.search(q).map { entries ->
                         if (typeFilter != null) entries.filter { it.type == typeFilter }
                         else entries
                     }
+                }
             }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     fun onQueryChange(value: String) { _query.value = value }
     fun setTypeFilter(type: String?) { _typeFilter.value = type }
 }

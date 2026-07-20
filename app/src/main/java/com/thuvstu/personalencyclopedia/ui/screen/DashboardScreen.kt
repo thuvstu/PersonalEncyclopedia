@@ -32,6 +32,8 @@ fun DashboardScreen(
 ) {
     val recentEntries by viewModel.recentEntries.collectAsState()
     val totalCount by viewModel.totalCount.collectAsState()
+    val dueCount by viewModel.dueCount.collectAsState()
+    val quizCount by viewModel.quizCount.collectAsState()
     val quickAddTitle by viewModel.quickAddTitle.collectAsState()
 
     var showQuickAddDialog by remember { mutableStateOf(false) }
@@ -41,6 +43,9 @@ fun DashboardScreen(
             TopAppBar(
                 title = { Text("Personal Encyclopedia") },
                 actions = {
+                    IconButton(onClick = onNavigateToImport) {
+                        Icon(Icons.Default.Add, contentDescription = "インポート")
+                    }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "設定")
                     }
@@ -106,7 +111,7 @@ fun DashboardScreen(
                 }
             }
 
-// Quick actions (SRS / Quiz buttons)
+            // Quick actions
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

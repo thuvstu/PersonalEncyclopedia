@@ -2,9 +2,6 @@ package com.thuvstu.personalencyclopedia.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.thuvstu.personalencyclopedia.db.dao.EntryDao
-import com.thuvstu.personalencyclopedia.db.dao.EntryDefinitionDao
-import com.thuvstu.personalencyclopedia.db.dao.EntryThoughtDao
 import com.thuvstu.personalencyclopedia.server.LocalServer
 import com.thuvstu.personalencyclopedia.server.TokenManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,10 +12,7 @@ import javax.inject.Inject
 @HiltViewModel
 class ServerViewModel @Inject constructor(
     private val localServer: LocalServer,
-    private val tokenManager: TokenManager,
-    private val entryDao: EntryDao,
-    private val thoughtDao: EntryThoughtDao,
-    private val definitionDao: EntryDefinitionDao
+    private val tokenManager: TokenManager
 ) : ViewModel() {
 
     private val _isRunning = MutableStateFlow(false)
@@ -37,9 +31,6 @@ class ServerViewModel @Inject constructor(
                 localServer.stop()
                 _isRunning.value = false
             } else {
-                localServer.entryDao = entryDao
-                localServer.thoughtDao = thoughtDao
-                localServer.definitionDao = definitionDao
                 localServer.start()
                 _isRunning.value = true
             }

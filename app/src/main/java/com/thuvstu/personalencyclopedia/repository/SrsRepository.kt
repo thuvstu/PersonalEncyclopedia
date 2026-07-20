@@ -3,7 +3,6 @@ package com.thuvstu.personalencyclopedia.repository
 import com.thuvstu.personalencyclopedia.brain.srs.Sm2Algorithm
 import com.thuvstu.personalencyclopedia.db.dao.EntryDefinitionDao
 import com.thuvstu.personalencyclopedia.db.dao.SrsReviewDao
-import com.thuvstu.personalencyclopedia.db.entity.EntryDefinitionEntity
 import com.thuvstu.personalencyclopedia.db.entity.SrsCurrentView
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
@@ -47,7 +46,6 @@ class SrsRepository @Inject constructor(
             previousInterval = current?.intervalDays ?: 0,
             previousEase = current?.easeFactor ?: 2.5f,
             repetitionCount = if (current != null && current.grade >= 2) {
-                // Approximate repetition count from interval
                 when {
                     current.intervalDays <= 1 -> 1
                     current.intervalDays <= 6 -> 2
