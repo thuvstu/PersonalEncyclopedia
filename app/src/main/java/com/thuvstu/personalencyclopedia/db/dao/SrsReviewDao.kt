@@ -62,6 +62,10 @@ interface SrsReviewDao {
         WHERE reviewedAt >= :startOfDay
     """)
     fun observeReviewedTodayCount(startOfDay: Long): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM srs_review")
+    fun observeTotalReviewCount(): Flow<Int>
+
 }
 
 data class DueEntry(

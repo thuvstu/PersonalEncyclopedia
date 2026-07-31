@@ -9,7 +9,6 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
-
 data class ThoughtDraft(
     val title: String,
     val content: String?,
@@ -30,8 +29,10 @@ class EntryRepository @Inject constructor(
     private val entryDao: EntryDao,
     private val thoughtDao: EntryThoughtDao,
     private val definitionDao: EntryDefinitionDao,
+    private val extensionDao: EntryExtensionDao,
     private val tagDao: TagDao,
-    private val entryTypeDao: EntryTypeDao
+    private val entryTypeDao: EntryTypeDao,
+    private val embeddingQueue: com.thuvstu.personalencyclopedia.brain.ai.EmbeddingQueue
 ) {
     // ── Observe ──
     fun observeRecent(limit: Int = 10): Flow<List<EntryEntity>> =
@@ -49,11 +50,25 @@ class EntryRepository @Inject constructor(
     fun observeEntry(id: String): Flow<EntryEntity?> =
         entryDao.observeById(id)
 
+    suspend fun getEntry(id: String): EntryEntity? = entryDao.getById(id)
+
     fun observeThought(entryId: String): Flow<EntryThoughtEntity?> =
         thoughtDao.observeByEntryId(entryId)
 
     fun observeDefinition(entryId: String): Flow<EntryDefinitionEntity?> =
         definitionDao.observeByEntryId(entryId)
+
+    suspend fun getWebpage(entryId: String) = extensionDao.getWebpage(entryId)
+    suspend fun getBook(entryId: String) = extensionDao.getBook(entryId)
+    suspend fun getVideo(entryId: String) = extensionDao.getVideo(entryId)
+    suspend fun getDocument(entryId: String) = extensionDao.getDocument(entryId)
+    suspend fun getMedia(entryId: String) = extensionDao.getMedia(entryId)
+    suspend fun getPerson(entryId: String) = extensionDao.getPerson(entryId)
+    suspend fun getOrg(entryId: String) = extensionDao.getOrg(entryId)
+    suspend fun getPlace(entryId: String) = extensionDao.getPlace(entryId)
+    suspend fun getEvent(entryId: String) = extensionDao.getEvent(entryId)
+    suspend fun getLiked(entryId: String) = extensionDao.getLiked(entryId)
+    suspend fun getAiConv(entryId: String) = extensionDao.getAiConv(entryId)
 
     fun observeTagsForEntry(entryId: String): Flow<List<TagEntity>> =
         tagDao.observeTagsForEntry(entryId)
@@ -88,6 +103,10 @@ class EntryRepository @Inject constructor(
                 context = draft.context
             )
         )
+
+        // ★ Phase 2: 検索インデックス更新 + Embeddingキュー投入
+        embeddingQueue.enqueue(id)
+
         return id
     }
 
@@ -115,6 +134,110 @@ class EntryRepository @Inject constructor(
                 examplesJson = Json.encodeToString(draft.examples)
             )
         )
+
+        // ★ Phase 2: 検索インデックス更新 + Embeddingキュー投入
+        embeddingQueue.enqueue(id)
+
+        return id
+    }
+
+    suspend fun createWebpage(title: String, content: String?, url: String, author: String? = null, fullText: String? = null): String {
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        val domain = try { java.net.URI(url).host ?: "" } catch (e: Exception) { "" }
+        entryDao.insert(EntryEntity(id = id, type = "webpage", title = title, content = content, sourceUrl = url, createdAt = now, updatedAt = now, accessedAt = now))
+        extensionDao.insertWebpage(EntryWebpageEntity(entryId = id, url = url, domain = domain, scrapedAt = now, fullText = fullText, author = author))
+        embeddingQueue.enqueue(id)
+        return id
+    }
+
+    suspend fun createBook(title: String, content: String?, isbn: String?, authors: List<String>, publisher: String?, year: Int?, pages: Int?, status: String = "unread", rating: Int? = null): String {
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        entryDao.insert(EntryEntity(id = id, type = "book", title = title, content = content, createdAt = now, updatedAt = now, accessedAt = now))
+        extensionDao.insertBook(EntryBookEntity(entryId = id, isbn = isbn, authorsJson = Json.encodeToString(authors), publisher = publisher, publishedYear = year, totalPages = pages, readStatus = status, rating = rating))
+        embeddingQueue.enqueue(id)
+        return id
+    }
+
+    suspend fun createVideo(title: String, content: String?, platform: String, videoId: String?, channelName: String?, durationS: Int?, transcript: String?): String {
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        entryDao.insert(EntryEntity(id = id, type = "video", title = title, content = content, createdAt = now, updatedAt = now, accessedAt = now))
+        extensionDao.insertVideo(EntryVideoEntity(entryId = id, platform = platform, videoId = videoId, channelName = channelName, durationS = durationS, transcript = transcript))
+        embeddingQueue.enqueue(id)
+        return id
+    }
+
+    suspend fun createDocument(title: String, content: String?, docType: String, mimeType: String, sizeBytes: Long? = null, pages: Int? = null, extractedText: String? = null): String {
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        entryDao.insert(EntryEntity(id = id, type = "document", title = title, content = content, createdAt = now, updatedAt = now, accessedAt = now))
+        extensionDao.insertDocument(EntryDocumentEntity(entryId = id, docType = docType, mimeType = mimeType, fileSizeBytes = sizeBytes, pageCount = pages, extractedText = extractedText))
+        embeddingQueue.enqueue(id)
+        return id
+    }
+
+    suspend fun createMedia(title: String, content: String?, mediaType: String, blobPath: String, mimeType: String, ocrText: String? = null, caption: String? = null): String {
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        entryDao.insert(EntryEntity(id = id, type = "media", title = title, content = content, createdAt = now, updatedAt = now, accessedAt = now))
+        extensionDao.insertMedia(EntryMediaEntity(entryId = id, mediaType = mediaType, blobPath = blobPath, mimeType = mimeType, ocrText = ocrText, caption = caption))
+        embeddingQueue.enqueue(id)
+        return id
+    }
+
+    suspend fun createPerson(title: String, content: String?, fullName: String, aliases: List<String> = emptyList(), birthYear: Int? = null, deathYear: Int? = null, nationality: String? = null, occupations: List<String> = emptyList(), biography: String? = null): String {
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        entryDao.insert(EntryEntity(id = id, type = "person", title = title, content = content, createdAt = now, updatedAt = now, accessedAt = now))
+        extensionDao.insertPerson(EntryPersonEntity(entryId = id, fullName = fullName, aliasesJson = Json.encodeToString(aliases), birthYear = birthYear, deathYear = deathYear, nationality = nationality, occupationsJson = Json.encodeToString(occupations), biography = biography))
+        embeddingQueue.enqueue(id)
+        return id
+    }
+
+    suspend fun createOrg(title: String, content: String?, officialName: String, orgType: String? = null, foundedYear: Int? = null, country: String? = null, websiteUrl: String? = null, description: String? = null): String {
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        entryDao.insert(EntryEntity(id = id, type = "org", title = title, content = content, sourceUrl = websiteUrl, createdAt = now, updatedAt = now, accessedAt = now))
+        extensionDao.insertOrg(EntryOrgEntity(entryId = id, officialName = officialName, orgType = orgType, foundedYear = foundedYear, country = country, websiteUrl = websiteUrl, description = description))
+        embeddingQueue.enqueue(id)
+        return id
+    }
+
+    suspend fun createPlace(title: String, content: String?, placeName: String, placeType: String? = null, address: String? = null, latitude: Double? = null, longitude: Double? = null): String {
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        entryDao.insert(EntryEntity(id = id, type = "place", title = title, content = content, createdAt = now, updatedAt = now, accessedAt = now))
+        extensionDao.insertPlace(EntryPlaceEntity(entryId = id, placeName = placeName, placeType = placeType, address = address, latitude = latitude, longitude = longitude))
+        embeddingQueue.enqueue(id)
+        return id
+    }
+
+    suspend fun createEvent(title: String, content: String?, eventName: String, startedAt: Long, endedAt: Long? = null, locationText: String? = null, isPersonal: Boolean = true, participants: List<String> = emptyList()): String {
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        entryDao.insert(EntryEntity(id = id, type = "event", title = title, content = content, createdAt = now, updatedAt = now, accessedAt = now))
+        extensionDao.insertEvent(EntryEventEntity(entryId = id, eventName = eventName, startedAt = startedAt, endedAt = endedAt, locationText = locationText, isPersonal = isPersonal, participantsJson = Json.encodeToString(participants)))
+        embeddingQueue.enqueue(id)
+        return id
+    }
+
+    suspend fun createLiked(title: String, content: String?, platform: String, originalId: String, contentType: String, authorName: String? = null, fullText: String? = null): String {
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        entryDao.insert(EntryEntity(id = id, type = "liked", title = title, content = content, createdAt = now, updatedAt = now, accessedAt = now))
+        extensionDao.insertLiked(EntryLikedEntity(entryId = id, platform = platform, originalId = originalId, contentType = contentType, authorName = authorName, fullText = fullText))
+        embeddingQueue.enqueue(id)
+        return id
+    }
+
+    suspend fun createAiConv(title: String, content: String?, model: String, provider: String, topic: String? = null, isUseful: Boolean? = null, messagesJson: String = "[]"): String {
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        entryDao.insert(EntryEntity(id = id, type = "ai_conv", title = title, content = content, createdAt = now, updatedAt = now, accessedAt = now))
+        extensionDao.insertAiConv(EntryAiConvEntity(entryId = id, model = model, provider = provider, topic = topic, isUseful = isUseful, messagesJson = messagesJson))
+        embeddingQueue.enqueue(id)
         return id
     }
 
@@ -135,6 +258,9 @@ class EntryRepository @Inject constructor(
                 existing.copy(mood = draft.mood, context = draft.context)
             )
         }
+
+        // ★ Phase 2: 更新後にインデックス再構築
+        embeddingQueue.enqueue(entryId)
     }
 
     suspend fun updateDefinition(entryId: String, draft: DefinitionDraft) {
@@ -158,11 +284,23 @@ class EntryRepository @Inject constructor(
                 )
             )
         }
+
+        // ★ Phase 2: 更新後にインデックス再構築
+        embeddingQueue.enqueue(entryId)
     }
 
     // ── Delete / Favorite ──
-    suspend fun softDelete(id: String) = entryDao.softDelete(id)
-    suspend fun restore(id: String) = entryDao.restore(id)
+    suspend fun softDelete(id: String) {
+        entryDao.softDelete(id)
+        // ★ Phase 2: 削除時は検索インデックスからも除去
+        embeddingQueue.updateSearchDocument(id)  // deletedAt != null なので削除される
+    }
+
+    suspend fun restore(id: String) {
+        entryDao.restore(id)
+        embeddingQueue.enqueue(id)  // 復元時は再インデックス
+    }
+
     suspend fun toggleFavorite(id: String) {
         entryDao.getById(id)?.let {
             entryDao.setFavorite(id, !it.isFavorite)
@@ -184,4 +322,31 @@ class EntryRepository @Inject constructor(
 
     suspend fun removeTag(entryId: String, tagId: String) =
         tagDao.unlinkTag(entryId, tagId)
+
+    suspend fun updateEntryCommon(entryId: String, title: String, content: String?) {
+        val existing = entryDao.getById(entryId) ?: return
+        entryDao.update(existing.copy(
+            title = title, content = content, updatedAt = System.currentTimeMillis()))
+        embeddingQueue.enqueue(entryId)
+    }
+
+    suspend fun upsertExtension(entity: Any) {
+        val entryId = when (entity) {
+            is EntryWebpageEntity -> { extensionDao.insertWebpage(entity); entity.entryId }
+            is EntryBookEntity -> { extensionDao.insertBook(entity); entity.entryId }
+            is EntryVideoEntity -> { extensionDao.insertVideo(entity); entity.entryId }
+            is EntryDocumentEntity -> { extensionDao.insertDocument(entity); entity.entryId }
+            is EntryMediaEntity -> { extensionDao.insertMedia(entity); entity.entryId }
+            is EntryPersonEntity -> { extensionDao.insertPerson(entity); entity.entryId }
+            is EntryOrgEntity -> { extensionDao.insertOrg(entity); entity.entryId }
+            is EntryPlaceEntity -> { extensionDao.insertPlace(entity); entity.entryId }
+            is EntryEventEntity -> { extensionDao.insertEvent(entity); entity.entryId }
+            is EntryLikedEntity -> { extensionDao.insertLiked(entity); entity.entryId }
+            is EntryAiConvEntity -> { extensionDao.insertAiConv(entity); entity.entryId }
+            else -> return
+        }
+        embeddingQueue.enqueue(entryId)  // search_document + Embedding 再生成キューへ
+    }
+
+    suspend fun findByTitle(title: String): EntryEntity? = entryDao.findByTitle(title)
 }

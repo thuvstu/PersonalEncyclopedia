@@ -14,9 +14,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.thuvstu.personalencyclopedia.brain.search.SearchMode
 import com.thuvstu.personalencyclopedia.ui.component.EmptyState
 import com.thuvstu.personalencyclopedia.ui.component.EntryCard
-import com.thuvstu.personalencyclopedia.ui.theme.entryTypeLabelJa
 import com.thuvstu.personalencyclopedia.viewmodel.SearchViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -29,11 +29,23 @@ fun SearchScreen(
     val query by viewModel.query.collectAsState()
     val results by viewModel.results.collectAsState()
     val typeFilter by viewModel.typeFilter.collectAsState()
+    val searchMode by viewModel.searchMode.collectAsState()
+    val isSearching by viewModel.isSearching.collectAsState()
 
     val types = listOf(
         null to "すべて",
-        "thought" to "メモ",
-        "definition" to "単語帳"
+        "thought" to "メモ", "definition" to "単語帳", "webpage" to "Web",
+        "book" to "本", "video" to "動画", "document" to "文書",
+        "media" to "メディア", "person" to "人物", "org" to "組織",
+        "place" to "場所", "event" to "イベント", "liked" to "いいね",
+        "ai_conv" to "AI会話"
+    )
+
+    val modes = listOf(
+        SearchMode.HYBRID to "統合",
+        SearchMode.FULLTEXT to "全文",
+        SearchMode.SEMANTIC to "意味",
+        SearchMode.LIKE to "部分一致"
     )
 
     Scaffold(
@@ -65,20 +77,41 @@ fun SearchScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
+            // Search mode chips
+            Row(
+                modifier = Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                modes.forEach { (mode, label) ->
+                    FilterChip(
+                        selected = searchMode == mode,
+                        onClick = { viewModel.setSearchMode(mode) },
+                        label = { Text(label, style = MaterialTheme.typography.labelSmall) }
+                    )
+                }
+            }
+
             // Type filter chips
             Row(
                 modifier = Modifier
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 types.forEach { (type, label) ->
                     FilterChip(
                         selected = typeFilter == type,
                         onClick = { viewModel.setTypeFilter(type) },
-                        label = { Text(label) }
+                        label = { Text(label, style = MaterialTheme.typography.labelSmall) }
                     )
                 }
+            }
+
+            // Loading indicator
+            if (isSearching) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
 
             // Results
@@ -86,11 +119,15 @@ fun SearchScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (results.isEmpty()) {
+                if (results.isEmpty() && !isSearching) {
                     item {
                         EmptyState(
                             emoji = "🔍",
-                            title = if (query.isBlank()) "エントリーがありません" else "「$query」に一致する結果がありません"
+                            title = if (query.isBlank()) "キーワードを入力してください"
+                            else "「$query」に一致する結果がありません",
+                            subtitle = if (searchMode == SearchMode.SEMANTIC)
+                                "意味検索にはGemini APIキーの設定が必要です（設定画面）"
+                            else null
                         )
                     }
                 }

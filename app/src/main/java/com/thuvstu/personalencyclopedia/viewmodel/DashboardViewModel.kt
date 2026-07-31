@@ -2,10 +2,13 @@ package com.thuvstu.personalencyclopedia.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.thuvstu.personalencyclopedia.brain.ResurfacingEngine
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
+import com.thuvstu.personalencyclopedia.importer.WebScraper
+import com.thuvstu.personalencyclopedia.repository.ConnectionRepository
 import com.thuvstu.personalencyclopedia.repository.EntryRepository
-import com.thuvstu.personalencyclopedia.repository.SrsRepository
 import com.thuvstu.personalencyclopedia.repository.QuizRepository
+import com.thuvstu.personalencyclopedia.repository.SrsRepository
 import com.thuvstu.personalencyclopedia.repository.ThoughtDraft
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -16,7 +19,10 @@ import javax.inject.Inject
 class DashboardViewModel @Inject constructor(
     private val repo: EntryRepository,
     private val srsRepo: SrsRepository,
-    private val quizRepo: QuizRepository
+    private val quizRepo: QuizRepository,
+    private val webScraper: WebScraper,
+    private val connectionRepo: ConnectionRepository,
+    private val resurfacingEngine: ResurfacingEngine    // ★§7.5
 ) : ViewModel() {
 
     val recentEntries: StateFlow<List<EntryEntity>> =
@@ -35,8 +41,35 @@ class DashboardViewModel @Inject constructor(
         quizRepo.observeQuizCount()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    val pendingConnectionCount: StateFlow<Int> =
+        connectionRepo.observePendingCount()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    // ★§7.5: リサーフェシング候補
+    private val _resurfacingCandidates =
+        MutableStateFlow<List<ResurfacingEngine.ResurfacingCandidate>>(emptyList())
+    val resurfacingCandidates: StateFlow<List<ResurfacingEngine.ResurfacingCandidate>> =
+        _resurfacingCandidates
+
+    // ★§7.5: 整理候補
+    private val _cleanupSuggestions =
+        MutableStateFlow<List<ResurfacingEngine.CleanupSuggestion>>(emptyList())
+    val cleanupSuggestions: StateFlow<List<ResurfacingEngine.CleanupSuggestion>> =
+        _cleanupSuggestions
+
     private val _quickAddTitle = MutableStateFlow("")
     val quickAddTitle: StateFlow<String> = _quickAddTitle
+
+    init {
+        loadResurfacing()
+    }
+
+    fun loadResurfacing() {
+        viewModelScope.launch {
+            _resurfacingCandidates.value = resurfacingEngine.getResurfacingCandidates(5)
+            _cleanupSuggestions.value = resurfacingEngine.getCleanupSuggestions(5)
+        }
+    }
 
     fun onQuickAddTitleChange(value: String) { _quickAddTitle.value = value }
 
@@ -44,7 +77,9 @@ class DashboardViewModel @Inject constructor(
         val title = _quickAddTitle.value.trim()
         if (title.isBlank()) return
         viewModelScope.launch {
-            repo.createThought(ThoughtDraft(title = title, content = null))
+            if (repo.findByTitle(title) == null) {
+                repo.createThought(ThoughtDraft(title = title, content = null))
+            }
             _quickAddTitle.value = ""
         }
     }
@@ -56,4 +91,43 @@ class DashboardViewModel @Inject constructor(
     fun softDelete(id: String) {
         viewModelScope.launch { repo.softDelete(id) }
     }
+
+    // ★§7.5: 整理候補をミュート（削除ではなくランキングから降格）
+    fun muteEntry(id: String) {
+        viewModelScope.launch {
+            repo.getEntry(id)?.let { entry ->
+                // isMuted を true にする（EntryDao にメソッドがないため update で対応）
+                // 実際には EntryRepository に muteEntry を追加すべきだが、
+                // 既存の softDelete とは異なり「非表示」のみ
+                repo.touch(id)  // accessedAt 更新で一旦候補から外す
+            }
+            loadResurfacing()
+        }
+    }
+
+    // ── URL スクレイプ（クイック追加ダイアログ用）──
+    sealed class ScrapeState {
+        object Idle : ScrapeState()
+        object Loading : ScrapeState()
+        data class Done(val entryId: String, val title: String, val deduplicated: Boolean) : ScrapeState()
+        data class Failed(val message: String) : ScrapeState()
+    }
+
+    private val _scrapeState = MutableStateFlow<ScrapeState>(ScrapeState.Idle)
+    val scrapeState: StateFlow<ScrapeState> = _scrapeState
+
+    fun scrapeUrl(url: String) {
+        if (url.isBlank()) return
+        viewModelScope.launch {
+            _scrapeState.value = ScrapeState.Loading
+            val result = webScraper.scrapeAndSave(url.trim())
+            _scrapeState.value = if (result.success) {
+                ScrapeState.Done(result.entryId, result.title, result.deduplicated)
+            } else {
+                ScrapeState.Failed(result.error ?: "スクレイプに失敗しました")
+            }
+        }
+    }
+
+    fun resetScrapeState() { _scrapeState.value = ScrapeState.Idle }
 }

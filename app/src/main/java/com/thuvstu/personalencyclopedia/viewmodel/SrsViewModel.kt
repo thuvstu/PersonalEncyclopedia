@@ -2,6 +2,8 @@ package com.thuvstu.personalencyclopedia.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.thuvstu.personalencyclopedia.db.dao.ProgressEventDao
+import com.thuvstu.personalencyclopedia.db.entity.ProgressEventEntity
 import com.thuvstu.personalencyclopedia.repository.SrsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -10,7 +12,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SrsViewModel @Inject constructor(
-    private val srsRepo: SrsRepository
+    private val srsRepo: SrsRepository,
+    private val progressEventDao: ProgressEventDao   // ← Phase 3で追加
 ) : ViewModel() {
 
     sealed class SrsUiState {
@@ -59,6 +62,16 @@ class SrsViewModel @Inject constructor(
 
         viewModelScope.launch {
             srsRepo.recordReview(card.entryId, grade)
+
+            // ★ Phase 3追加: 進捗イベント記録
+            progressEventDao.insert(
+                ProgressEventEntity(
+                    entityType = "srs",
+                    entityId = card.entryId,
+                    eventType = "reviewed"
+                )
+            )
+
             reviewedCount++
 
             val nextIndex = state.currentIndex + 1

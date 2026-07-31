@@ -18,17 +18,30 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.thuvstu.personalencyclopedia.viewmodel.ServerViewModel
+import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    onNavigateToDbManagement: () -> Unit,
     viewModel: ServerViewModel = hiltViewModel()
 ) {
     val isRunning by viewModel.isRunning.collectAsState()
     val token by viewModel.token.collectAsState()
+    val apiKey by viewModel.apiKey.collectAsState()
+    val autoConnect by viewModel.autoConnectEnabled.collectAsState()
+    val threshold by viewModel.autoConnectThreshold.collectAsState()
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+
+    var apiKeyInput by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        viewModel.actionMessage.collectLatest {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -43,56 +56,87 @@ fun SettingsScreen(
         }
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+            modifier = Modifier.fillMaxSize().padding(padding)
+                .verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Server section
+            // ── Gemini API ──
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("🌐 Ktorローカルサーバー", style = MaterialTheme.typography.titleMedium)
+                    Text("🤖 Gemini API", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        if (apiKey.isNullOrBlank()) "未設定 — Embedding・LLM・意味的採点が無効です"
+                        else "設定済み: ${apiKey!!.take(8)}…（保存済み）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (apiKey.isNullOrBlank()) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.primary
+                    )
                     Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = apiKeyInput,
+                        onValueChange = { apiKeyInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("API Key") },
+                        singleLine = true,
+                        placeholder = { Text("AIza…（Google AI Studioで無料取得）") }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            viewModel.saveApiKey(apiKeyInput)
+                            apiKeyInput = ""
+                        },
+                        enabled = apiKeyInput.isNotBlank()
+                    ) { Text("保存") }
+                }
+            }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
+            // ── 自動接続（§5.5.3）──
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("🔗 自動接続候補", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                text = if (isRunning) "サーバー稼働中" else "サーバー停止中",
-                                style = MaterialTheme.typography.bodyMedium
+                                "類似エントリーをconnection_candidateに提案（承認制・直接接続はしない）",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            if (isRunning) {
-                                Text(
-                                    text = "ポート: 8080",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
                         }
-                        Switch(
-                            checked = isRunning,
-                            onCheckedChange = { viewModel.toggleServer() }
+                        Switch(checked = autoConnect, onCheckedChange = viewModel::setAutoConnect)
+                    }
+                    if (autoConnect) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("類似度しきい値: %.2f".format(threshold),
+                            style = MaterialTheme.typography.labelMedium)
+                        Slider(
+                            value = threshold,
+                            onValueChange = viewModel::setThreshold,
+                            valueRange = 0.70f..0.98f
                         )
                     }
                 }
             }
 
-            // Token section
+            // ── Ktorサーバー ──
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("🔑 アクセストークン", style = MaterialTheme.typography.titleMedium)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("🌐 Ktorローカルサーバー", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                if (isRunning) "起動中（PCからLAN経由アクセス可）" else "停止中",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(checked = isRunning, onCheckedChange = { viewModel.toggleServer() })
+                    }
                     Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = token ?: "生成中...",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
+                    Text("🔑 アクセストークン", style = MaterialTheme.typography.titleSmall)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(token ?: "生成中…", style = MaterialTheme.typography.bodySmall)
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = {
@@ -101,32 +145,56 @@ fun SettingsScreen(
                                 Toast.makeText(context, "コピーしました", Toast.LENGTH_SHORT).show()
                             }
                         }) {
-                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("コピー")
+                            Icon(Icons.Default.ContentCopy, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp)); Text("コピー")
                         }
                         OutlinedButton(onClick = { viewModel.regenerateToken() }) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("再生成")
+                            Icon(Icons.Default.Refresh, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp)); Text("再発行")
                         }
                     }
                 }
             }
 
-            // App info
+            // ── メンテナンス ──
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("🛠️ メンテナンス", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = { viewModel.rebuildSearchIndex() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("検索インデックス再構築（FTS4+search_document）") }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { viewModel.backupNow() },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("今すぐバックアップ") }
+                        OutlinedButton(
+                            onClick = { viewModel.exportNow() },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("今すぐエクスポート") }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = onNavigateToDbManagement,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("🗄️ データベース管理") }
+                }
+            }
+
+            // ── アプリ情報 ──
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("ℹ️ アプリ情報", style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("Personal Encyclopedia v0.1.0", style = MaterialTheme.typography.bodyMedium)
-                    Text("Phase 0 — 毎日使える最小版", style = MaterialTheme.typography.bodySmall)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "データはすべてこの端末内のSQLiteデータベースに保存されています。",
+                    Text("Personal Encyclopedia v0.5.0", style = MaterialTheme.typography.bodyMedium)
+                    Text("Phase 3 — 知識接続・全13型・統合エディタ",
+                        style = MaterialTheme.typography.bodySmall)
+                    Text("データは端末内SQLiteに保存。UIが消えてもデータは無傷（§6.4）",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }

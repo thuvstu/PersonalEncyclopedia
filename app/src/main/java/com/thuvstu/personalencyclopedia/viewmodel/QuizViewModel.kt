@@ -2,6 +2,8 @@ package com.thuvstu.personalencyclopedia.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.thuvstu.personalencyclopedia.db.dao.ProgressEventDao
+import com.thuvstu.personalencyclopedia.db.entity.ProgressEventEntity
 import com.thuvstu.personalencyclopedia.db.entity.QuizBankEntity
 import com.thuvstu.personalencyclopedia.repository.QuizRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -11,7 +13,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class QuizViewModel @Inject constructor(
-    private val quizRepo: QuizRepository
+    private val quizRepo: QuizRepository,
+    private val progressEventDao: ProgressEventDao   // ← Phase 3で追加
 ) : ViewModel() {
 
     sealed class QuizUiState {
@@ -111,6 +114,15 @@ class QuizViewModel @Inject constructor(
                 quiz = quiz,
                 userAnswer = answer,
                 hintsRevealed = state.hintsRevealed
+            )
+
+            // ★ Phase 3追加: 進捗イベント記録
+            progressEventDao.insert(
+                ProgressEventEntity(
+                    entityType = "quiz",
+                    entityId = quiz.id,
+                    eventType = "answered"
+                )
             )
 
             if (attempt.isCorrect == true) correctCount++

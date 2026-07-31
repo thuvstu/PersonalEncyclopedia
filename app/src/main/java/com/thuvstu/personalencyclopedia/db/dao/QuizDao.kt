@@ -9,9 +9,8 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface QuizDao {
 
-    @Insert
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertQuiz(quiz: QuizBankEntity)
-
     @Insert
     suspend fun insertQuizzes(quizzes: List<QuizBankEntity>)
 
@@ -101,4 +100,7 @@ interface QuizDao {
         LIMIT 1
     """)
     suspend fun getLastAttempt(quizId: String): QuizAttemptEntity?
+
+    @Query("SELECT COUNT(*) FROM quiz_bank WHERE question = :question AND isActive = 1")
+    suspend fun countByQuestion(question: String): Int
 }

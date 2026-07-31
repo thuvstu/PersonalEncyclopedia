@@ -1,16 +1,25 @@
 package com.thuvstu.personalencyclopedia
 
 import android.app.Application
+import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.thuvstu.personalencyclopedia.backup.BackupWorker
 import com.thuvstu.personalencyclopedia.backup.PortableExportWorker
+import com.thuvstu.personalencyclopedia.brain.ai.EmbeddingQueue
+import com.thuvstu.personalencyclopedia.brain.ai.GeminiClient
+import com.thuvstu.personalencyclopedia.brain.connection.ConnectionEngine
+import com.thuvstu.personalencyclopedia.brain.search.InMemoryVectorIndex
 import com.thuvstu.personalencyclopedia.db.AppDatabase
+import com.thuvstu.personalencyclopedia.db.DemoData
 import com.thuvstu.personalencyclopedia.db.SeedData
+import com.thuvstu.personalencyclopedia.plugins.PluginEngine
+import com.thuvstu.personalencyclopedia.repository.SettingsRepository
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -19,27 +28,66 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
 
     @Inject lateinit var database: AppDatabase
     @Inject lateinit var workerFactory: HiltWorkerFactory
+    @Inject lateinit var embeddingQueue: EmbeddingQueue
+    @Inject lateinit var vectorIndex: InMemoryVectorIndex
+    @Inject lateinit var connectionEngine: ConnectionEngine
+    @Inject lateinit var pluginEngine: PluginEngine
+    @Inject lateinit var settingsRepository: SettingsRepository   // ★追加
+    @Inject lateinit var geminiClient: GeminiClient               // ★追加
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
-            .setMinimumLoggingLevel(android.util.Log.INFO)
+            .setMinimumLoggingLevel(Log.INFO)
             .build()
 
     override fun onCreate() {
         super.onCreate()
 
-        // Seed entry types
         appScope.launch {
-            database.entryTypeDao().insertAll(SeedData.entryTypes)
+            try {
+                // ★ 永続化設定の復元（コルーチン内なので .first() 可能）
+                settingsRepository.geminiApiKey.first()
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let {
+                        geminiClient.setApiKey(it)
+                        Log.i("App", "Gemini API key restored from settings")
+                    }
+                connectionEngine.autoConnectEnabled =
+                    settingsRepository.autoConnectEnabled.first()
+                connectionEngine.autoConnectThreshold =
+                    settingsRepository.autoConnectThreshold.first()
+
+                connectionEngine.seedTypeDefs()
+                pluginEngine.installBuiltinPlugins()
+
+                DemoData.seed(
+                    entryDao = database.entryDao(),
+                    thoughtDao = database.entryThoughtDao(),
+                    definitionDao = database.entryDefinitionDao(),
+                    topicDao = database.topicDao(),
+                    quizDao = database.quizDao(),
+                    connectionDao = database.connectionDao()
+                )
+
+                database.entryTypeDao().insertAll(SeedData.entryTypes)
+                vectorIndex.load()
+                Log.i("App", "Vector index loaded: ${vectorIndex.size()} entries")
+                embeddingQueue.recoverJobs()
+                embeddingQueue.startWorker()
+                embeddingQueue.rebuildAllSearchDocuments()
+            } catch (e: Exception) {
+                Log.e("App", "Init failed", e)
+            }
         }
 
-        // Schedule daily encrypted backup (§6.3)
-        BackupWorker.schedule(this)
-
-        // Schedule weekly portable export (§6.3 layer 2)
-        PortableExportWorker.schedule(this)
+        try {
+            BackupWorker.schedule(this)
+            PortableExportWorker.schedule(this)
+        } catch (e: Exception) {
+            Log.e("App", "WorkManager schedule failed", e)
+        }
     }
 }

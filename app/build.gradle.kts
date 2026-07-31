@@ -112,4 +112,12 @@ dependencies {
     implementation(libs.google.http.gson)
 
     implementation(libs.startup.runtime)
+
+    // Web scraping
+    implementation(libs.okhttp)
+    implementation(libs.jsoup)
+
+    implementation(libs.rhino)
+
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
 }

@@ -20,13 +20,39 @@ import com.thuvstu.personalencyclopedia.db.entity.*
         SrsReviewEntity::class,
         QuizBankEntity::class,
         QuizAttemptEntity::class,
+        // Phase 2
+        EntryWebpageEntity::class,
+        EntryBookEntity::class,
+        EntryVideoEntity::class,
+        EntryDocumentEntity::class,
+        EntryMediaEntity::class,
+        EntryPersonEntity::class,
+        EntryOrgEntity::class,
+        EntryPlaceEntity::class,
+        EntryEventEntity::class,
+        EntryLikedEntity::class,
+        EntryAiConvEntity::class,
+        SearchDocumentEntity::class,
+        SearchDocumentFtsEntity::class,
+        EmbeddingEntity::class,
+        EmbeddingJobEntity::class,
+        // Phase 3
+        ConnectionTypeDefEntity::class,
+        ConnectionEntity::class,
+        ConnectionCandidateEntity::class,
+        AiExplanationEntity::class,
+        ProgressEventEntity::class,
+        PluginEntity::class,
+
+        EntryAttachmentEntity::class,
+        WhiteboardNodeEntity::class,
     ],
     views = [
         SrsCurrentView::class,
         QuizMasteryView::class,
     ],
-    version = 2,
-    exportSchema = true
+    version = 6,
+    exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     // Phase 0
@@ -39,4 +65,16 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun topicDao(): TopicDao
     abstract fun srsReviewDao(): SrsReviewDao
     abstract fun quizDao(): QuizDao
+    // Phase 2
+    abstract fun entryExtensionDao(): EntryExtensionDao
+    abstract fun searchDocumentDao(): SearchDocumentDao
+    abstract fun embeddingDao(): EmbeddingDao
+    // Phase 3
+    abstract fun connectionDao(): ConnectionDao
+    abstract fun aiExplanationDao(): AiExplanationDao
+    abstract fun progressEventDao(): ProgressEventDao
+    abstract fun pluginDao(): PluginDao
+
+    abstract fun entryAttachmentDao(): EntryAttachmentDao
+    abstract fun whiteboardDao(): WhiteboardDao
 }

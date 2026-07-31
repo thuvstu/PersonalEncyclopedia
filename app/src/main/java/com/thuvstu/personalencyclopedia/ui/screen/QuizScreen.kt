@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,6 +22,7 @@ import com.thuvstu.personalencyclopedia.viewmodel.QuizViewModel
 @Composable
 fun QuizScreen(
     onBack: () -> Unit,
+    onNavigateToQuizNew: () -> Unit,
     viewModel: QuizViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -32,6 +34,11 @@ fun QuizScreen(
     }
 
     Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(onClick = onNavigateToQuizNew) {
+                Icon(Icons.Default.Add, contentDescription = "クイズを作成")
+            }
+        },
         topBar = {
             TopAppBar(
                 title = { Text("クイズ演習") },

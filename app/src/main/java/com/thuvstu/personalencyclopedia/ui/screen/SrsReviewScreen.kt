@@ -14,6 +14,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.thuvstu.personalencyclopedia.ui.theme.entryTypeColor
 import com.thuvstu.personalencyclopedia.viewmodel.SrsViewModel
+import androidx.compose.ui.graphics.Color
+import com.thuvstu.personalencyclopedia.ui.component.RubyText
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -110,18 +112,13 @@ fun SrsReviewScreen(
                                 verticalArrangement = Arrangement.Center
                             ) {
                                 // Term
-                                Text(
+                                RubyText(
                                     text = card.term,
-                                    style = MaterialTheme.typography.headlineLarge,
-                                    textAlign = TextAlign.Center
-                                )
-                                if (!card.reading.isNullOrBlank()) {
-                                    Text(
-                                        text = card.reading,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    reading = card.reading,
+                                    textStyle = MaterialTheme.typography.headlineLarge.copy(
+                                        textAlign = TextAlign.Center
                                     )
-                                }
+                                )
                                 if (!card.field.isNullOrBlank()) {
                                     Spacer(modifier = Modifier.height(8.dp))
                                     SuggestionChip(

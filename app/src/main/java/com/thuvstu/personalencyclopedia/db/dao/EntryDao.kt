@@ -81,4 +81,23 @@ interface EntryDao {
         LIMIT :limit
     """)
     fun observeRecent(limit: Int = 10): Flow<List<EntryEntity>>
+
+    @Query("""
+SELECT type, COUNT(*) AS cnt FROM entry
+WHERE deletedAt IS NULL GROUP BY type ORDER BY cnt DESC
+""")
+
+    fun observeCountsByType(): Flow<List<TypeCount>>
+
+    @Query("SELECT * FROM entry WHERE deletedAt IS NULL ORDER BY createdAt LIMIT :limit OFFSET :offset")
+    suspend fun getAllPaged(limit: Int, offset: Int): List<EntryEntity>
+
+    @Query("SELECT * FROM entry WHERE title = :title AND deletedAt IS NULL LIMIT 1")
+    suspend fun findByTitle(title: String): EntryEntity?
+
+
+    @Query("SELECT * FROM entry WHERE sourceUrl = :url AND deletedAt IS NULL LIMIT 1")
+    suspend fun findBySourceUrl(url: String): EntryEntity?
 }
+
+data class TypeCount(val type: String, val cnt: Int)

@@ -1,5 +1,8 @@
 package com.thuvstu.personalencyclopedia.ui.navigation
 
+import androidx.compose.animation.core.tween          // ★追加
+import androidx.compose.animation.fadeIn             // ★追加
+import androidx.compose.animation.fadeOut            // ★追加
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -13,55 +16,111 @@ object Routes {
     const val SEARCH = "search"
     const val SRS_REVIEW = "srs_review"
     const val QUIZ = "quiz"
+    const val STATS = "stats"
+    const val CONNECTION_CANDIDATES = "connection_candidates"
+    const val CONNECTIONS = "connections"
+    const val WHITEBOARD = "whiteboard"              // ★追加
     const val SETTINGS = "settings"
     const val IMPORT = "import"
+    const val DB_MANAGEMENT = "db_management"
     const val THOUGHT_NEW = "thought/new"
     const val THOUGHT_EDIT = "thought/edit/{entryId}"
     const val DEFINITION_NEW = "definition/new"
     const val DEFINITION_EDIT = "definition/edit/{entryId}"
     const val ENTRY_DETAIL = "entry/{entryId}"
+    const val ENTRY_NEW = "entry/new/{type}"
+    const val ENTRY_EDIT_GENERIC = "entry/edit/{type}/{entryId}"
+    const val QUIZ_NEW = "quiz/new"
+    const val QUIZ_EDIT = "quiz/edit/{quizId}"
 }
 
 @Composable
 fun AppNavGraph(navController: NavHostController) {
-    NavHost(navController = navController, startDestination = Routes.DASHBOARD) {
-
+    NavHost(
+        navController = navController,
+        startDestination = Routes.DASHBOARD,
+        // ★追加: 遷移アニメーション高速化（のっそり感対策）
+        enterTransition = { fadeIn(animationSpec = tween(120)) },
+        exitTransition = { fadeOut(animationSpec = tween(90)) },
+        popEnterTransition = { fadeIn(animationSpec = tween(120)) },
+        popExitTransition = { fadeOut(animationSpec = tween(90)) }
+    ) {
         composable(Routes.DASHBOARD) {
             DashboardScreen(
                 onNavigateToEntry = { id -> navController.navigate("entry/$id") },
                 onNavigateToNewThought = { navController.navigate(Routes.THOUGHT_NEW) },
                 onNavigateToNewDefinition = { navController.navigate(Routes.DEFINITION_NEW) },
+                onNavigateToNewEntry = { type -> navController.navigate("entry/new/$type") },
                 onNavigateToSearch = { navController.navigate(Routes.SEARCH) },
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
                 onNavigateToSrs = { navController.navigate(Routes.SRS_REVIEW) },
                 onNavigateToQuiz = { navController.navigate(Routes.QUIZ) },
-                onNavigateToImport = { navController.navigate(Routes.IMPORT) }
+                onNavigateToQuizNew = { navController.navigate(Routes.QUIZ_NEW) },
+                onNavigateToImport = { navController.navigate(Routes.IMPORT) },
+                onNavigateToConnectionCandidates = { navController.navigate(Routes.CONNECTION_CANDIDATES) },
+                onNavigateToConnections = { navController.navigate(Routes.CONNECTIONS) },
+                onNavigateToWhiteboard = { navController.navigate(Routes.WHITEBOARD) }   // ★追加
             )
         }
-
         composable(Routes.SEARCH) {
             SearchScreen(
                 onBack = { navController.popBackStack() },
                 onNavigateToEntry = { id -> navController.navigate("entry/$id") }
             )
         }
-
         composable(Routes.SRS_REVIEW) {
             SrsReviewScreen(onBack = { navController.popBackStack() })
         }
-
         composable(Routes.QUIZ) {
-            QuizScreen(onBack = { navController.popBackStack() })
+            QuizScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToQuizNew = { navController.navigate(Routes.QUIZ_NEW) }
+            )
         }
-
+        composable(Routes.QUIZ_NEW) {
+            QuizEditScreen(
+                onBack = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() }
+            )
+        }
+        composable(
+            route = Routes.QUIZ_EDIT,
+            arguments = listOf(navArgument("quizId") { type = NavType.StringType })
+        ) {
+            QuizEditScreen(
+                onBack = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() }
+            )
+        }
+        composable(Routes.STATS) { StatsScreen() }
+        composable(Routes.CONNECTION_CANDIDATES) {
+            ConnectionCandidatesScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.CONNECTIONS) {
+            ConnectionsScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToEntry = { id -> navController.navigate("entry/$id") }
+            )
+        }
+        // ★追加: ホワイトボード
+        composable(Routes.WHITEBOARD) {
+            WhiteboardScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToEntry = { id -> navController.navigate("entry/$id") }
+            )
+        }
         composable(Routes.SETTINGS) {
-            SettingsScreen(onBack = { navController.popBackStack() })
+            SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToDbManagement = { navController.navigate(Routes.DB_MANAGEMENT) }
+            )
         }
-
         composable(Routes.IMPORT) {
             ImportScreen(onBack = { navController.popBackStack() })
         }
-
+        composable(Routes.DB_MANAGEMENT) {
+            DatabaseManagementScreen(onBack = { navController.popBackStack() })
+        }
         composable(Routes.THOUGHT_NEW) {
             ThoughtEditScreen(
                 onBack = { navController.popBackStack() },
@@ -71,7 +130,6 @@ fun AppNavGraph(navController: NavHostController) {
                 }
             )
         }
-
         composable(
             route = Routes.THOUGHT_EDIT,
             arguments = listOf(navArgument("entryId") { type = NavType.StringType })
@@ -81,7 +139,6 @@ fun AppNavGraph(navController: NavHostController) {
                 onSaved = { navController.popBackStack() }
             )
         }
-
         composable(Routes.DEFINITION_NEW) {
             DefinitionEditScreen(
                 onBack = { navController.popBackStack() },
@@ -91,7 +148,6 @@ fun AppNavGraph(navController: NavHostController) {
                 }
             )
         }
-
         composable(
             route = Routes.DEFINITION_EDIT,
             arguments = listOf(navArgument("entryId") { type = NavType.StringType })
@@ -101,7 +157,30 @@ fun AppNavGraph(navController: NavHostController) {
                 onSaved = { navController.popBackStack() }
             )
         }
-
+        composable(
+            route = Routes.ENTRY_NEW,
+            arguments = listOf(navArgument("type") { type = NavType.StringType })
+        ) {
+            EntryEditScreen(
+                onBack = { navController.popBackStack() },
+                onSaved = { id ->
+                    navController.popBackStack()
+                    navController.navigate("entry/$id")
+                }
+            )
+        }
+        composable(
+            route = Routes.ENTRY_EDIT_GENERIC,
+            arguments = listOf(
+                navArgument("type") { type = NavType.StringType },
+                navArgument("entryId") { type = NavType.StringType }
+            )
+        ) {
+            EntryEditScreen(
+                onBack = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() }
+            )
+        }
         composable(
             route = Routes.ENTRY_DETAIL,
             arguments = listOf(navArgument("entryId") { type = NavType.StringType })
@@ -112,8 +191,10 @@ fun AppNavGraph(navController: NavHostController) {
                     when (type) {
                         "thought" -> navController.navigate("thought/edit/$entryId")
                         "definition" -> navController.navigate("definition/edit/$entryId")
+                        else -> navController.navigate("entry/edit/$type/$entryId")
                     }
-                }
+                },
+                onNavigateToEntry = { id -> navController.navigate("entry/$id") }
             )
         }
     }

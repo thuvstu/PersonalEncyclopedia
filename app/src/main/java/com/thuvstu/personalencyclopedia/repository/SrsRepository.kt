@@ -1,17 +1,20 @@
 package com.thuvstu.personalencyclopedia.repository
 
+import com.thuvstu.personalencyclopedia.brain.srs.FsrsAlgorithm
 import com.thuvstu.personalencyclopedia.brain.srs.Sm2Algorithm
 import com.thuvstu.personalencyclopedia.db.dao.EntryDefinitionDao
 import com.thuvstu.personalencyclopedia.db.dao.SrsReviewDao
 import com.thuvstu.personalencyclopedia.db.entity.SrsCurrentView
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class SrsRepository @Inject constructor(
     private val srsDao: SrsReviewDao,
-    private val definitionDao: EntryDefinitionDao
+    private val definitionDao: EntryDefinitionDao,
+    private val settingsRepo: SettingsRepository        // ★追加
 ) {
     data class ReviewCard(
         val entryId: String,
@@ -40,19 +43,36 @@ class SrsRepository @Inject constructor(
 
     suspend fun recordReview(entryId: String, grade: Int) {
         val current = srsDao.getCurrentState(entryId)
-        val review = Sm2Algorithm.createReview(
-            entryId = entryId,
-            grade = grade,
-            previousInterval = current?.intervalDays ?: 0,
-            previousEase = current?.easeFactor ?: 2.5f,
-            repetitionCount = if (current != null && current.grade >= 2) {
-                when {
-                    current.intervalDays <= 1 -> 1
-                    current.intervalDays <= 6 -> 2
-                    else -> 3
-                }
-            } else 0
-        )
+        val algorithm = settingsRepo.srsAlgorithm.first()   // ★ "SM2" or "FSRS"
+
+        val review = if (algorithm == "FSRS") {
+            val elapsedDays = current?.lastReviewedAt?.let {
+                (System.currentTimeMillis() - it) / 86_400_000.0
+            } ?: 0.0
+            val prevDifficulty = current?.easeFactor?.takeIf { it in 1.0f..10.0f }
+            val prevStability = current?.intervalDays?.toFloat()?.takeIf { it > 0f }
+            FsrsAlgorithm.createReview(
+                entryId = entryId,
+                sm2Grade = grade,
+                elapsedDays = elapsedDays,
+                previousDifficulty = prevDifficulty,
+                previousStability = prevStability
+            )
+        } else {
+            Sm2Algorithm.createReview(
+                entryId = entryId,
+                grade = grade,
+                previousInterval = current?.intervalDays ?: 0,
+                previousEase = current?.easeFactor ?: 2.5f,
+                repetitionCount = if (current != null && current.grade >= 2) {
+                    when {
+                        current.intervalDays <= 1 -> 1
+                        current.intervalDays <= 6 -> 2
+                        else -> 3
+                    }
+                } else 0
+            )
+        }
         srsDao.insert(review)
     }
 
