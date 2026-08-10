@@ -43,9 +43,13 @@ import com.thuvstu.personalencyclopedia.db.entity.*
         AiExplanationEntity::class,
         ProgressEventEntity::class,
         PluginEntity::class,
-
         EntryAttachmentEntity::class,
+        // Phase 4 — v12.0 追加
+        WhiteboardEntity::class,
+        WhiteboardNoteEntity::class,
         WhiteboardNodeEntity::class,
+        WhiteboardSectionEntity::class,
+        WikiArticleEntity::class,
     ],
     views = [
         SrsCurrentView::class,
@@ -74,7 +78,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun aiExplanationDao(): AiExplanationDao
     abstract fun progressEventDao(): ProgressEventDao
     abstract fun pluginDao(): PluginDao
-
     abstract fun entryAttachmentDao(): EntryAttachmentDao
+    // Phase 4 — v12.0 追加
     abstract fun whiteboardDao(): WhiteboardDao
+    abstract fun wikiArticleDao(): WikiArticleDao
 }

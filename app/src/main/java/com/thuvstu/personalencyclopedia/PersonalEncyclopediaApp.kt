@@ -25,15 +25,14 @@ import javax.inject.Inject
 
 @HiltAndroidApp
 class PersonalEncyclopediaApp : Application(), Configuration.Provider {
-
     @Inject lateinit var database: AppDatabase
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var embeddingQueue: EmbeddingQueue
     @Inject lateinit var vectorIndex: InMemoryVectorIndex
     @Inject lateinit var connectionEngine: ConnectionEngine
     @Inject lateinit var pluginEngine: PluginEngine
-    @Inject lateinit var settingsRepository: SettingsRepository   // ★追加
-    @Inject lateinit var geminiClient: GeminiClient               // ★追加
+    @Inject lateinit var settingsRepository: SettingsRepository
+    @Inject lateinit var geminiClient: GeminiClient
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -45,20 +44,14 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
-
         appScope.launch {
             try {
-                // ★ 永続化設定の復元（コルーチン内なので .first() 可能）
-                settingsRepository.geminiApiKey.first()
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let {
-                        geminiClient.setApiKey(it)
-                        Log.i("App", "Gemini API key restored from settings")
-                    }
-                connectionEngine.autoConnectEnabled =
-                    settingsRepository.autoConnectEnabled.first()
-                connectionEngine.autoConnectThreshold =
-                    settingsRepository.autoConnectThreshold.first()
+                // 設定復元
+                settingsRepository.geminiApiKey.first()?.takeIf { it.isNotBlank() }?.let {
+                    geminiClient.setApiKey(it)
+                }
+                connectionEngine.autoConnectEnabled = settingsRepository.autoConnectEnabled.first()
+                connectionEngine.autoConnectThreshold = settingsRepository.autoConnectThreshold.first()
 
                 connectionEngine.seedTypeDefs()
                 pluginEngine.installBuiltinPlugins()
@@ -71,10 +64,9 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
                     quizDao = database.quizDao(),
                     connectionDao = database.connectionDao()
                 )
-
                 database.entryTypeDao().insertAll(SeedData.entryTypes)
+
                 vectorIndex.load()
-                Log.i("App", "Vector index loaded: ${vectorIndex.size()} entries")
                 embeddingQueue.recoverJobs()
                 embeddingQueue.startWorker()
                 embeddingQueue.rebuildAllSearchDocuments()
@@ -82,7 +74,6 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
                 Log.e("App", "Init failed", e)
             }
         }
-
         try {
             BackupWorker.schedule(this)
             PortableExportWorker.schedule(this)

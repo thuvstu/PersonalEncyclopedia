@@ -32,4 +32,19 @@ interface TagDao {
 
     @Query("DELETE FROM entry_tag WHERE entryId = :entryId AND tagId = :tagId")
     suspend fun unlinkTag(entryId: String, tagId: String)
+
+    // ★v12.0: エクスポートN+1解消用の一括取得
+    @Query("""
+        SELECT et.entryId AS entryId, t.id AS tagId, t.name AS tagName
+        FROM entry_tag et
+        INNER JOIN tag t ON t.id = et.tagId
+        WHERE et.entryId IN (:entryIds)
+    """)
+    suspend fun getTagsForEntries(entryIds: List<String>): List<EntryTagJoin>
 }
+
+data class EntryTagJoin(
+    val entryId: String,
+    val tagId: String,
+    val tagName: String
+)

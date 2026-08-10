@@ -22,6 +22,7 @@ import com.thuvstu.personalencyclopedia.viewmodel.SearchViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
+    initialQuery: String = "",          // ★追加（末尾カンマ必須）
     onBack: () -> Unit,
     onNavigateToEntry: (String) -> Unit,
     viewModel: SearchViewModel = hiltViewModel()
@@ -32,6 +33,11 @@ fun SearchScreen(
     val searchMode by viewModel.searchMode.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
 
+    // ★追加: タグ/分野タップからの初期クエリを反映
+    LaunchedEffect(initialQuery) {
+        if (initialQuery.isNotBlank()) viewModel.onQueryChange(initialQuery)
+    }
+
     val types = listOf(
         null to "すべて",
         "thought" to "メモ", "definition" to "単語帳", "webpage" to "Web",
@@ -40,7 +46,6 @@ fun SearchScreen(
         "place" to "場所", "event" to "イベント", "liked" to "いいね",
         "ai_conv" to "AI会話"
     )
-
     val modes = listOf(
         SearchMode.HYBRID to "統合",
         SearchMode.FULLTEXT to "全文",
@@ -77,7 +82,6 @@ fun SearchScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
-            // Search mode chips
             Row(
                 modifier = Modifier
                     .horizontalScroll(rememberScrollState())
@@ -92,8 +96,6 @@ fun SearchScreen(
                     )
                 }
             }
-
-            // Type filter chips
             Row(
                 modifier = Modifier
                     .horizontalScroll(rememberScrollState())
@@ -108,13 +110,9 @@ fun SearchScreen(
                     )
                 }
             }
-
-            // Loading indicator
             if (isSearching) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
-
-            // Results
             LazyColumn(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)

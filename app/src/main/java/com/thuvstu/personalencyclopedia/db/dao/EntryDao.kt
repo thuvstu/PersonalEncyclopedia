@@ -95,6 +95,8 @@ WHERE deletedAt IS NULL GROUP BY type ORDER BY cnt DESC
     @Query("SELECT * FROM entry WHERE title = :title AND deletedAt IS NULL LIMIT 1")
     suspend fun findByTitle(title: String): EntryEntity?
 
+    @Query("SELECT * FROM entry WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<String>): List<EntryEntity>
 
     @Query("SELECT * FROM entry WHERE sourceUrl = :url AND deletedAt IS NULL LIMIT 1")
     suspend fun findBySourceUrl(url: String): EntryEntity?

@@ -8,9 +8,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface QuizDao {
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertQuiz(quiz: QuizBankEntity)
+
     @Insert
     suspend fun insertQuizzes(quizzes: List<QuizBankEntity>)
 
@@ -32,7 +32,7 @@ interface QuizDao {
         SELECT qb.* FROM quiz_bank qb
         LEFT JOIN entry_topic et ON et.entryId = qb.sourceEntryId
         WHERE qb.isActive = 1
-          AND (:topicId IS NULL OR et.topicId = :topicId OR qb.topicId = :topicId)
+        AND (:topicId IS NULL OR et.topicId = :topicId OR qb.topicId = :topicId)
         ORDER BY qb.createdAt DESC
         LIMIT :limit
     """)
@@ -41,7 +41,7 @@ interface QuizDao {
     @Query("""
         SELECT qb.* FROM quiz_bank qb
         WHERE qb.isActive = 1
-          AND qb.quizType IN (:types)
+        AND qb.quizType IN (:types)
         ORDER BY RANDOM()
         LIMIT :limit
     """)
@@ -50,9 +50,9 @@ interface QuizDao {
     @Query("""
         SELECT qb.* FROM quiz_bank qb
         WHERE qb.isActive = 1
-          AND qb.id NOT IN (
-              SELECT qa.quizId FROM quiz_attempts qa WHERE qa.isCorrect = 1
-          )
+        AND qb.id NOT IN (
+            SELECT qa.quizId FROM quiz_attempts qa WHERE qa.isCorrect = 1
+        )
         ORDER BY RANDOM()
         LIMIT :limit
     """)
@@ -61,16 +61,28 @@ interface QuizDao {
     @Query("""
         SELECT qb.* FROM quiz_bank qb
         WHERE qb.isActive = 1
-          AND qb.id IN (
-              SELECT qa.quizId FROM quiz_attempts qa
-              WHERE qa.isCorrect = 0
-              GROUP BY qa.quizId
-              HAVING COUNT(*) >= 1
-          )
+        AND qb.id IN (
+            SELECT qa.quizId FROM quiz_attempts qa
+            WHERE qa.isCorrect = 0
+            GROUP BY qa.quizId
+            HAVING COUNT(*) >= 1
+        )
         ORDER BY RANDOM()
         LIMIT :limit
     """)
     suspend fun getWrongQuizzes(limit: Int = 10): List<QuizBankEntity>
+
+    // ★v12.0追加: 弱点分析のtopicId対応
+    @Query("""
+        SELECT qb.* FROM quiz_bank qb
+        LEFT JOIN entry_topic et ON et.entryId = qb.sourceEntryId
+        WHERE qb.isActive = 1
+        AND qb.id IN (SELECT qa.quizId FROM quiz_attempts qa WHERE qa.isCorrect = 0)
+        AND (:topicId IS NULL OR :topicId = 'all' OR qb.topicId = :topicId OR et.topicId = :topicId)
+        ORDER BY RANDOM()
+        LIMIT :limit
+    """)
+    suspend fun getWrongQuizzesByTopic(topicId: String?, limit: Int = 20): List<QuizBankEntity>
 
     @Query("SELECT * FROM QuizMasteryView WHERE quizId = :quizId")
     suspend fun getMastery(quizId: String): QuizMasteryView?
@@ -100,7 +112,4 @@ interface QuizDao {
         LIMIT 1
     """)
     suspend fun getLastAttempt(quizId: String): QuizAttemptEntity?
-
-    @Query("SELECT COUNT(*) FROM quiz_bank WHERE question = :question AND isActive = 1")
-    suspend fun countByQuestion(question: String): Int
 }

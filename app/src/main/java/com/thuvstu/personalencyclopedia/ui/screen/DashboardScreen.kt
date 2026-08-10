@@ -1,5 +1,6 @@
 package com.thuvstu.personalencyclopedia.ui.screen
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,7 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Download     // ★追加
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -18,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -28,8 +30,6 @@ import com.thuvstu.personalencyclopedia.ui.theme.entryTypeColor
 import com.thuvstu.personalencyclopedia.ui.theme.entryTypeIcon
 import com.thuvstu.personalencyclopedia.ui.theme.entryTypeLabelJa
 import com.thuvstu.personalencyclopedia.viewmodel.DashboardViewModel
-import android.widget.Toast
-import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,12 +42,15 @@ fun DashboardScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToSrs: () -> Unit,
     onNavigateToQuiz: () -> Unit,
+    onNavigateToQuizNew: () -> Unit,
     onNavigateToImport: () -> Unit,
     onNavigateToConnectionCandidates: () -> Unit,
     onNavigateToConnections: () -> Unit,
-    onNavigateToQuizNew: () -> Unit,
-    onNavigateToWhiteboard: () -> Unit,          // ★追加
+    onNavigateToWhiteboard: () -> Unit,
+    onNavigateToWiki: () -> Unit,          // ★追加
+    onNavigateToQuizList: () -> Unit,      // ★追加
     viewModel: DashboardViewModel = hiltViewModel()
+
 ) {
     val scrapeState by viewModel.scrapeState.collectAsState()
     var urlInput by remember { mutableStateOf("") }
@@ -66,7 +69,6 @@ fun DashboardScreen(
                 viewModel.resetScrapeState()
                 showQuickAddDialog = false
                 urlInput = ""
-                // ★変更: 重複時はトーストで知らせる
                 if (s.deduplicated) {
                     Toast.makeText(context, "既に保存済み — 開きます", Toast.LENGTH_SHORT).show()
                 }
@@ -85,7 +87,6 @@ fun DashboardScreen(
             TopAppBar(
                 title = { Text("Personal Encyclopedia") },
                 actions = {
-                    // ★変更: プラス2個問題 → インポートはDownloadアイコンに
                     IconButton(onClick = onNavigateToImport) {
                         Icon(Icons.Default.Download, contentDescription = "インポート")
                     }
@@ -160,8 +161,29 @@ fun DashboardScreen(
                             onClick = onNavigateToQuiz,
                             modifier = Modifier.weight(1f)
                         ) { Text("📝 クイズ") }
+                        // 既存の「📚 復習」「📝 クイズ」の下に追加
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilledTonalButton(
+                                onClick = onNavigateToWhiteboard,
+                                modifier = Modifier.weight(1f)
+                            ) { Text("🗒️ ホワイトボード") }
+                            FilledTonalButton(
+                                onClick = onNavigateToWiki,
+                                modifier = Modifier.weight(1f)
+                            ) { Text("📚 Wiki") }
+                        }
+                        OutlinedButton(
+                            onClick = onNavigateToQuizList,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("📋 クイズ一覧") }
+                        FilledTonalButton(
+                            onClick = onNavigateToQuizList,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("📋 一覧") }
                     }
-                    // ★追加: ホワイトボード導線
                     OutlinedButton(
                         onClick = onNavigateToWhiteboard,
                         modifier = Modifier.fillMaxWidth()
@@ -279,6 +301,23 @@ fun DashboardScreen(
                                 Text("📝", fontSize = 26.sp)
                                 Spacer(Modifier.height(4.dp))
                                 Text("クイズ作成", style = MaterialTheme.typography.labelSmall,
+                                    textAlign = TextAlign.Center)
+                            }
+                        }
+                        item {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        showQuickAddDialog = false
+                                        onNavigateToQuizList()
+                                    }
+                                    .padding(vertical = 10.dp, horizontal = 4.dp)
+                            ) {
+                                Text("📋", fontSize = 26.sp)
+                                Spacer(Modifier.height(4.dp))
+                                Text("クイズ一覧", style = MaterialTheme.typography.labelSmall,
                                     textAlign = TextAlign.Center)
                             }
                         }

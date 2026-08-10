@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0">
+    <!-- ローカルassets優先。なければCDNフォールバック -->
+    <link rel="stylesheet" href="file:///android_asset/katex/katex.min.css"
+          onerror="this.href='https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css'">
+    <style>
+        :root { color-scheme: light dark; }
+        body { font-family: sans-serif; line-height:1.7; padding:16px; margin:0;
+               font-size:15px; word-wrap:break-word; }
+        h1{font-size:1.6em;border-bottom:2px solid #888;padding-bottom:4px}
+        h2{font-size:1.35em;border-bottom:1px solid #aaa;padding-bottom:3px}
+        h3{font-size:1.15em}
+        a { color:#1a73e8; text-decoration:none; }
+        a.wikilink { color:#0b57d0; border-bottom:1px dashed #0b57d0; }
+        a.missing  { color:#c0392b; border-bottom:1px dashed #c0392b; }
+        code { background:rgba(127,127,127,.15); padding:2px 5px; border-radius:4px; font-size:.9em; }
+        pre  { background:rgba(127,127,127,.12); padding:10px; border-radius:8px; overflow-x:auto; }
+        blockquote { border-left:4px solid #aaa; margin:8px 0; padding:4px 12px; color:#888; }
+        table { border-collapse:collapse; } td,th { border:1px solid #aaa; padding:4px 8px; }
+        ruby rt { font-size:.55em; color:#888; }
+        .katex-display { overflow-x:auto; overflow-y:hidden; }
+        img { max-width:100%; }
+    </style>
+</head>
+<body>
+<div id="content"></div>
+<script src="file:///android_asset/marked.min.js"
+        onerror="loadCdn('https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js')"></script>
+<script src="file:///android_asset/katex/katex.min.js"
+        onerror="loadCdn('https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js')"></script>
+<script src="file:///android_asset/katex/contrib/auto-render.min.js"
+        onerror="loadCdn('https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js')"></script>
+<script>
+    function loadCdn(u){ var s=document.createElement('script'); s.src=u; document.head.appendChild(s); }
+
+    // [[title]] / [[title|alias]] を内部リンクに変換（marked実行前にエスケープ）
+    function preprocessWiki(md){
+      return md.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, function(_, title, alias){
+        var t = title.trim();
+        var label = (alias||t).trim();
+        return '<a class="wikilink" href="app://wiki/' + encodeURIComponent(t) + '">' + label + '</a>';
+      })
+      // {漢字|かんじ} を <ruby> に
+      .replace(/\{([^{}|]+)\|([^{}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>');
+    }
+
+    function renderContent(md){
+      var el = document.getElementById('content');
+      var html;
+      if (window.marked) {
+        html = marked.parse(preprocessWiki(md));
+      } else {
+        // ライブラリ未読込のフォールバック
+        html = '<pre>' + preprocessWiki(md).replace(/</g,'&lt;') + '</pre>';
+      }
+      el.innerHTML = html;
+      // KaTeX 数式描画
+      if (window.renderMathInElement) {
+        renderMathInElement(el, {
+          delimiters: [
+            {left:'$$', right:'$$', display:true},
+            {left:'$',  right:'$',  display:false}
+          ],
+          throwOnError: false
+        });
+      }
+    }
+
+    // リンククリック → Kotlinブリッジ or 外部ブラウザ
+    document.addEventListener('click', function(e){
+      var a = e.target.closest('a'); if(!a) return;
+      var href = a.getAttribute('href')||'';
+      if (href.indexOf('app://')===0){ e.preventDefault(); AppBridge.onLink(href.substring(6)); }
+      else if (href.indexOf('http')===0){ e.preventDefault(); AppBridge.onExternal(href); }
+    });
+</script>
+</body>
+</html>

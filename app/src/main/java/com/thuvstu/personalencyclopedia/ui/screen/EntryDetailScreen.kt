@@ -23,7 +23,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.thuvstu.personalencyclopedia.ui.component.AttachmentSection
 import com.thuvstu.personalencyclopedia.ui.component.ConnectionSection
 import com.thuvstu.personalencyclopedia.ui.component.EntryTypeSection
-import com.thuvstu.personalencyclopedia.ui.component.MarkdownText
+import com.thuvstu.personalencyclopedia.ui.component.RichContentView
 import com.thuvstu.personalencyclopedia.ui.theme.entryTypeColor
 import com.thuvstu.personalencyclopedia.ui.theme.entryTypeIcon
 import com.thuvstu.personalencyclopedia.ui.theme.entryTypeLabelJa
@@ -38,6 +38,7 @@ fun EntryDetailScreen(
     onBack: () -> Unit,
     onEdit: (type: String, entryId: String) -> Unit,
     onNavigateToEntry: (String) -> Unit,
+    onNavigateToWiki: (String) -> Unit,          // ★追加
     viewModel: EntryDetailViewModel = hiltViewModel()
 ) {
     val entry by viewModel.entry.collectAsState()
@@ -51,7 +52,6 @@ fun EntryDetailScreen(
     val searchResults by viewModel.searchResults.collectAsState()
     val attachments by viewModel.attachments.collectAsState()
     val tagSuggestions by viewModel.tagSuggestions.collectAsState()
-    val autoLinker by viewModel.autoLinker.collectAsState()
 
     var showConnectionDialog by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
@@ -63,7 +63,6 @@ fun EntryDetailScreen(
     var tagInput by remember { mutableStateOf("") }
 
     val context = LocalContext.current
-
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetMultipleContents()
     ) { uris -> uris.forEach { viewModel.addAttachment(it) } }
@@ -121,10 +120,15 @@ fun EntryDetailScreen(
                     modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))
                         .background(entryTypeColor(e.type).copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center
-                ) { Text(entryTypeIcon(e.type), style = MaterialTheme.typography.headlineSmall) }
+                ) {
+                    Text(entryTypeIcon(e.type), style = MaterialTheme.typography.headlineSmall)
+                }
                 Spacer(modifier = Modifier.width(12.dp))
-                Text(e.title, style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.weight(1f))
+                Text(
+                    e.title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.weight(1f)
+                )
             }
 
             val sdf = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
@@ -134,42 +138,44 @@ fun EntryDetailScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            // ★§12.5 + §11.5: 本文をMarkdown + AutoLinker で描画
+            // ★本文を RichContentView（Markdown+KaTeX+ルビ+リンク）で描画
             if (!e.content.isNullOrBlank()) {
                 OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("📝 メモ", style = MaterialTheme.typography.labelLarge)
                         Spacer(modifier = Modifier.height(8.dp))
-                        MarkdownText(
-                            text = e.content,
-                            autoLinker = autoLinker,
-                            onWikiLinkClick = { title ->
+                        RichContentView(
+                            markdown = e.content,
+                            onInternalLink = { target ->
+                                val title = target.removePrefix("wiki/")
                                 viewModel.resolveWikiLink(title) { id ->
-                                    id?.let { onNavigateToEntry(it) } ?: Toast.makeText(
-                                        context, "「$title」は見つかりません", Toast.LENGTH_SHORT
-                                    ).show()
+                                    id?.let { onNavigateToEntry(it) }
                                 }
                             },
-                            onAutoLinkClick = { entryId ->
-                                onNavigateToEntry(entryId)
-                            }
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 60.dp, max = 400.dp)
                         )
                     }
                 }
             }
 
             // 型固有セクション（全13型）
-            EntryTypeSection(type = e.type, extension = extension,
-                thought = thought, definition = definition)
+            EntryTypeSection(
+                type = e.type,
+                extension = extension,
+                thought = thought,
+                definition = definition
+            )
 
-            // 添付画像（全型共通）
+            // 添付画像
             AttachmentSection(
                 attachments = attachments,
                 onPickImage = { imagePicker.launch("image/*") },
                 onRemove = { viewModel.removeAttachment(it) }
             )
 
-            // クイズ生成アクション
+            // クイズ生成
             OutlinedButton(
                 onClick = { viewModel.generateQuizzesFromThisEntry() },
                 modifier = Modifier.fillMaxWidth()
@@ -179,34 +185,57 @@ fun EntryDetailScreen(
                 Text("このエントリーからクイズを自動生成")
             }
 
-            // タグ（候補サジェスト付き）
+            // ★記事化ボタン
+            OutlinedButton(
+                onClick = {
+                    viewModel.draftArticleFromEntry { articleId ->
+                        if (articleId.isNotBlank()) onNavigateToWiki(articleId)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.MenuBook, contentDescription = null, Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("📚 このエントリーを記事化する")
+            }
+
+            // タグ
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("🏷️ タグ", style = MaterialTheme.typography.labelLarge)
                         Spacer(modifier = Modifier.weight(1f))
-                        IconButton(onClick = { showTagDialog = true },
-                            modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.Add, contentDescription = "タグ追加",
-                                modifier = Modifier.size(18.dp))
+                        IconButton(onClick = { showTagDialog = true }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Add, contentDescription = "タグ追加", modifier = Modifier.size(18.dp))
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     if (tags.isEmpty()) {
-                        Text("タグなし", style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "タグなし",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     } else {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
                             tags.forEach { tag ->
                                 InputChip(
-                                    selected = false, onClick = {},
+                                    selected = false,
+                                    onClick = {},
                                     label = { Text(tag.name) },
                                     trailingIcon = {
-                                        IconButton(onClick = { viewModel.removeTag(tag.id) },
-                                            modifier = Modifier.size(18.dp)) {
-                                            Icon(Icons.Default.Close, contentDescription = "削除",
-                                                modifier = Modifier.size(14.dp))
+                                        IconButton(
+                                            onClick = { viewModel.removeTag(tag.id) },
+                                            modifier = Modifier.size(18.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Close,
+                                                contentDescription = "削除",
+                                                modifier = Modifier.size(14.dp)
+                                            )
                                         }
                                     }
                                 )
@@ -216,7 +245,7 @@ fun EntryDetailScreen(
                 }
             }
 
-            // 接続セクション
+            // 接続
             ConnectionSection(
                 connections = connections,
                 typeDefs = connectionTypeDefs,
@@ -236,9 +265,11 @@ fun EntryDetailScreen(
                                 onClick = { onNavigateToEntry(rel.id) },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("${entryTypeIcon(rel.type)} ${rel.title}",
+                                Text(
+                                    "${entryTypeIcon(rel.type)} ${rel.title}",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.fillMaxWidth())
+                                    modifier = Modifier.fillMaxWidth()
+                                )
                             }
                         }
                     }
@@ -273,34 +304,41 @@ fun EntryDetailScreen(
                             if (searchQuery.isBlank()) "関連から選ぶ:" else "検索結果:",
                             style = MaterialTheme.typography.labelSmall
                         )
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
                             candidates.take(6).forEach { item ->
                                 FilterChip(
                                     selected = selectedTargetEntryId == item.id,
                                     onClick = { selectedTargetEntryId = item.id },
                                     label = {
-                                        Text("${entryTypeIcon(item.type)} ${item.title.take(12)}",
-                                            style = MaterialTheme.typography.labelSmall)
+                                        Text(
+                                            "${entryTypeIcon(item.type)} ${item.title.take(12)}",
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
                                     }
                                 )
                             }
                         }
                     }
                     Text("関係タイプ:", style = MaterialTheme.typography.labelSmall)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         connectionTypeDefs.forEach { typeDef ->
                             FilterChip(
                                 selected = selectedRelationType == typeDef.name,
                                 onClick = { selectedRelationType = typeDef.name },
-                                label = { Text(typeDef.labelJa,
-                                    style = MaterialTheme.typography.labelSmall) }
+                                label = { Text(typeDef.labelJa, style = MaterialTheme.typography.labelSmall) }
                             )
                         }
                     }
-                    Text("強度: %.0f%%".format(connectionStrength * 100),
-                        style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        "強度: %.0f%%".format(connectionStrength * 100),
+                        style = MaterialTheme.typography.labelSmall
+                    )
                     Slider(
                         value = connectionStrength,
                         onValueChange = { connectionStrength = it },
@@ -358,16 +396,17 @@ fun EntryDetailScreen(
                         singleLine = true
                     )
                     if (tagSuggestions.isNotEmpty()) {
-                        Text("既存の類似タグ（表記揺れ？）:",
-                            style = MaterialTheme.typography.labelSmall)
+                        Text("既存の類似タグ（表記揺れ？）:", style = MaterialTheme.typography.labelSmall)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             tagSuggestions.take(4).forEach { s ->
                                 FilterChip(
                                     selected = false,
                                     onClick = { tagInput = s.existingTag.name },
                                     label = {
-                                        Text("${s.existingTag.name} (${"%.0f".format(s.similarity * 100)}%)",
-                                            style = MaterialTheme.typography.labelSmall)
+                                        Text(
+                                            "${s.existingTag.name} (${"%.0f".format(s.similarity * 100)}%)",
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
                                     }
                                 )
                             }

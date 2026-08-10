@@ -1,56 +1,37 @@
-// app/src/main/java/com/thuvstu/personalencyclopedia/brain/srs/FsrsAlgorithm.kt
 package com.thuvstu.personalencyclopedia.brain.srs
 
 import com.thuvstu.personalencyclopedia.db.entity.SrsReviewEntity
 import java.util.UUID
 import kotlin.math.exp
+import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
- * FSRS-4.5 (Free Spaced Repetition Scheduler) のKotlin移植。
- * open-spaced-repetition/fsrs4anki のアルゴリズムを参照。
+ * FSRS-4.5 アルゴリズム（§8.6 H-1）。
+ * SM-2 と並列実装。srs_review が履歴テーブルの設計上の利点を活かす。
  *
- * §8.6 設計方針:
- * - 初期安定性 3.0日 (Good) / 目標保持率 90%
- * - srs_review テーブルは不変（§5.5.5）。
- *   easeFactor = difficulty (1..10) として流用、
- *   intervalDays = stability として格納。
- *   ※ R=0.9 のとき I(0.9,S)=S が数学的に厳密に成立するため、
- *     intervalDays を stability として扱っても誤差ゼロ。
- *
- * 状態: (difficulty D ∈ [1,10], stability S > 0)
- * FSRS grade: 1=Again, 2=Hard, 3=Good, 4=Easy
+ * 初期安定性 3.0日 / 目標保持率 90%
  */
 object FsrsAlgorithm {
-
-    // FSRS-4.5 数学定数
+    // FSRS-4.5 定数
     private const val DECAY = -0.5
-    private const val FACTOR = 19.0 / 81.0          // = 0.9^(1/DECAY) - 1
-
-    const val REQUESTED_RETENTION = 0.9             // §8.6 保持率90%
-    private const val MAX_INTERVAL = 36500          // 100年
+    private const val FACTOR = 19.0 / 81.0   // = 0.9^(1/DECAY) - 1
+    const val REQUESTED_RETENTION = 0.9
+    private const val MAX_INTERVAL = 36500   // 100年
     private const val MIN_DIFFICULTY = 1.0
     private const val MAX_DIFFICULTY = 10.0
 
-    /**
-     * FSRS-4.5 デフォルト重み w[0..16]
-     * w[0..3]  初期安定性 (Again/Hard/Good/Easy)  ← w[2]=3.0 は §8.6 反映
-     * w[4..5]  初期難易度
-     * w[6]     難易度更新勾配
-     * w[7]     mean reversion 重み
-     * w[8..10] 成功時の安定性増加（w[8]≒成長率）
-     * w[11..14]失敗時の安定性
-     * w[15]    hard penalty / w[16] easy bonus
-     */
+    // FSRS-4.5 デフォルト重み w[0..16]
+    // w[0..3]: 初期安定性 (Again/Hard/Good/Easy)
     private val W = doubleArrayOf(
-        0.4, 0.6, 3.0, 5.8,
-        4.93, 0.94, 0.86, 0.01,
-        1.49, 0.14, 0.94,
-        2.18, 0.05, 0.34, 1.26,
-        0.29, 2.61
+        0.4, 0.6, 3.0, 5.8,       // w0..w3: 初期安定性（w2=3.0 は §8.6 反映）
+        4.93, 0.94, 0.86, 0.01,   // w4..w7
+        1.49, 0.14, 0.94,         // w8..w10: 成功時増加
+        2.18, 0.05, 0.34, 1.26,   // w11..w14: 失敗時
+        0.29, 2.61                // w15: hard penalty, w16: easy bonus
     )
 
     data class FsrsResult(
@@ -59,8 +40,6 @@ object FsrsAlgorithm {
         val stability: Float,
         val nextReviewAt: Long
     )
-
-    // ── 核心関数 ────────────────────────────────────────────
 
     /** 初期難易度 D0(G) = w4 - e^(w5*(G-1)) + 1, clamped [1,10] */
     private fun initDifficulty(grade: Int): Double {
@@ -111,8 +90,6 @@ object FsrsAlgorithm {
         val interval = (stability / FACTOR) * (REQUESTED_RETENTION.pow(1.0 / DECAY) - 1.0)
         return max(1, min(interval.roundToInt(), MAX_INTERVAL))
     }
-
-    // ── メイン計算 ──────────────────────────────────────────
 
     /**
      * @param grade FSRS grade: 1=Again, 2=Hard, 3=Good, 4=Easy

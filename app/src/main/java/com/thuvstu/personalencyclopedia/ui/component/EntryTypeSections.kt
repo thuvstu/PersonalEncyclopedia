@@ -29,7 +29,9 @@ fun EntryTypeSection(
     type: String,
     extension: Any?,
     thought: EntryThoughtEntity? = null,
-    definition: EntryDefinitionEntity? = null
+    definition: EntryDefinitionEntity? = null,
+    onInternalLink: ((String) -> Unit)? = null
+
 ) {
     when (type) {
         "thought" -> thought?.let { ThoughtSection(it) }
@@ -45,6 +47,7 @@ fun EntryTypeSection(
         "event" -> (extension as? EntryEventEntity)?.let { EventSection(it) }
         "liked" -> (extension as? EntryLikedEntity)?.let { LikedSection(it) }
         "ai_conv" -> (extension as? EntryAiConvEntity)?.let { AiConvSection(it) }
+        "definition" -> definition?.let { DefinitionSection(it, onInternalLink) }
     }
 }
 
@@ -305,7 +308,37 @@ private fun ExpandableText(label: String, text: String?, maxLines: Int = 4) {
         }
     }
 }
-
+@Composable
+private fun DefinitionSection(d: EntryDefinitionEntity, onInternalLink: ((String) -> Unit)?) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = entryTypeColor("definition").copy(alpha = 0.08f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(d.term, style = MaterialTheme.typography.headlineMedium)
+            if (!d.reading.isNullOrBlank())
+                Text(d.reading, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!d.field.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                SuggestionChip(onClick = {}, label = { Text(d.field) }, modifier = Modifier.height(28.dp))
+            }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+            // ★ 定義文をリッチ描画（Markdown+KaTeX+ルビ+[[wiki]]+自動リンク）
+            RichContentView(
+                markdown = d.definition,
+                onInternalLink = { onInternalLink?.invoke(it) },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp, max = 300.dp)
+            )
+            parseList(d.examplesJson).takeIf { it.isNotEmpty() }?.let { ex ->
+                Spacer(Modifier.height(8.dp))
+                Text("例", style = MaterialTheme.typography.labelLarge)
+                ex.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall) }
+            }
+        }
+    }
+}
 private fun parseList(json: String?): List<String> = try {
     Json.parseToJsonElement(json ?: "[]").jsonArray.map { it.jsonPrimitive.content }
 } catch (_: Exception) { emptyList() }

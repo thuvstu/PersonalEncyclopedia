@@ -17,7 +17,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.thuvstu.personalencyclopedia.db.dao.WikiArticleDao
+import com.thuvstu.personalencyclopedia.db.entity.WikiArticleEntity
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class EntryDetailViewModel @Inject constructor(
     private val repo: EntryRepository,
@@ -26,6 +30,7 @@ class EntryDetailViewModel @Inject constructor(
     private val quizRepo: QuizRepository,
     private val tagSuggestionEngine: TagSuggestionEngine,
     private val entryDao: EntryDao,    // ★ AutoLinker 構築用
+    private val wikiArticleDao: WikiArticleDao,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -170,6 +175,33 @@ class EntryDetailViewModel @Inject constructor(
     fun resolveWikiLink(title: String, onResolved: (String?) -> Unit) {
         viewModelScope.launch {
             onResolved(repo.findByTitle(title)?.id)
+        }
+    }
+    fun draftArticleFromEntry(onDone: (String) -> Unit) {
+        viewModelScope.launch {
+            val e = entry.value ?: return@launch
+            val existing = wikiArticleDao.findByTitle(e.title)
+            if (existing != null) {
+                onDone(existing.id)
+                return@launch
+            }
+            val def = definition.value
+            val sb = StringBuilder().appendLine("# ${e.title}").appendLine()
+            if (def != null) {
+                sb.appendLine("**${def.term}**（${def.reading ?: ""}）は、${def.definition}")
+            } else {
+                e.content?.let { sb.appendLine(it) }
+            }
+            val now = System.currentTimeMillis()
+            val article = WikiArticleEntity(
+                title = e.title,
+                contentMd = sb.toString(),
+                summary = e.summary ?: def?.definition?.take(100),
+                createdAt = now,
+                updatedAt = now
+            )
+            wikiArticleDao.upsert(article)
+            onDone(article.id)
         }
     }
 }

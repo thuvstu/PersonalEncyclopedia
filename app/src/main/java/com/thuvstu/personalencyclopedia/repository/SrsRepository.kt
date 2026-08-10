@@ -14,7 +14,7 @@ import javax.inject.Singleton
 class SrsRepository @Inject constructor(
     private val srsDao: SrsReviewDao,
     private val definitionDao: EntryDefinitionDao,
-    private val settingsRepo: SettingsRepository        // ★追加
+    private val settingsRepo: SettingsRepository
 ) {
     data class ReviewCard(
         val entryId: String,
