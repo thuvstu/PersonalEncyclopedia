@@ -93,6 +93,9 @@ interface QuizDao {
     @Query("SELECT COUNT(*) FROM quiz_bank WHERE isActive = 1")
     fun observeQuizCount(): Flow<Int>
 
+    @Query("SELECT COUNT(*) FROM quiz_bank WHERE question = :question")
+    suspend fun countByQuestion(question: String): Int
+
     @Query("""
         SELECT COUNT(*) FROM quiz_attempts
         WHERE attemptedAt >= :startOfDay

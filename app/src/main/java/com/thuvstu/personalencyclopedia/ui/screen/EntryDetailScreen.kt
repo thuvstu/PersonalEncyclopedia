@@ -145,8 +145,8 @@ fun EntryDetailScreen(
                         Text("📝 メモ", style = MaterialTheme.typography.labelLarge)
                         Spacer(modifier = Modifier.height(8.dp))
                         RichContentView(
-                            markdown = e.content,
-                            onInternalLink = { target ->
+                            content = e.content,
+                            onWikiLinkClick = { target ->
                                 val title = target.removePrefix("wiki/")
                                 viewModel.resolveWikiLink(title) { id ->
                                     id?.let { onNavigateToEntry(it) }

@@ -327,8 +327,8 @@ private fun DefinitionSection(d: EntryDefinitionEntity, onInternalLink: ((String
             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
             // ★ 定義文をリッチ描画（Markdown+KaTeX+ルビ+[[wiki]]+自動リンク）
             RichContentView(
-                markdown = d.definition,
-                onInternalLink = { onInternalLink?.invoke(it) },
+                content = d.definition,
+                onWikiLinkClick = { onInternalLink?.invoke(it) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp, max = 300.dp)
             )
             parseList(d.examplesJson).takeIf { it.isNotEmpty() }?.let { ex ->

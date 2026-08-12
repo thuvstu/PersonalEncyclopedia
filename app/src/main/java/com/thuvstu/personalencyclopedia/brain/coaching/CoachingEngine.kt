@@ -78,7 +78,7 @@ class CoachingEngine @Inject constructor(
         if (cached != null) return cached.response
 
         // Gather recent wrong attempts
-        val wrongQuizzes = quizDao.getWrongQuizzes(limit = 20)
+        val wrongQuizzes = quizDao.getWrongQuizzesByTopic(topicId, limit = 20)
         if (wrongQuizzes.isEmpty()) {
             return "まだ誤答の記録がありません。クイズを解いて弱点を発見しましょう。"
         }
