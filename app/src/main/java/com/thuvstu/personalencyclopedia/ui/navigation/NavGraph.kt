@@ -247,7 +247,8 @@ fun AppNavGraph(navController: NavHostController) {
                         else -> navController.navigate("entry/edit/$type/$entryId")
                     }
                 },
-                onNavigateToEntry = { id -> navController.navigate("entry/$id") }
+                onNavigateToEntry = { id -> navController.navigate("entry/$id") },
+                onNavigateToWiki = { id -> navController.navigate("wiki/$id") }
             )
         }
     }

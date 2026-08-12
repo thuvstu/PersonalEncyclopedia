@@ -89,6 +89,7 @@ fun WikiListScreen(
 fun WikiArticleScreen(
     onBack: () -> Unit,
     onEdit: (String) -> Unit,
+    onNavigateToEntry: (String) -> Unit = {},
     viewModel: WikiViewModel = hiltViewModel()
 ) {
     val article by viewModel.article.collectAsState()

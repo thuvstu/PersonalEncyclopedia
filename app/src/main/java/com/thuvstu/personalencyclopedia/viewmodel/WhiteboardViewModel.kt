@@ -27,14 +27,17 @@ class WhiteboardViewModel @Inject constructor(
     val boards: StateFlow<List<WhiteboardEntity>> = repo.observeBoards()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val currentBoard: StateFlow<WhiteboardEntity?> = boardId?.let { repo.observeBoard(it) }
-        ?: MutableStateFlow(null)
+    val currentBoard: StateFlow<WhiteboardEntity?> = boardId?.let {
+        repo.observeBoard(it).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    } ?: MutableStateFlow(null)
 
-    val nodes: StateFlow<List<WhiteboardNodeEntity>> = boardId?.let { repo.observeNodes(it) }
-        ?: MutableStateFlow(emptyList())
+    val nodes: StateFlow<List<WhiteboardNodeEntity>> = boardId?.let {
+        repo.observeNodes(it).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    } ?: MutableStateFlow(emptyList())
 
-    val sections: StateFlow<List<WhiteboardSectionEntity>> = boardId?.let { repo.observeSections(it) }
-        ?: MutableStateFlow(emptyList())
+    val sections: StateFlow<List<WhiteboardSectionEntity>> = boardId?.let {
+        repo.observeSections(it).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    } ?: MutableStateFlow(emptyList())
 
     fun createBoard(title: String) {
         viewModelScope.launch {
