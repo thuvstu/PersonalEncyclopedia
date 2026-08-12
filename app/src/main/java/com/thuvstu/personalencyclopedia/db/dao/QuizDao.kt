@@ -72,6 +72,22 @@ interface QuizDao {
     """)
     suspend fun getWrongQuizzes(limit: Int = 10): List<QuizBankEntity>
 
+    @Query("""
+        SELECT qb.* FROM quiz_bank qb
+        LEFT JOIN entry_topic et ON et.entryId = qb.sourceEntryId
+        WHERE qb.isActive = 1
+          AND (:topicId IS NULL OR et.topicId = :topicId OR qb.topicId = :topicId)
+          AND qb.id IN (
+              SELECT qa.quizId FROM quiz_attempts qa
+              WHERE qa.isCorrect = 0
+              GROUP BY qa.quizId
+              HAVING COUNT(*) >= 1
+          )
+        ORDER BY RANDOM()
+        LIMIT :limit
+    """)
+    suspend fun getWrongQuizzesByTopic(topicId: String?, limit: Int = 10): List<QuizBankEntity>
+
     @Query("SELECT * FROM QuizMasteryView WHERE quizId = :quizId")
     suspend fun getMastery(quizId: String): QuizMasteryView?
 

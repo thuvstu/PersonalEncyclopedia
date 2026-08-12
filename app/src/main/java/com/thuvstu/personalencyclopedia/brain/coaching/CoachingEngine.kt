@@ -77,8 +77,8 @@ class CoachingEngine @Inject constructor(
         val cached = aiExplanationDao.getCached(SOURCE_WEAK_POINT, cacheKey)
         if (cached != null) return cached.response
 
-        // Gather recent wrong attempts
-        val wrongQuizzes = quizDao.getWrongQuizzes(limit = 20)
+        // Gather recent wrong attempts for the specified topic
+        val wrongQuizzes = quizDao.getWrongQuizzesByTopic(topicId = topicId, limit = 20)
         if (wrongQuizzes.isEmpty()) {
             return "まだ誤答の記録がありません。クイズを解いて弱点を発見しましょう。"
         }

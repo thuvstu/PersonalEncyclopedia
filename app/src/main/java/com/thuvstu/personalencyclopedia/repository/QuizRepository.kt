@@ -70,7 +70,7 @@ class QuizRepository @Inject constructor(
     }
 
     suspend fun getNextQuizzes(topicId: String? = null, limit: Int = 10): List<QuizBankEntity> {
-        val wrong = quizDao.getWrongQuizzes(limit / 3)
+        val wrong = quizDao.getWrongQuizzesByTopic(topicId, limit / 3)
         val unmastered = quizDao.getUnmasteredQuizzes(limit / 3)
         val random = quizDao.getRandomQuizzes(
             types = listOf("qa", "mcq", "fill_blank"), limit = limit
