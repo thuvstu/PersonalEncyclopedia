@@ -42,10 +42,34 @@
   `QuizRepository.gradeAndRecord()` がスコア係数を計算する。
 - 復習モードに **サバイバル形式**(1問ミスで即終了、連続正解数を記録)と、**プレッシャーテスト全列挙型**(同一分野の定義群から正解集合を動的生成し、60秒制限で漏れなく答える)がある(§8.7.2)。`QuizViewModel` / `QuizScreen` がモード切替を実装。
 
+## 4. 新採点システム(ルーブリック採点・試作)
+
+`docs/新採点システム.txt` の仕様を実装した **rubric ベース採点**(試作)。既存の多段階採点では拾えない「意味が近いのに採点が全く違う」ケースを複数軸で判定する。
+
+パイプライン(新採点システム.txt):
+
+```
+Rubric分解(RubricParser) → feature抽出(RubricFeatureExtractor)
+→ confidence集計(RubricConfidence) → 最終LLM judge(RubricJudge)
+```
+
+- **Rubric分解**: `quiz_bank.gradingContextJson`(未設定なら模範解答から自動分解)。
+  ```json
+  {"rubric":[{"kind":"keyword","label":"必須語","expected":"プレート境界","weight":0.5},
+             {"kind":"numeric_unit","label":"単位変換","expected":"72 km/h","weight":0.3},
+             {"kind":"polarity","label":"肯定/否定","expected":"POSITIVE","weight":0.2}],
+   "modelAnswers":["模範解答1","模範解答2"]}
+  ```
+- **判定軸** (`RubricKind`): `KEYWORD`(語の一致) / `CONCEPT`(Embedding類似度・複数模範解答とのmax) / `NUMERIC_UNIT`(単位換算込みの数値検証: `72 km/h = 20 m/s`) / `RELATION`(A→B vs B→A の向き) / `POLARITY`(否定・極性。**最も重要**:「位置する/しない」を区別) / `EXPLANATION`(説明量)。
+- **confidence**: 決定論軸(数値0.98/キーワード0.95/極性0.9)は高く、Embeddingのみ(0.5〜0.7)は低い。矛盾シグナル(極性反転・関係反転)や判定不能、総合confidence<0.7 は `deferToLlm` で最終LLM judgeへ委譲。
+- **最終LLM judge**: 構造化evidenceをプロンプトに埋め込みGeminiに最終判定させる。API未設定時は決定論フォールバック(重み付きスコア≧0.6で正解)。`judgeSource` は `llm` / `heuristic`。
+- **provider差し替え点**: `brain/quiz/rubric/provider/` の `IEmbeddingProvider` / `IEntailmentProvider` / `ICrossEncoderProvider` / `IJudgerProvider`。現在は `GeminiGradingProviders`(既存Gemini APIアダプタ)。将来端末内モデル(Qwen3系)は `LocalGradingProviders` を同じInterfaceで追加し、`GradingProviderModule` のバインディング差し替えのみで切替。
+- **統合点**: `QuizRepository.gradeAndRecord` が記述式(qa/essay・5文字以上)に適用。rubricが正解と判定した場合のみ `method="rubric"` へ昇格(既存の意味的採点昇格は維持)。採点根拠は `QuizViewModel.QuizUiState.Answered.rubricRationale` として渡り、`QuizScreen` の「採点の根拠」カードに表示される。DBマイグレーションは行わない(試作ブランチを統合しやすいように)。
+
 ## どこで使われているか
 
-- アプリ内: `QuizViewModel`(出題→採点→履歴)、`SrsRepository`(復習)
+- アプリ内: `QuizViewModel`(出題→採点→履歴)、`SrsRepository`(復習)、`RubricGrader`(新採点システム)
 - サーバー: `/api/quiz`・`/api/srs`(Web クライアント用、§10)
-- テスト: `MultiStageGraderTest`(採点)、`InMemoryVectorIndexConcurrencyTest`(検索基盤)
+- テスト: `MultiStageGraderTest`(採点)、`brain/quiz/rubric/*Test`(新採点システム: PolarityAnalyzer/NumericUnitVerifier/RelationDirectionChecker/RubricGrader ほか)、`InMemoryVectorIndexConcurrencyTest`(検索基盤)
 
-- 参考: 設計書 §8(クイズ・学習エンジン仕様)
+- 参考: 設計書 §8(クイズ・学習エンジン仕様)、`docs/新採点システム.txt`
