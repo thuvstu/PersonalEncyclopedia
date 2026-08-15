@@ -23,17 +23,26 @@ class ImportPipeline @Inject constructor(
     private val thoughtDao: EntryThoughtDao,
     private val webScraper: WebScraper,
     private val definitionDao: EntryDefinitionDao,
-    private val obsidianImporter: ObsidianImporter
+    private val obsidianImporter: ObsidianImporter,
+    private val contentHashDuplicateDetector: ContentHashDuplicateDetector,   // §12.7
+    private val urlDuplicateDetector: UrlDuplicateDetector                    // §12.7
 ) {
     data class ImportResult(
         val successCount: Int,
         val errorCount: Int,
-        val errors: List<String> = emptyList()
+        val errors: List<String> = emptyList(),
+        val skipCount: Int = 0        // §12.7: 重複スキップ件数
     )
+
+    /** §12.7: 候補が既存entryと重複していればスキップ(true)を返す。 */
+    private suspend fun isDuplicate(candidate: ImportCandidate): Boolean =
+        contentHashDuplicateDetector.findDuplicate(candidate) != null ||
+            urlDuplicateDetector.findDuplicate(candidate) != null
 
     suspend fun importDefinitionsCsv(uri: Uri): ImportResult {
         val errors = mutableListOf<String>()
         var success = 0
+        var skipped = 0
 
         try {
             val inputStream = context.contentResolver.openInputStream(uri)
@@ -69,6 +78,12 @@ class ImportPipeline @Inject constructor(
                         continue
                     }
 
+                    // §12.7: 同一用語+定義の重複をスキップ
+                    if (isDuplicate(ImportCandidate(title = term, type = "definition", content = definition))) {
+                        skipped++
+                        continue
+                    }
+
                     val id = UUID.randomUUID().toString()
                     val now = System.currentTimeMillis()
 
@@ -100,12 +115,13 @@ class ImportPipeline @Inject constructor(
             errors.add("File error: ${e.message}")
         }
 
-        return ImportResult(success, errors.size, errors)
+        return ImportResult(successCount = success, errorCount = errors.size, errors = errors, skipCount = skipped)
     }
 
     suspend fun importMarkdown(uri: Uri): ImportResult {
         val errors = mutableListOf<String>()
         var success = 0
+        var skipped = 0
 
         try {
             val inputStream = context.contentResolver.openInputStream(uri)
@@ -124,6 +140,12 @@ class ImportPipeline @Inject constructor(
                 val body = lines.drop(1).joinToString("\n").trim()
 
                 if (title.isBlank()) continue
+
+                // §12.7: 同一タイトル+本文の重複をスキップ
+                if (isDuplicate(ImportCandidate(title = title, type = "thought", content = body))) {
+                    skipped++
+                    continue
+                }
 
                 val id = UUID.randomUUID().toString()
                 val now = System.currentTimeMillis()
@@ -148,7 +170,7 @@ class ImportPipeline @Inject constructor(
             errors.add("File error: ${e.message}")
         }
 
-        return ImportResult(success, errors.size, errors)
+        return ImportResult(successCount = success, errorCount = errors.size, errors = errors, skipCount = skipped)
     }
 
     private fun parseCsvLine(line: String): List<String> {
@@ -175,9 +197,11 @@ class ImportPipeline @Inject constructor(
         result.add(sb.toString())
         return result
     }
+
     suspend fun importEntriesJson(uri: Uri): ImportResult {
         val errors = mutableListOf<String>()
         var success = 0
+        var skipped = 0
         try {
             val text = context.contentResolver.openInputStream(uri)?.use {
                 it.bufferedReader(Charsets.UTF_8).readText()
@@ -190,6 +214,15 @@ class ImportPipeline @Inject constructor(
                     val type = obj["type"]?.jsonPrimitive?.content ?: "thought"
                     val title = obj["title"]?.jsonPrimitive?.content ?: continue
                     val content = obj["content"]?.jsonPrimitive?.content
+                    // §12.7: 重複をスキップ（URL持ちはURL一致、それ以外はタイトル+本文）
+                    val candidate = ImportCandidate(
+                        title = title, type = type, content = content,
+                        sourceUrl = obj["sourceUrl"]?.jsonPrimitive?.content
+                    )
+                    if (isDuplicate(candidate)) {
+                        skipped++
+                        continue
+                    }
                     val id = UUID.randomUUID().toString()
                     val now = System.currentTimeMillis()
                     entryDao.insert(
@@ -223,13 +256,14 @@ class ImportPipeline @Inject constructor(
         } catch (e: Exception) {
             errors.add("File error: ${e.message}")
         }
-        return ImportResult(success, errors.size, errors)
+        return ImportResult(successCount = success, errorCount = errors.size, errors = errors, skipCount = skipped)
     }
 
     /** ★F: URLリスト一括取り込み（1行1URLのtxt/csv） */
     suspend fun importUrlList(uri: Uri): ImportResult {
         val errors = mutableListOf<String>()
         var success = 0
+        var skipped = 0
         try {
             val lines = context.contentResolver.openInputStream(uri)?.use {
                 it.bufferedReader(Charsets.UTF_8).readLines()
@@ -239,12 +273,17 @@ class ImportPipeline @Inject constructor(
                 .filter { it.startsWith("http://") || it.startsWith("https://") }
             for (url in urls) {
                 val result = webScraper.scrapeAndSave(url)
-                if (result.success) success++ else errors.add("$url: ${result.error}")
+                if (result.success) {
+                    // §12.7: WebScraper内部のURL重複判定で取り込まれた分はスキップとして計上
+                    if (result.deduplicated) skipped++ else success++
+                } else {
+                    errors.add("$url: ${result.error}")
+                }
             }
         } catch (e: Exception) {
             errors.add("File error: ${e.message}")
         }
-        return ImportResult(success, errors.size, errors)
+        return ImportResult(successCount = success, errorCount = errors.size, errors = errors, skipCount = skipped)
     }
 
     suspend fun importNotionMarkdown(uri: Uri): ImportResult {

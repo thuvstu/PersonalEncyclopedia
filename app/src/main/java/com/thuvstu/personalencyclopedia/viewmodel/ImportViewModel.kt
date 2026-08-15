@@ -35,7 +35,10 @@ class ImportViewModel @Inject constructor(
             _state.value = ImportState.Importing
             try {
                 val result = importPipeline.importDefinitionsCsv(uri)
-                _state.value = ImportState.Done("インポート完了: ${result.successCount}件の定義を作成しました。")
+                _state.value = ImportState.Done(
+                    "インポート完了: ${result.successCount}件の定義を作成しました。" +
+                        skipSuffix(result.skipCount)
+                )
             } catch (e: Exception) {
                 _state.value = ImportState.Error(e.message ?: "Unknown error")
             }
@@ -47,7 +50,10 @@ class ImportViewModel @Inject constructor(
             _state.value = ImportState.Importing
             try {
                 val result = importPipeline.importMarkdown(uri)
-                _state.value = ImportState.Done("インポート完了: ${result.successCount}件のエントリーを作成しました。")
+                _state.value = ImportState.Done(
+                    "インポート完了: ${result.successCount}件のエントリーを作成しました。" +
+                        skipSuffix(result.skipCount)
+                )
             } catch (e: Exception) {
                 _state.value = ImportState.Error(e.message ?: "Unknown error")
             }
@@ -94,7 +100,10 @@ class ImportViewModel @Inject constructor(
             _state.value = ImportState.Importing
             try {
                 val result = importPipeline.importEntriesJson(uri)
-                _state.value = ImportState.Done("JSONインポート完了: ${result.successCount}件")
+                _state.value = ImportState.Done(
+                    "JSONインポート完了: ${result.successCount}件" +
+                        skipSuffix(result.skipCount)
+                )
             } catch (e: Exception) {
                 _state.value = ImportState.Error(e.message ?: "Unknown error")
             }
@@ -106,10 +115,16 @@ class ImportViewModel @Inject constructor(
             _state.value = ImportState.Importing
             try {
                 val result = importPipeline.importUrlList(uri)
-                _state.value = ImportState.Done("URL一括取り込み完了: ${result.successCount}件")
+                _state.value = ImportState.Done(
+                    "URL一括取り込み完了: ${result.successCount}件" +
+                        skipSuffix(result.skipCount)
+                )
             } catch (e: Exception) {
                 _state.value = ImportState.Error(e.message ?: "Unknown error")
             }
         }
     }
+
+    private fun skipSuffix(skipCount: Int): String =
+        if (skipCount > 0) "（重複スキップ: ${skipCount}件）" else ""
 }
