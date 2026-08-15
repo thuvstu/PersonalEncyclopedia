@@ -1,5 +1,7 @@
 package com.thuvstu.personalencyclopedia.brain.quiz
 
+import com.thuvstu.personalencyclopedia.brain.quiz.rubric.RubricParser
+import com.thuvstu.personalencyclopedia.brain.quiz.rubric.RubricParser.RubricItemJson
 import com.thuvstu.personalencyclopedia.db.entity.EntryDefinitionEntity
 import com.thuvstu.personalencyclopedia.db.entity.QuizBankEntity
 import kotlinx.serialization.encodeToString
@@ -27,6 +29,13 @@ object RuleBasedQuizGenerator {
             answer = def.definition,
             generationMethod = "rule_based",
             difficulty = 3,
+            gradingContextJson = RubricParser.buildGradingContextJson( // ★最適化R5
+                items = listOf(
+                    RubricItemJson(kind = "keyword", label = "必須用語", expected = def.term, weight = 0.4f),
+                    RubricItemJson(kind = "concept", label = "定義内容", expected = def.definition, weight = 0.6f)
+                ),
+                modelAnswers = listOf(def.definition)
+            ),
             hintsJson = json.encodeToString(
                 listOfNotNull(
                     def.field?.let { "分野: $it" },
@@ -49,6 +58,12 @@ object RuleBasedQuizGenerator {
             answer = def.term,
             generationMethod = "rule_based",
             difficulty = 2,
+            gradingContextJson = RubricParser.buildGradingContextJson( // ★最適化R5
+                items = listOf(
+                    RubricItemJson(kind = "keyword", label = "必須用語", expected = def.term, weight = 1.0f)
+                ),
+                modelAnswers = listOf(def.term)
+            ),
             hintsJson = json.encodeToString(
                 listOfNotNull(
                     def.field?.let { "分野: $it" },
@@ -106,6 +121,12 @@ object RuleBasedQuizGenerator {
             answer = def.term,
             generationMethod = "rule_based",
             difficulty = 3,
+            gradingContextJson = RubricParser.buildGradingContextJson( // ★最適化R5
+                items = listOf(
+                    RubricItemJson(kind = "keyword", label = "必須用語", expected = def.term, weight = 1.0f)
+                ),
+                modelAnswers = listOf(def.term)
+            ),
             hintsJson = json.encodeToString(listOf("最初の文字: ${def.term.first()}"))
         )
     }

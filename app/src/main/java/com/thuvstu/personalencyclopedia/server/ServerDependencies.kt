@@ -1,6 +1,6 @@
 package com.thuvstu.personalencyclopedia.server
 
-import com.thuvstu.personalencyclopedia.brain.quiz.MultiStageGrader
+import com.thuvstu.personalencyclopedia.brain.quiz.QuizGraderService
 import com.thuvstu.personalencyclopedia.db.dao.ConnectionDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryDefinitionDao
@@ -24,5 +24,6 @@ class ServerDependencies @Inject constructor(
     val connectionDao: ConnectionDao,
     val progressEventDao: ProgressEventDao,
     val pluginDao: PluginDao,
-    val multiStageGrader: MultiStageGrader
+    // ★最適化R6: 採点はアプリと共通のQuizGraderServiceに統一
+    val quizGraderService: QuizGraderService
 )

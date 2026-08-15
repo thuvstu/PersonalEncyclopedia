@@ -58,6 +58,15 @@ object RubricParser {
         }
     }
 
+    /**
+     * ★最適化R5: 生成器が出力する gradingContextJson のビルダー。
+     * gradingContextJson 契約(上記doc)に沿って採点項目と模範解答をシリアライズする。
+     */
+    fun buildGradingContextJson(
+        items: List<RubricItemJson>,
+        modelAnswers: List<String>
+    ): String = json.encodeToString(RubricJson(items, modelAnswers))
+
     /** gradingContextJson を解析し、RubricBundle を返す。空/不正時は自動分解にフォールバック */
     fun parse(gradingContextJson: String?, modelAnswer: String): RubricBundle {
         if (gradingContextJson.isNullOrBlank()) {

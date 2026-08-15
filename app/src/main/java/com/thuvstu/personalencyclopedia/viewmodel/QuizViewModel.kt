@@ -45,6 +45,7 @@ class QuizViewModel @Inject constructor(
             val gradingMethod: String,
             val questionNumber: Int,
             val totalQuestions: Int,
+            val choices: List<String> = emptyList(),   // ★最適化R4: MCQの正解強調表示用
             // ★新採点システム(試作): rubric採点の根拠(LLM/ヒューリスティックのrationale)
             val rubricRationale: String? = null,
             val rubricEvidenceJson: String? = null
@@ -270,6 +271,7 @@ class QuizViewModel @Inject constructor(
                 gradingMethod = attempt.gradingMethod,
                 questionNumber = state.questionNumber,
                 totalQuestions = state.totalQuestions,
+                choices = quizRepo.parseChoices(quiz.choicesJson),
                 rubricRationale = result.rubricRationale,
                 rubricEvidenceJson = result.rubricEvidenceJson
             )

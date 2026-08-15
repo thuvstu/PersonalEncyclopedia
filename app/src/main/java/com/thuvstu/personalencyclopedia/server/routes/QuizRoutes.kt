@@ -14,6 +14,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.coroutines.flow.first
+import java.util.UUID
 
 fun Route.quizRoutes(deps: ServerDependencies) {
     route("/quiz") {
@@ -39,23 +40,23 @@ fun Route.quizRoutes(deps: ServerDependencies) {
                 ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Not found"))
             val body = call.receive<QuizAttemptRequest>()
 
-            val gradeResult = deps.multiStageGrader.grade(
+            // ★最適化R6: 採点をアプリと共通のQuizGraderServiceに統一
+            // （多段採点→ルーブリック採点(試作)→意味的採点→ヒント減点・速度ボーナス）
+            val graded = deps.quizGraderService.grade(
+                quiz = quiz,
                 userAnswer = body.userAnswer,
-                correctAnswer = quiz.answer
+                hintsRevealed = body.hintsRevealed,
+                answeredWithinMs = body.answeredWithinMs,
+                hintPenalty = 0.3f
             )
 
-            val score = when {
-                gradeResult.isCorrect -> 1.0f
-                body.userAnswer == "__UNLEARNED__" -> 0f
-                else -> -1.0f
-            }
-
             val attempt = QuizAttemptEntity(
+                id = UUID.randomUUID().toString(),
                 quizId = id,
                 userAnswer = body.userAnswer,
-                isCorrect = if (body.userAnswer == "__UNLEARNED__") null else gradeResult.isCorrect,
-                score = score,
-                gradingMethod = gradeResult.method,
+                isCorrect = graded.isCorrect,
+                score = graded.score,
+                gradingMethod = graded.method,
                 hintsRevealed = body.hintsRevealed,
                 answeredWithinMs = body.answeredWithinMs
             )
@@ -65,8 +66,8 @@ fun Route.quizRoutes(deps: ServerDependencies) {
                 QuizAttemptResponse(
                     quizId = id,
                     isCorrect = attempt.isCorrect,
-                    score = score,
-                    gradingMethod = gradeResult.method,
+                    score = graded.score,
+                    gradingMethod = graded.method,
                     correctAnswer = quiz.answer,
                     explanation = quiz.explanation
                 )

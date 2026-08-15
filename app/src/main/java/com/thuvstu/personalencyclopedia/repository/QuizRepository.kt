@@ -2,11 +2,8 @@ package com.thuvstu.personalencyclopedia.repository
 
 import com.thuvstu.personalencyclopedia.brain.ai.GeminiClient
 import com.thuvstu.personalencyclopedia.brain.quiz.LlmQuizGenerator
-import com.thuvstu.personalencyclopedia.brain.quiz.MultiStageGrader
+import com.thuvstu.personalencyclopedia.brain.quiz.QuizGraderService
 import com.thuvstu.personalencyclopedia.brain.quiz.RuleBasedQuizGenerator
-import com.thuvstu.personalencyclopedia.brain.quiz.SemanticGrader
-import com.thuvstu.personalencyclopedia.brain.quiz.rubric.RubricGrader
-import com.thuvstu.personalencyclopedia.brain.quiz.rubric.toJudgeJson
 import com.thuvstu.personalencyclopedia.db.dao.EntryDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryDefinitionDao
 import com.thuvstu.personalencyclopedia.db.dao.QuizDao
@@ -29,10 +26,8 @@ class QuizRepository @Inject constructor(
     private val topicDao: TopicDao,
     private val entryDao: EntryDao,                    // ★追加
     private val llmQuizGenerator: LlmQuizGenerator,    // ★追加
-    private val semanticGrader: SemanticGrader,        // ★追加（G）
-    private val geminiClient: GeminiClient,             // ★追加
-    private val multiStageGrader: MultiStageGrader,      // ★追加（E: era_master参照）
-    private val rubricGrader: RubricGrader               // ★新採点システム(試作)
+    private val geminiClient: GeminiClient,            // ★追加
+    private val graderService: QuizGraderService       // ★最適化R6: 採点は共通サービスへ統一
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -144,65 +139,30 @@ class QuizRepository @Inject constructor(
         answeredWithinMs: Long? = null,   // §8.7.3 (v8): 設問表示〜回答までの経過時間
         hintPenalty: Float = 0.3f         // ★最適化R2: ヒント減点率（設定で調整可能）
     ): QuizGradingResult {
-        var gradeResult = multiStageGrader.grade(userAnswer, quiz.answer)
-
-        // ★新採点システム(試作): 記述式はルーブリック採点を適用し、採点根拠を記録する。
-        // rubricが正解と判定した場合のみ正解に昇格する(safeな試作統合)。
-        var rubricRationale: String? = null
-        var rubricEvidenceJson: String? = null
-        var rubricUsed = false
-        if (rubricGrader.applicable(quiz.quizType, userAnswer)) {
-            val rubric = rubricGrader.grade(quiz.question, userAnswer, quiz.answer, quiz.gradingContextJson)
-            rubricUsed = true
-            rubricRationale = rubric.rationale
-            rubricEvidenceJson = rubric.evidence.toJudgeJson().toString()
-            if (rubric.isCorrect) {
-                gradeResult = MultiStageGrader.GradeResult(
-                    isCorrect = true,
-                    score = rubric.score.coerceAtLeast(gradeResult.score),
-                    method = "rubric"
-                )
-            }
-        }
-
-        // ★G: 記述式で通常採点が不正解かつAPI利用可能な場合、意味的採点に昇格（§8.4第6段階）
-        if (!gradeResult.isCorrect &&
-            userAnswer != "__UNLEARNED__" &&
-            userAnswer.length >= 5 &&
-            quiz.quizType in listOf("qa", "essay")
-        ) {
-            semanticGrader.grade(userAnswer, quiz.answer)?.let { sem ->
-                if (sem.isCorrect) gradeResult = sem
-            }
-        }
-
-        val baseScore = when {
-            gradeResult.isCorrect -> maxOf(0f, 1.0f - hintPenalty * hintsRevealed)
-            userAnswer == "__UNLEARNED__" -> 0f
-            else -> -1.0f
-        }
-        // §8.7.3 (Kahoot由来): 正解かつ速いほど高得点。10秒未満で最大+50%のボーナス。
-        val speedBonus = if (gradeResult.isCorrect && answeredWithinMs != null) {
-            (1.0f - answeredWithinMs.coerceAtMost(10_000L) / 10_000f)
-                .coerceIn(0f, 1f) * 0.5f
-        } else 0f
-        val score = baseScore + speedBonus
+        // ★最適化R6: 採点は共通サービス(QuizGraderService)へ委譲（アプリ/サーバーで同一ロジック）
+        val graded = graderService.grade(
+            quiz = quiz,
+            userAnswer = userAnswer,
+            hintsRevealed = hintsRevealed,
+            answeredWithinMs = answeredWithinMs,
+            hintPenalty = hintPenalty
+        )
         val attempt = QuizAttemptEntity(
             id = UUID.randomUUID().toString(),
             quizId = quiz.id,
             userAnswer = userAnswer,
-            isCorrect = if (userAnswer == "__UNLEARNED__") null else gradeResult.isCorrect,
-            score = score,
-            gradingMethod = gradeResult.method,
+            isCorrect = graded.isCorrect,
+            score = graded.score,
+            gradingMethod = graded.method,
             hintsRevealed = hintsRevealed,
             answeredWithinMs = answeredWithinMs
         )
         quizDao.insertAttempt(attempt)
         return QuizGradingResult(
             attempt = attempt,
-            rubricRationale = rubricRationale,
-            rubricEvidenceJson = rubricEvidenceJson,
-            rubricUsed = rubricUsed
+            rubricRationale = graded.rubricRationale,
+            rubricEvidenceJson = graded.rubricEvidenceJson,
+            rubricUsed = graded.rubricUsed
         )
     }
 

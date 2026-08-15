@@ -161,43 +161,40 @@ fun DashboardScreen(
                             onClick = onNavigateToQuiz,
                             modifier = Modifier.weight(1f)
                         ) { Text("📝 クイズ") }
-                        // 既存の「📚 復習」「📝 クイズ」の下に追加
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            FilledTonalButton(
-                                onClick = onNavigateToWhiteboard,
-                                modifier = Modifier.weight(1f)
-                            ) { Text("🗒️ ホワイトボード") }
-                            FilledTonalButton(
-                                onClick = onNavigateToWiki,
-                                modifier = Modifier.weight(1f)
-                            ) { Text("📚 Wiki") }
-                        }
-                        OutlinedButton(
-                            onClick = onNavigateToQuizList,
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("📋 クイズ一覧") }
+                    }
+                    // ★最適化R4: 重複していた「ホワイトボード」「クイズ一覧」ボタンを統合し2列構成に整理
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilledTonalButton(
+                            onClick = onNavigateToWhiteboard,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("🗒️ ホワイトボード") }
+                        FilledTonalButton(
+                            onClick = onNavigateToWiki,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("📚 Wiki") }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         FilledTonalButton(
                             onClick = onNavigateToQuizList,
                             modifier = Modifier.weight(1f)
-                        ) { Text("📋 一覧") }
+                        ) { Text("📋 クイズ一覧") }
+                        FilledTonalButton(
+                            onClick = onNavigateToConnections,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("🕸️ すべての接続") }
                     }
-                    OutlinedButton(
-                        onClick = onNavigateToWhiteboard,
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("🗒️ ホワイトボード") }
                     if (pendingConnectionCount > 0) {
                         OutlinedButton(
                             onClick = onNavigateToConnectionCandidates,
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("🔗 新規接続候補 ($pendingConnectionCount 件)") }
                     }
-                    OutlinedButton(
-                        onClick = onNavigateToConnections,
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("🕸️ すべての接続") }
                 }
             }
             item {

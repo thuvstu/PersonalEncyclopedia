@@ -1,6 +1,8 @@
 package com.thuvstu.personalencyclopedia.brain.quiz
 
 import com.thuvstu.personalencyclopedia.brain.ai.GeminiClient
+import com.thuvstu.personalencyclopedia.brain.quiz.rubric.RubricParser
+import com.thuvstu.personalencyclopedia.brain.quiz.rubric.RubricParser.RubricItemJson
 import com.thuvstu.personalencyclopedia.db.dao.QuizDao
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
 import com.thuvstu.personalencyclopedia.db.entity.QuizBankEntity
@@ -78,6 +80,15 @@ class LlmQuizGenerator @Inject constructor(
                         question = q.question,
                         choicesJson = choicesJson,
                         answer = q.answer,
+                        // ★最適化R5: 記述式は採点用ルーブリックコンテキストを書き出し、ルーブリック採点が使えるようにする
+                        gradingContextJson = if (q.quizType in listOf("qa", "essay")) {
+                            RubricParser.buildGradingContextJson(
+                                items = listOf(
+                                    RubricItemJson(kind = "keyword", label = "必須キーワード", expected = q.answer, weight = 1.0f)
+                                ),
+                                modelAnswers = listOf(q.answer)
+                            )
+                        } else "{}",
                         hintsJson = hintsJson,
                         explanation = q.explanation,
                         generationMethod = "cloud_ai"

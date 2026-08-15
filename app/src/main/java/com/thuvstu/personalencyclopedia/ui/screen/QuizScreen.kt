@@ -1,9 +1,11 @@
 package com.thuvstu.personalencyclopedia.ui.screen
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -15,9 +17,34 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.thuvstu.personalencyclopedia.viewmodel.QuizViewModel
+
+// ★最適化R4: 形式・採点方式のラベルを日本語に統一（DBに存在する全形式を網羅し生文字列出力を排除）
+private fun quizTypeLabel(type: String): String = when (type) {
+    "qa" -> "記述式"
+    "essay" -> "記述式"
+    "mcq" -> "選択式"
+    "fill_blank" -> "穴埋め"
+    "cloze" -> "穴埋め"
+    "sort" -> "並べ替え"
+    "custom" -> "カスタム"
+    else -> "クイズ"
+}
+
+private fun gradingMethodLabel(method: String): String = when (method) {
+    "exact" -> "完全一致"
+    "normalized" -> "正規化一致"
+    "fuzzy" -> "あいまい一致"
+    "semantic" -> "意味的採点"
+    "rubric" -> "ルーブリック採点"
+    "multi_answer" -> "複数回答一致"
+    else -> method
+}
+
+private val NUM_MARKS = listOf("①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,6 +56,16 @@ fun QuizScreen(
     val uiState by viewModel.uiState.collectAsState()
     var answerInput by remember { mutableStateOf("") }
     var enumerateInput by remember { mutableStateOf("") }
+    var showExitConfirm by remember { mutableStateOf(false) }
+
+    // ★最適化R4: セッション進行中は戻る操作で破棄確認を出す
+    val inSession = uiState is QuizViewModel.QuizUiState.Question ||
+        uiState is QuizViewModel.QuizUiState.Answered ||
+        uiState is QuizViewModel.QuizUiState.EnumerateQuestion
+    val requestExit: () -> Unit = {
+        if (inSession) showExitConfirm = true else onBack()
+    }
+    BackHandler(enabled = inSession) { showExitConfirm = true }
 
     Scaffold(
         floatingActionButton = {
@@ -40,7 +77,7 @@ fun QuizScreen(
             TopAppBar(
                 title = { Text("クイズ演習") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = requestExit) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
                     }
                 }
@@ -53,7 +90,14 @@ fun QuizScreen(
                 .padding(padding)
                 .padding(16.dp)
         ) {
-            when (val state = uiState) {
+            // ★最適化R4: 大画面・タブレットでは内容幅を制限して読みやすくする
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .widthIn(max = 640.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                when (val state = uiState) {
                 is QuizViewModel.QuizUiState.SelectMode -> {
                     Column(
                         modifier = Modifier.align(Alignment.Center),
@@ -152,16 +196,7 @@ fun QuizScreen(
                                 // Quiz type badge
                                 SuggestionChip(
                                     onClick = {},
-                                    label = {
-                                        Text(
-                                            when (state.quiz.quizType) {
-                                                "qa" -> "記述式"
-                                                "mcq" -> "選択式"
-                                                "fill_blank" -> "穴埋め"
-                                                else -> state.quiz.quizType
-                                            }
-                                        )
-                                    }
+                                    label = { Text(quizTypeLabel(state.quiz.quizType)) }
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
@@ -198,7 +233,7 @@ fun QuizScreen(
                         // Answer input
                         when (state.quiz.quizType) {
                             "mcq" -> {
-                                state.choices.forEach { choice ->
+                                state.choices.forEachIndexed { i, choice ->
                                     OutlinedButton(
                                         onClick = {
                                             answerInput = choice
@@ -209,7 +244,10 @@ fun QuizScreen(
                                             .padding(vertical = 4.dp),
                                         shape = RoundedCornerShape(12.dp)
                                     ) {
-                                        Text(choice, modifier = Modifier.padding(8.dp))
+                                        Text(
+                                            "${NUM_MARKS.getOrElse(i) { "${i + 1}." }} $choice",
+                                            modifier = Modifier.padding(8.dp)
+                                        )
                                     }
                                 }
                             }
@@ -219,7 +257,8 @@ fun QuizScreen(
                                     onValueChange = { answerInput = it },
                                     modifier = Modifier.fillMaxWidth(),
                                     label = { Text("解答を入力") },
-                                    minLines = 2
+                                    minLines = 2,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Row(
@@ -243,7 +282,10 @@ fun QuizScreen(
                                         },
                                         modifier = Modifier.weight(1f)
                                     ) {
-                                        Text("未習")
+                                        Text(
+                                            if (state.mode == QuizViewModel.SessionMode.SURVIVAL) "未習(終了)"
+                                            else "未習"
+                                        )
                                     }
                                 }
                             }
@@ -258,6 +300,14 @@ fun QuizScreen(
                             .verticalScroll(rememberScrollState()),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        // 進捗（最適化R4: 答え合わせ画面にも進捗を表示）
+                        Text(
+                            "問 ${state.questionNumber} / ${state.totalQuestions}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
                         // Result icon
                         val (icon, color, label) = when (state.isCorrect) {
                             true -> Triple("⭕", MaterialTheme.colorScheme.primary, "正解！")
@@ -271,12 +321,77 @@ fun QuizScreen(
                             color = color
                         )
                         Text(
-                            "スコア: ${String.format("%.1f", state.score)} (${state.gradingMethod})",
+                            "スコア: ${String.format("%.1f", state.score)}（${gradingMethodLabel(state.gradingMethod)}）",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        // あなたの回答（最適化R4）
+                        if (state.userAnswer.isNotBlank() && state.userAnswer != "__UNLEARNED__") {
+                            Card(modifier = Modifier.fillMaxWidth()) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text("あなたの回答", style = MaterialTheme.typography.labelLarge)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        state.userAnswer,
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+
+                        // ★最適化R4: MCQは全選択肢に正解・あなたの回答を強調表示
+                        if (state.quiz.quizType == "mcq" && state.choices.isNotEmpty()) {
+                            Card(modifier = Modifier.fillMaxWidth()) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text("選択肢", style = MaterialTheme.typography.labelLarge)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    state.choices.forEach { c ->
+                                        val isCorrectChoice = c == state.quiz.answer
+                                        val isUserChoice = c == state.userAnswer && state.userAnswer != "__UNLEARNED__"
+                                        Surface(
+                                            color = when {
+                                                isCorrectChoice -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                                isUserChoice -> MaterialTheme.colorScheme.errorContainer
+                                                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                            },
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 3.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    c,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                if (isCorrectChoice) {
+                                                    Text(
+                                                        "✓ 正解",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                } else if (isUserChoice) {
+                                                    Text(
+                                                        "あなたの回答",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.error
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
 
                         // Correct answer
                         Card(
@@ -514,7 +629,26 @@ fun QuizScreen(
                         }
                     }
                 }
+                }
             }
         }
+    }
+
+    // ★最適化R4: セッション進行中の破棄確認
+    if (showExitConfirm) {
+        AlertDialog(
+            onDismissRequest = { showExitConfirm = false },
+            title = { Text("セッションを終了しますか？") },
+            text = { Text("進行中のセッションは破棄されます。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showExitConfirm = false
+                    onBack()
+                }) { Text("終了") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitConfirm = false }) { Text("続ける") }
+            }
+        )
     }
 }
