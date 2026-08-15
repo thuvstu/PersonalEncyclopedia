@@ -82,7 +82,8 @@ class QuizRepository @Inject constructor(
     suspend fun gradeAndRecord(
         quiz: QuizBankEntity,
         userAnswer: String,
-        hintsRevealed: Int = 0
+        hintsRevealed: Int = 0,
+        answeredWithinMs: Long? = null   // §8.7.3 (v8): 設問表示〜回答までの経過時間
     ): QuizAttemptEntity {
         var gradeResult = multiStageGrader.grade(userAnswer, quiz.answer)
 
@@ -109,7 +110,8 @@ class QuizRepository @Inject constructor(
             isCorrect = if (userAnswer == "__UNLEARNED__") null else gradeResult.isCorrect,
             score = score,
             gradingMethod = gradeResult.method,
-            hintsRevealed = hintsRevealed
+            hintsRevealed = hintsRevealed,
+            answeredWithinMs = answeredWithinMs
         )
         quizDao.insertAttempt(attempt)
         return attempt

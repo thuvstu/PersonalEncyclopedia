@@ -72,9 +72,15 @@ Round 3: answeredWithinMs の記録
 - スコア計算式への係数組み込み（早押し加点）は今回のスコープ外（DB層のみ）
 
 完了チェック
-[ ] ビルド成功
-[ ] 単体テスト green
-[ ] コミット実施
+[x] ビルド成功（:app:assembleDebug）
+[x] 単体テスト green（:app:testDebugUnitTest）
+[x] コミット実施（a8b14f1）
+
+実施結果
+- QuizRepository.gradeAndRecord に answeredWithinMs パラメータ（デフォルト null）を追加して保存
+- QuizViewModel が SystemClock.elapsedRealtime() で設問表示時刻を記録し、回答時の経過msを渡す
+- Ktor API: QuizAttemptRequest に answeredWithinMs（null許容）を追加し、QuizRoutes POST /{id}/attempt で保存
+- スコア計算式への係数組み込み（早押し加点）はスコープ外として未変更
 
 Round 4: 全体検証
 概要

@@ -64,7 +64,11 @@ data class QuizResponse(
 )
 
 @Serializable
-data class QuizAttemptRequest(val userAnswer: String, val hintsRevealed: Int = 0)
+data class QuizAttemptRequest(
+    val userAnswer: String,
+    val hintsRevealed: Int = 0,
+    val answeredWithinMs: Long? = null   // §8.7.3 (v8): 設問表示〜回答までの経過時間
+)
 
 @Serializable
 data class QuizAttemptResponse(

@@ -56,7 +56,8 @@ fun Route.quizRoutes(deps: ServerDependencies) {
                 isCorrect = if (body.userAnswer == "__UNLEARNED__") null else gradeResult.isCorrect,
                 score = score,
                 gradingMethod = gradeResult.method,
-                hintsRevealed = body.hintsRevealed
+                hintsRevealed = body.hintsRevealed,
+                answeredWithinMs = body.answeredWithinMs
             )
             deps.quizDao.insertAttempt(attempt)
 

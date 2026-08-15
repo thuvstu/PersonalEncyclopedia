@@ -1,5 +1,6 @@
 package com.thuvstu.personalencyclopedia.viewmodel
 
+import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.thuvstu.personalencyclopedia.db.dao.ProgressEventDao
@@ -51,6 +52,7 @@ class QuizViewModel @Inject constructor(
     private var currentIndex = 0
     private var correctCount = 0
     private var totalScore = 0f
+    private var questionShownAt = 0L   // §8.7.3 (v8): 設問表示時刻（回答時間計測用）
 
     val quizCount: StateFlow<Int> = quizRepo.observeQuizCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
@@ -88,6 +90,7 @@ class QuizViewModel @Inject constructor(
             return
         }
         val quiz = quizzes[currentIndex]
+        questionShownAt = SystemClock.elapsedRealtime()
         _uiState.value = QuizUiState.Question(
             quiz = quiz,
             choices = quizRepo.parseChoices(quiz.choicesJson),
@@ -110,10 +113,13 @@ class QuizViewModel @Inject constructor(
         val quiz = state.quiz
 
         viewModelScope.launch {
+            // §8.7.3 (v8): 設問表示からの経過時間を記録
+            val answeredWithinMs = SystemClock.elapsedRealtime() - questionShownAt
             val attempt = quizRepo.gradeAndRecord(
                 quiz = quiz,
                 userAnswer = answer,
-                hintsRevealed = state.hintsRevealed
+                hintsRevealed = state.hintsRevealed,
+                answeredWithinMs = answeredWithinMs
             )
 
             // ★ Phase 3追加: 進捗イベント記録
