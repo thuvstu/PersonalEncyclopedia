@@ -158,7 +158,10 @@ object FsrsAlgorithm {
         sm2Grade: Int,
         elapsedDays: Double,
         previousDifficulty: Float?,
-        previousStability: Float?
+        previousStability: Float?,
+        // §5.8.5 (v8): このレビュー時点の累積成功反復回数（SM-2基準 grade>=2 で成功）
+        repetitionCount: Int = 0,
+        recordedRepetitionCount: Int = if (sm2Grade < 2) 0 else repetitionCount + 1
     ): SrsReviewEntity {
         val g = sm2GradeToFsrs(sm2Grade)
         val result = calculate(
@@ -173,7 +176,8 @@ object FsrsAlgorithm {
             grade = sm2Grade,
             intervalDays = result.intervalDays,
             easeFactor = result.difficulty,
-            nextReviewAt = result.nextReviewAt
+            nextReviewAt = result.nextReviewAt,
+            repetitionCount = recordedRepetitionCount
         )
     }
 }

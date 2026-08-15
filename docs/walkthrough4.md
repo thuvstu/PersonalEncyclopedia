@@ -40,9 +40,12 @@ Round 1: v8 マイグレーション一式
 [MODIFY] docs/walkthrough4.md（本ラウンドの結果を追記）
 
 完了チェック
-[ ] .\gradlew.bat :app:assembleDebug が成功（8.json が自動生成される）
-[ ] .\gradlew.bat :app:testDebugUnitTest が green（ベースライン13件維持）
-[ ] git コミット実施
+[x] .\gradlew.bat :app:assembleDebug が成功（8.json が自動生成される）
+[x] .\gradlew.bat :app:testDebugUnitTest が green（ベースライン13件維持）
+[x] 8.json の SrsCurrentView / srs_review / quiz_attempts / entry_custom_field を Migration7to8 と突合（完全一致確認）
+[x] Migration1to2 の View SQL を 2.json と突合（完全一致確認）
+[x] :app:compileDebugAndroidTestKotlin が成功（MigrationTest の v8 検証を含む）
+[x] git コミット実施（5c4af71）
 
 Round 2: repetitionCount の明示的記録
 概要
@@ -52,9 +55,15 @@ Round 2: repetitionCount の明示的記録
 - Sm2Algorithm / FsrsAlgorithm の createReview が repetitionCount を保存する
 
 完了チェック
-[ ] ビルド成功
-[ ] 単体テスト green
-[ ] コミット実施
+[x] ビルド成功（:app:assembleDebug）
+[x] 単体テスト green（:app:testDebugUnitTest）
+[x] コミット実施（5c4af71）
+
+実施結果
+- Sm2Algorithm.createReview に recordedRepetitionCount（デフォルト: 成功なら前回+1 / 失敗なら0）を追加して保存
+- FsrsAlgorithm.createReview にも repetitionCount / recordedRepetitionCount を追加して保存（SM-2基準 grade>=2 で成功）
+- SrsRepository.recordReview / SrsRoutes POST /review は DB の repetitionCount をそのまま前回値として使用。
+  v8 移行前データ（repetitionCount=0 のまま）は従来の間隔日数ベース推定へフォールバック（既存挙動維持）
 
 Round 3: answeredWithinMs の記録
 概要

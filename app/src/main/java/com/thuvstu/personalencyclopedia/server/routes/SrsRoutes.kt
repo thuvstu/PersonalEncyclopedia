@@ -1,6 +1,7 @@
 package com.thuvstu.personalencyclopedia.server.routes
 
 import com.thuvstu.personalencyclopedia.brain.srs.Sm2Algorithm
+import com.thuvstu.personalencyclopedia.db.entity.SrsCurrentView
 import com.thuvstu.personalencyclopedia.server.ServerDependencies
 import com.thuvstu.personalencyclopedia.server.dto.ErrorResponse
 import com.thuvstu.personalencyclopedia.server.dto.SrsDueResponse
@@ -16,6 +17,20 @@ import io.ktor.server.routing.route
 import kotlinx.coroutines.flow.first
 
 fun Route.srsRoutes(deps: ServerDependencies) {
+    /** §5.8.5: 前回の累積成功反復回数。v8移行前データは従来の間隔日数ベース推定にフォールバック。 */
+    fun resolvePriorRepetitionCount(current: SrsCurrentView?): Int {
+        if (current == null) return 0
+        val recorded = current.repetitionCount
+        if (recorded > 0) return recorded
+        return if (current.grade >= 2) {
+            when {
+                current.intervalDays <= 1 -> 1
+                current.intervalDays <= 6 -> 2
+                else -> 3
+            }
+        } else 0
+    }
+
     route("/srs") {
         get("/due") {
             val limit = call.parameters["limit"]?.toIntOrNull() ?: 30
@@ -46,18 +61,14 @@ fun Route.srsRoutes(deps: ServerDependencies) {
                 return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid input"))
             }
             val current = deps.srsReviewDao.getCurrentState(body.entryId)
+            // §5.8.5 (v8): 明示記録された反復回数をそのまま前回値として使う（移行前データは従来推定へフォールバック）
+            val priorCount = resolvePriorRepetitionCount(current)
             val review = Sm2Algorithm.createReview(
                 entryId = body.entryId,
                 grade = body.grade,
                 previousInterval = current?.intervalDays ?: 0,
                 previousEase = current?.easeFactor ?: 2.5f,
-                repetitionCount = if (current != null && current.grade >= 2) {
-                    when {
-                        current.intervalDays <= 1 -> 1
-                        current.intervalDays <= 6 -> 2
-                        else -> 3
-                    }
-                } else 0
+                repetitionCount = priorCount
             )
             deps.srsReviewDao.insert(review)
             call.respond(

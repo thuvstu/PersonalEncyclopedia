@@ -65,7 +65,9 @@ object Sm2Algorithm {
         grade: Int,
         previousInterval: Int = 0,
         previousEase: Float = 2.5f,
-        repetitionCount: Int = 0
+        repetitionCount: Int = 0,
+        // §5.8.5 (v8): このレビュー時点の累積成功反復回数。成功(grade>=2)なら前回+1、失敗なら0
+        recordedRepetitionCount: Int = if (grade < 2) 0 else repetitionCount + 1
     ): SrsReviewEntity {
         val result = calculate(grade, previousInterval, previousEase, repetitionCount)
         return SrsReviewEntity(
@@ -74,7 +76,8 @@ object Sm2Algorithm {
             grade = grade,
             intervalDays = result.intervalDays,
             easeFactor = result.easeFactor,
-            nextReviewAt = result.nextReviewAt
+            nextReviewAt = result.nextReviewAt,
+            repetitionCount = recordedRepetitionCount
         )
     }
 }

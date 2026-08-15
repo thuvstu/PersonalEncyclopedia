@@ -44,6 +44,9 @@ class SrsRepository @Inject constructor(
     suspend fun recordReview(entryId: String, grade: Int) {
         val current = srsDao.getCurrentState(entryId)
         val algorithm = settingsRepo.srsAlgorithm.first()   // ★ "SM2" or "FSRS"
+        // §5.8.5 (v8): 明示記録された反復回数をそのまま前回値として使う。
+        // v8移行前データ（repetitionCount=0のまま）は従来の間隔日数ベース推定をフォールバック。
+        val priorCount = resolvePriorRepetitionCount(current)
 
         val review = if (algorithm == "FSRS") {
             val elapsedDays = current?.lastReviewedAt?.let {
@@ -56,7 +59,8 @@ class SrsRepository @Inject constructor(
                 sm2Grade = grade,
                 elapsedDays = elapsedDays,
                 previousDifficulty = prevDifficulty,
-                previousStability = prevStability
+                previousStability = prevStability,
+                repetitionCount = priorCount
             )
         } else {
             Sm2Algorithm.createReview(
@@ -64,16 +68,24 @@ class SrsRepository @Inject constructor(
                 grade = grade,
                 previousInterval = current?.intervalDays ?: 0,
                 previousEase = current?.easeFactor ?: 2.5f,
-                repetitionCount = if (current != null && current.grade >= 2) {
-                    when {
-                        current.intervalDays <= 1 -> 1
-                        current.intervalDays <= 6 -> 2
-                        else -> 3
-                    }
-                } else 0
+                repetitionCount = priorCount
             )
         }
         srsDao.insert(review)
+    }
+
+    /** §5.8.5: 前回の累積成功反復回数。v8移行前データは従来の推定（間隔日数ベース）にフォールバック。 */
+    private fun resolvePriorRepetitionCount(current: SrsCurrentView?): Int {
+        if (current == null) return 0
+        val recorded = current.repetitionCount
+        if (recorded > 0) return recorded
+        return if (current.grade >= 2) {
+            when {
+                current.intervalDays <= 1 -> 1
+                current.intervalDays <= 6 -> 2
+                else -> 3
+            }
+        } else 0
     }
 
     fun observeDueCount(): Flow<Int> = srsDao.observeDueCount()
