@@ -30,4 +30,15 @@ interface EntryDefinitionDao {
         LIMIT :limit
     """)
     fun search(q: String, limit: Int = 50): Flow<List<EntryDefinitionEntity>>
+
+    // §8.7.2 プレッシャーテスト(全列挙型)用: 分野一覧と分野別エントリー群
+    @Query("SELECT DISTINCT field FROM entry_definition WHERE field IS NOT NULL AND field != '' ORDER BY field")
+    suspend fun getDistinctFields(): List<String>
+
+    @Query("""
+        SELECT ed.* FROM entry_definition ed
+        INNER JOIN entry e ON e.id = ed.entryId
+        WHERE ed.field = :field AND e.deletedAt IS NULL
+    """)
+    suspend fun getByField(field: String): List<EntryDefinitionEntity>
 }

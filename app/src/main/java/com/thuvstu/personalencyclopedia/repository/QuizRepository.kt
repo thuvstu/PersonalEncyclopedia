@@ -79,6 +79,39 @@ class QuizRepository @Inject constructor(
         return (wrong + unmastered + random).distinctBy { it.id }.take(limit)
     }
 
+    // §8.7.2 プレッシャーテスト(全列挙型)の出題セット
+    data class EnumerateChallenge(
+        val field: String,
+        val answers: List<String>
+    )
+
+    /** 同一分野のentry群から正解集合を動的生成する。対象が少なすぎる分野はスキップ。 */
+    suspend fun buildEnumerateChallenge(): EnumerateChallenge? {
+        val fields = definitionDao.getDistinctFields()
+        for (field in fields) {
+            val defs = definitionDao.getByField(field)
+            val terms = defs.mapNotNull { it.term.trim().takeIf { t -> t.isNotBlank() } }
+                .distinct().take(12)
+            if (terms.size >= 3) return EnumerateChallenge(field, terms)
+        }
+        return null
+    }
+
+    /** §8.7.2: 回答文字列が正解集合に含まれるかを正規化比較で判定（マッチ済みは除外）。 */
+    fun matchEnumerateAnswer(
+        answer: String,
+        correctSet: List<String>,
+        matched: List<String>
+    ): String? {
+        val norm = answer.trim().replace(Regex("\\s+"), "")
+        if (norm.isBlank()) return null
+        val already = matched.map { it.replace(Regex("\\s+"), "") }.toSet()
+        return correctSet.firstOrNull { c ->
+            val cNorm = c.replace(Regex("\\s+"), "")
+            cNorm.isNotEmpty() && cNorm !in already && cNorm == norm
+        }
+    }
+
     suspend fun gradeAndRecord(
         quiz: QuizBankEntity,
         userAnswer: String,
@@ -98,11 +131,17 @@ class QuizRepository @Inject constructor(
             }
         }
 
-        val score = when {
+        val baseScore = when {
             gradeResult.isCorrect -> maxOf(0f, 1.0f - 0.3f * hintsRevealed)
             userAnswer == "__UNLEARNED__" -> 0f
             else -> -1.0f
         }
+        // §8.7.3 (Kahoot由来): 正解かつ速いほど高得点。10秒未満で最大+50%のボーナス。
+        val speedBonus = if (gradeResult.isCorrect && answeredWithinMs != null) {
+            (1.0f - answeredWithinMs.coerceAtMost(10_000L) / 10_000f)
+                .coerceIn(0f, 1f) * 0.5f
+        } else 0f
+        val score = baseScore + speedBonus
         val attempt = QuizAttemptEntity(
             id = UUID.randomUUID().toString(),
             quizId = quiz.id,

@@ -8,6 +8,8 @@ import com.thuvstu.personalencyclopedia.db.entity.ProgressEventEntity
 import com.thuvstu.personalencyclopedia.db.entity.QuizBankEntity
 import com.thuvstu.personalencyclopedia.repository.QuizRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -18,7 +20,10 @@ class QuizViewModel @Inject constructor(
     private val progressEventDao: ProgressEventDao   // ← Phase 3で追加
 ) : ViewModel() {
 
+    enum class SessionMode { NORMAL, SURVIVAL }
+
     sealed class QuizUiState {
+        object SelectMode : QuizUiState()
         object Loading : QuizUiState()
         object Empty : QuizUiState()
         data class Question(
@@ -27,7 +32,8 @@ class QuizViewModel @Inject constructor(
             val hints: List<String>,
             val hintsRevealed: Int,
             val questionNumber: Int,
-            val totalQuestions: Int
+            val totalQuestions: Int,
+            val mode: SessionMode = SessionMode.NORMAL
         ) : QuizUiState()
         data class Answered(
             val quiz: QuizBankEntity,
@@ -41,11 +47,25 @@ class QuizViewModel @Inject constructor(
         data class SessionComplete(
             val totalAnswered: Int,
             val correctCount: Int,
-            val totalScore: Float
+            val totalScore: Float,
+            val survivalStreak: Int? = null
+        ) : QuizUiState()
+        // §8.7.2 プレッシャーテスト(全列挙型)
+        data class EnumerateQuestion(
+            val fieldLabel: String,
+            val correctSet: List<String>,
+            val matched: List<String>,
+            val timeLeftMs: Long
+        ) : QuizUiState()
+        data class EnumerateComplete(
+            val fieldLabel: String,
+            val matchedCount: Int,
+            val totalCount: Int,
+            val missed: List<String>
         ) : QuizUiState()
     }
 
-    private val _uiState = MutableStateFlow<QuizUiState>(QuizUiState.Loading)
+    private val _uiState = MutableStateFlow<QuizUiState>(QuizUiState.SelectMode)
     val uiState: StateFlow<QuizUiState> = _uiState
 
     private var quizzes: List<QuizBankEntity> = emptyList()
@@ -53,6 +73,8 @@ class QuizViewModel @Inject constructor(
     private var correctCount = 0
     private var totalScore = 0f
     private var questionShownAt = 0L   // §8.7.3 (v8): 設問表示時刻（回答時間計測用）
+    private var mode = SessionMode.NORMAL
+    private var enumerateJob: Job? = null
 
     val quizCount: StateFlow<Int> = quizRepo.observeQuizCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
@@ -64,6 +86,27 @@ class QuizViewModel @Inject constructor(
             currentIndex = 0
             correctCount = 0
             totalScore = 0f
+            mode = SessionMode.NORMAL
+            enumerateJob?.cancel()
+
+            if (quizzes.isEmpty()) {
+                _uiState.value = QuizUiState.Empty
+            } else {
+                showCurrentQuestion()
+            }
+        }
+    }
+
+    // §8.7.2 サバイバル形式: 1問でも間違えると即終了。連続正解数を記録。
+    fun startSurvivalSession(topicId: String? = null) {
+        viewModelScope.launch {
+            _uiState.value = QuizUiState.Loading
+            quizzes = quizRepo.getNextQuizzes(topicId = topicId, limit = 30)
+            currentIndex = 0
+            correctCount = 0
+            totalScore = 0f
+            mode = SessionMode.SURVIVAL
+            enumerateJob?.cancel()
 
             if (quizzes.isEmpty()) {
                 _uiState.value = QuizUiState.Empty
@@ -80,12 +123,62 @@ class QuizViewModel @Inject constructor(
         }
     }
 
+    // §8.7.2 プレッシャーテスト: 同一分野のentry群を制限時間内にできるだけ多く列挙
+    fun startEnumerateChallenge() {
+        viewModelScope.launch {
+            _uiState.value = QuizUiState.Loading
+            val challenge = quizRepo.buildEnumerateChallenge()
+            if (challenge == null) {
+                _uiState.value = QuizUiState.Empty
+                return@launch
+            }
+            val initial = QuizUiState.EnumerateQuestion(
+                fieldLabel = challenge.field,
+                correctSet = challenge.answers,
+                matched = emptyList(),
+                timeLeftMs = 60_000L
+            )
+            _uiState.value = initial
+            enumerateJob?.cancel()
+            enumerateJob = viewModelScope.launch {
+                while (true) {
+                    delay(250)
+                    val st = _uiState.value as? QuizUiState.EnumerateQuestion ?: break
+                    val remaining = st.timeLeftMs - 250
+                    if (remaining <= 0) {
+                        finishEnumerate(st)
+                        break
+                    }
+                    _uiState.value = st.copy(timeLeftMs = remaining)
+                }
+            }
+        }
+    }
+
+    private fun finishEnumerate(st: QuizUiState.EnumerateQuestion) {
+        _uiState.value = QuizUiState.EnumerateComplete(
+            fieldLabel = st.fieldLabel,
+            matchedCount = st.matched.size,
+            totalCount = st.correctSet.size,
+            missed = st.correctSet.filterNot { it in st.matched }
+        )
+    }
+
+    fun submitEnumerateAnswer(answer: String) {
+        val st = _uiState.value as? QuizUiState.EnumerateQuestion ?: return
+        val hit = quizRepo.matchEnumerateAnswer(answer, st.correctSet, st.matched)
+        if (hit != null) {
+            _uiState.value = st.copy(matched = st.matched + hit)
+        }
+    }
+
     private fun showCurrentQuestion() {
         if (currentIndex >= quizzes.size) {
             _uiState.value = QuizUiState.SessionComplete(
-                totalAnswered = quizzes.size,
+                totalAnswered = correctCount,
                 correctCount = correctCount,
-                totalScore = totalScore
+                totalScore = totalScore,
+                survivalStreak = if (mode == SessionMode.SURVIVAL) correctCount else null
             )
             return
         }
@@ -97,7 +190,8 @@ class QuizViewModel @Inject constructor(
             hints = quizRepo.parseHints(quiz.hintsJson),
             hintsRevealed = 0,
             questionNumber = currentIndex + 1,
-            totalQuestions = quizzes.size
+            totalQuestions = quizzes.size,
+            mode = mode
         )
     }
 
@@ -134,6 +228,17 @@ class QuizViewModel @Inject constructor(
             if (attempt.isCorrect == true) correctCount++
             totalScore += attempt.score
 
+            // §8.7.2 サバイバル形式: 正解以外（未習含む）は即終了
+            if (mode == SessionMode.SURVIVAL && attempt.isCorrect != true) {
+                _uiState.value = QuizUiState.SessionComplete(
+                    totalAnswered = correctCount,
+                    correctCount = correctCount,
+                    totalScore = totalScore,
+                    survivalStreak = correctCount
+                )
+                return@launch
+            }
+
             _uiState.value = QuizUiState.Answered(
                 quiz = quiz,
                 userAnswer = answer,
@@ -151,7 +256,18 @@ class QuizViewModel @Inject constructor(
     }
 
     fun nextQuestion() {
-        currentIndex++
-        showCurrentQuestion()
+        if (mode == SessionMode.SURVIVAL) {
+            // 正解時のみここへ来る（不正解はsubmitAnswerで終了済み）
+            currentIndex++
+            showCurrentQuestion()
+        } else {
+            currentIndex++
+            showCurrentQuestion()
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        enumerateJob?.cancel()
     }
 }
