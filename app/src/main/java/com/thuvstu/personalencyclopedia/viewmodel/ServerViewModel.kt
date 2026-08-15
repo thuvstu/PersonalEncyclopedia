@@ -56,6 +56,22 @@ class ServerViewModel @Inject constructor(
     val lastBackupStatus: StateFlow<String?> = settingsRepo.lastBackupStatus
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    // §8.6 SRSアルゴリズム切替（"SM2" / "FSRS"）
+    val srsAlgorithm: StateFlow<String> = settingsRepo.srsAlgorithm
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "SM2")
+
+    // §4.4 AI設定（プロバイダ・モデル）
+    val aiProvider: StateFlow<String> = settingsRepo.aiProvider
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "gemini")
+    val geminiModel: StateFlow<String> = settingsRepo.geminiModel
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    val ollamaHost: StateFlow<String> = settingsRepo.ollamaHost
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    val ollamaChatModel: StateFlow<String> = settingsRepo.ollamaChatModel
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    val ollamaEmbedModel: StateFlow<String> = settingsRepo.ollamaEmbedModel
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
     private val _actionMessage = MutableSharedFlow<String>()
     val actionMessage: SharedFlow<String> = _actionMessage
 
@@ -119,6 +135,64 @@ class ServerViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepo.setAutoConnectThreshold(v)
             connectionEngine.autoConnectThreshold = v
+        }
+    }
+
+    // §8.6: SRSアルゴリズム切替（"SM2" / "FSRS"）。次回レビューから反映。
+    fun setSrsAlgorithm(algorithm: String) {
+        viewModelScope.launch {
+            settingsRepo.setSrsAlgorithm(algorithm)
+            _actionMessage.emit(
+                if (algorithm == "FSRS") "✅ SRSをFSRS-4.5に切り替えました（次回レビューから適用）"
+                else "✅ SRSをSM-2に切り替えました（次回レビューから適用）"
+            )
+        }
+    }
+
+    // §4.4: AIプロバイダ切替（gemini / ollama）
+    fun setAiProvider(provider: String) {
+        viewModelScope.launch {
+            settingsRepo.setAiProvider(provider)
+            _actionMessage.emit(
+                if (provider == "ollama") "AIプロバイダをOllama(LAN)に切り替えました"
+                else "AIプロバイダをGeminiに切り替えました"
+            )
+        }
+    }
+
+    fun setGeminiModel(model: String) {
+        viewModelScope.launch {
+            settingsRepo.setGeminiModel(model)
+            geminiClient.geminiModel = model   // 即時反映
+            _actionMessage.emit("Geminiモデルを切り替えました")
+        }
+    }
+
+    private fun syncOllamaClient() {
+        viewModelScope.launch {
+            val host = settingsRepo.ollamaHost.first()
+            val chat = settingsRepo.ollamaChatModel.first()
+            val embed = settingsRepo.ollamaEmbedModel.first()
+            if (host.isNotBlank()) geminiClient.setOllama(host, chat, embed)
+        }
+    }
+
+    fun setOllamaHost(v: String) {
+        viewModelScope.launch {
+            settingsRepo.setOllamaHost(v); syncOllamaClient()
+        }
+    }
+
+    fun setOllamaChatModel(v: String) {
+        viewModelScope.launch {
+            settingsRepo.setOllamaChatModel(v); syncOllamaClient()
+        }
+    }
+
+    fun setOllamaEmbedModel(v: String) {
+        viewModelScope.launch {
+            settingsRepo.setOllamaEmbedModel(v); syncOllamaClient()
+            _actionMessage.emit("Ollama設定を保存しました")
         }
     }
 

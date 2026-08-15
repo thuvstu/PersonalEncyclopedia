@@ -12,6 +12,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -27,10 +29,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Security
+import com.thuvstu.personalencyclopedia.brain.ai.AiModels
 import java.text.SimpleDateFormat
 import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
@@ -45,6 +49,12 @@ fun SettingsScreen(
     val safUri by viewModel.backupSafUri.collectAsState()
     val lastBackupTime by viewModel.lastBackupTime.collectAsState()
     val lastBackupStatus by viewModel.lastBackupStatus.collectAsState()
+    val srsAlgorithm by viewModel.srsAlgorithm.collectAsState()
+    val aiProvider by viewModel.aiProvider.collectAsState()
+    val geminiModel by viewModel.geminiModel.collectAsState()
+    val ollamaHost by viewModel.ollamaHost.collectAsState()
+    val ollamaChatModel by viewModel.ollamaChatModel.collectAsState()
+    val ollamaEmbedModel by viewModel.ollamaEmbedModel.collectAsState()
 
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -240,6 +250,29 @@ fun SettingsScreen(
                         }
                         Switch(checked = isRunning, onCheckedChange = { viewModel.toggleServer() })
                     }
+                    if (isRunning) {
+                        // §4.3: LAN警告（平文・暗号化なし。使用時のみONにする運用）
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Security, null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "⚠️ この通信は暗号化されていません。トークンを持つPCからはデータにアクセスできます。" +
+                                        "同じWi-Fiの共有環境では使用を避け、不要になったらすぐにOFFにしてください。",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
                     Spacer(modifier = Modifier.height(12.dp))
                     Text("🔑 アクセストークン", style = MaterialTheme.typography.titleSmall)
                     Spacer(modifier = Modifier.height(4.dp))
@@ -259,6 +292,96 @@ fun SettingsScreen(
                             Icon(Icons.Default.Refresh, null, Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp)); Text("再発行")
                         }
+                    }
+                }
+            }
+
+            // ── SRSアルゴリズム切替（§8.6）──
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("🧠 SRSアルゴリズム", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "復習間隔の計算方式を選択します（次回のレビューから反映）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = srsAlgorithm == "SM2",
+                            onClick = { viewModel.setSrsAlgorithm("SM2") },
+                            label = { Text("SM-2（既定）") }
+                        )
+                        FilterChip(
+                            selected = srsAlgorithm == "FSRS",
+                            onClick = { viewModel.setSrsAlgorithm("FSRS") },
+                            label = { Text("FSRS-4.5") }
+                        )
+                    }
+                }
+            }
+
+            // ── AI設定（§4.4）──
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("🤖 AI設定", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Embedding・LLM呼び出しに使うプロバイダを選択します",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = aiProvider == "gemini",
+                            onClick = { viewModel.setAiProvider("gemini") },
+                            label = { Text("Gemini API") }
+                        )
+                        FilterChip(
+                            selected = aiProvider == "ollama",
+                            onClick = { viewModel.setAiProvider("ollama") },
+                            label = { Text("Ollama (LAN)") }
+                        )
+                    }
+                    if (aiProvider == "gemini") {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("Geminiチャットモデル", style = MaterialTheme.typography.labelMedium)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            AiModels.GEMINI_CHAT_MODELS.forEach { def ->
+                                FilterChip(
+                                    selected = geminiModel == def.id || (geminiModel.isBlank() && def.id == AiModels.GEMINI_CHAT_MODELS.first().id),
+                                    onClick = { viewModel.setGeminiModel(def.id) },
+                                    label = { Text("${def.label}（${def.tier}）", style = MaterialTheme.typography.labelSmall) }
+                                )
+                            }
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = ollamaHost,
+                            onValueChange = viewModel::setOllamaHost,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Ollamaホスト (http://192.168.x.x:11434)") },
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = ollamaChatModel,
+                            onValueChange = viewModel::setOllamaChatModel,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("チャットモデル (例: llama3.1)") },
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = ollamaEmbedModel,
+                            onValueChange = viewModel::setOllamaEmbedModel,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Embeddingモデル (例: nomic-embed-text)") },
+                            singleLine = true
+                        )
                     }
                 }
             }
