@@ -87,3 +87,16 @@ Round 4: 全体検証
 - 全ラウンドの変更を walkthrough4.md に最終反映
 - 最終ビルド + 単体テスト再実行
 - コミット実施
+
+完了チェック
+[x] ビルド成功（:app:assembleDebug）
+[x] 単体テスト green（:app:testDebugUnitTest / 13件 / 0失敗）
+[x] :app:compileDebugAndroidTestKotlin 成功（MigrationTest に v8 検証を含む）
+[x] git コミット実施
+
+最終結果
+Round1（5c4af71）: v8 マイグレーション一式（entry_custom_field / srs_review.repetitionCount / quiz_attempts.answeredWithinMs / SrsCurrentView 再作成）
+Round2（a8b14f1）: repetitionCount の明示的記録（Sm2 / Fsrs / SrsRepository / SrsRoutes、移行前データは従来推定へフォールバック）
+Round3（71106ff）: answeredWithinMs の記録（QuizRepository / QuizViewModel / QuizAttemptRequest / QuizRoutes）
+- 最終検証: assembleDebug / testDebugUnitTest(13件) / compileDebugAndroidTestKotlin すべて成功
+- スコープ外の早押し加点（スコア係数）・カスタムフィールドのUI・その他の未実装要素は別ラウンドで対応予定
