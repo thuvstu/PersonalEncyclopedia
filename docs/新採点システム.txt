@@ -198,3 +198,280 @@ Rubric 3:
    Cross-Encoder
    Confidence / defer
    最終LLM judge
+
+モデル選定
+
+## 推奨構成
+
+### メインEmbedding：Qwen3-Embedding-4B
+
+[Qwen3-Embedding-4B](https://huggingface.co/Qwen/Qwen3-Embedding-4B?utm_source=chatgpt.com)
+
+これを**PKMのメインEmbedding**にする。
+
+理由はかなり明確で、
+
+* 4B
+* 32K context
+* 100+言語
+* 日本語対応
+* 最大2560次元
+* Matryoshka対応で次元を削れる
+* instruction-aware
+* MTEB Multilingual **69.45**
+* 0.6Bの64.33からかなり伸びる
+* 8Bの70.58にはそこまで大差ない
+
+というバランス。公式比較では4Bが69.45、8Bが70.58なので、**8Bに対して約1.1ポイントしか差がない**。([huggingface.co](https://huggingface.co/Qwen/Qwen3-Embedding-4B?utm_source=chatgpt.com)) ([Hugging Face][1])
+
+つまりAndroidで無理して8Bにするより、
+
+> **4Bを高品質量子化して常駐**
+
+のほうがPKMとしては合理的。
+
+---
+
+# ただし「最強を狙う」なら8B
+
+[Qwen3-Embedding-8B](https://huggingface.co/Qwen/Qwen3-Embedding-8B?utm_source=chatgpt.com)
+
+端末が**RAM 16～24GB級**なら、8Bも候補。
+
+Qwen3 Embeddingシリーズは0.6B / 4B / 8Bで、8Bは4096次元まで出せる。100+言語、32K context、instruction-aware、MRL対応。([huggingface.co](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B?utm_source=chatgpt.com)) ([Hugging Face][2])
+
+MTEB Multilingualは、
+
+```text
+0.6B    64.33
+4B      69.45
+8B      70.58
+```
+
+なので、
+
+**0.6B → 4B：かなり大きな改善**
+
+**4B → 8B：改善は小さくなる**
+
+という関係。
+
+だから俺なら、
+
+```text
+8GB RAM   → 0.6B
+12GB RAM  → 4B Q4
+16GB RAM  → 4B Q5/Q6 or 8B Q4
+24GB RAM  → 8B Q5/Q6
+```
+
+くらいを目安にする。
+
+ただしAndroidでは**モデルサイズ＝必要RAMではない**ので、実機ベンチマークは必要。
+
+---
+
+# そして「検索用」と「採点用」は分ける
+
+ここが今回の用途では重要。
+
+PKMの通常検索：
+
+```text
+ユーザー検索
+      ↓
+Qwen3-Embedding-4B
+      ↓
+Vector DB
+      ↓
+Top-K
+```
+
+ならこれでいい。
+
+しかし**採点**では、
+
+```text
+問題
+模範解答
+採点rubric
+学生回答
+```
+
+を比較する。
+
+ここではEmbeddingだけでなく、
+
+```text
+Qwen3-Embedding
+      +
+NLI
+      +
+Cross Encoder / Reranker
+      +
+否定・数値・構造解析
+```
+
+にする。
+
+---
+
+# RerankerもQwen3シリーズで揃える
+
+ここがかなり良い。
+
+**Qwen3-Reranker-4B**
+
+または端末が強ければ
+
+**Qwen3-Reranker-8B**
+
+を第二段階にする。
+
+Qwen3シリーズはEmbeddingだけでなく、0.6B / 4B / 8BのRerankerも用意されている。しかもEmbeddingとRerankerの両方がinstruction-aware。([huggingface.co](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B?utm_source=chatgpt.com)) ([Hugging Face][2])
+
+
+```text
+             Qwen3-Embedding-4B
+                     ↓
+              候補検索 Top-20
+                     ↓
+             Qwen3-Reranker-4B
+                     ↓
+                Top-3
+                     ↓
+              最終LLM Judge
+```
+
+という構成ができる。
+
+**Embeddingを「検索」、Rerankerを「精密比較」にする。**
+
+これはPKMでも採点でも非常に綺麗。
+
+## EmbeddingGemma-300M
+これは性能だけならQwen3-4Bには負けるが、**Androidへの実装容易性では圧倒的に強い**。
+
+Googleが明確にmobile/on-deviceをターゲットにしている300Mモデルで、100+言語対応。([ai.google.dev](https://ai.google.dev/gemma/docs/embeddinggemma/model_card)) ([Google AI for Developers][3])
+
+しかもLiteRT版では、Samsung Galaxy S25 Ultraで、
+
+```text
+NPU
+256 tokens
+7.8 ms
+224 MB RSS
+182 MB model
+```
+
+という実測値が公開されている。
+
+512 tokensでも18ms。1024でも57ms。([huggingface.co](https://huggingface.co/litert-community/embeddinggemma-300m)) ([Hugging Face][4])
+
+> **「とにかくAndroidで常時動かして、検索を一瞬で返したい」**
+
+こともあるのでEmbeddingGemmaもあり。
+
+
+### 普段のインデックス作成
+
+```text
+                    文書
+                     ↓
+              chunk / metadata
+                     ↓
+          Qwen3-Embedding-4B
+                     ↓
+              2560d / 1024d
+                     ↓
+                 SQLite
+                     ↓
+              vector index
+```
+
+ただし**2560dを必ず使う必要はない**。
+
+Qwen3-EmbeddingはMRLなので、例えば1024dまで落としても性能とストレージのバランスがかなり良い。
+
+数百万chunkを保存するなら次元数は結構効いてくる。
+
+---
+
+### 検索
+
+```text
+query
+ ↓
+Embedding
+ ↓
+Vector Search
+ ↓
+Top 30
+ ↓
+Reranker
+ ↓
+Top 5
+ ↓
+LLM
+```
+
+これならRerankerを全データに掛けなくていい。
+
+---
+
+# 採点
+
+採点はさらに別系統。
+
+```text
+学生回答
+   │
+   ├── Embedding ──────┐
+   │                    │
+   ├── Keyword ────────┤
+   │                    │
+   ├── Concept ────────┤
+   │                    │
+   ├── NLI ─────────────┤
+   │                    │
+   ├── Contradiction ───┤
+   │                    │
+   ├── Polarity ────────┤
+   │                    │
+   ├── Numeric ─────────┤
+   │                    │
+   └── Structure ───────┘
+                        ↓
+                 Rubric features
+                        ↓
+                 Qwen Reranker
+                        ↓
+                  Local LLM
+                        ↓
+                    最終採点
+```
+
+ここでは特に**Embeddingを最終判定にしない**。
+
+---
+
+9Bだから4Bより圧倒的に良い
+とはならないので4B
+---
+
+# 最終的な推奨
+
+| 用途             | 推奨                             |
+| -------------- | ------------------------------ |
+| **最高性能PKM**    | **Qwen3-Embedding-4B**         |
+| さらに性能を追求       | **Qwen3-Embedding-8B**         |
+| 超大モデルを試す       | BGE-Multilingual-Gemma2 9B     |
+| Android/NPU最優先 | **EmbeddingGemma-300M LiteRT** |
+| 高精度rerank      | **Qwen3-Reranker-4B**          |
+| 超高精度rerank     | Qwen3-Reranker-8B              |
+| 最終判断           | **ローカルLLM**                    |
+| 否定・数値・単位       | **専用処理**                       |
+
+MySoCはsnapdragon 8s gen4なのでモデルは動くと思う
+
+そして、APIから無料のGemini-embedding-2も使う。
