@@ -56,7 +56,7 @@ import com.thuvstu.personalencyclopedia.db.entity.*
         QuizMasteryView::class,
     ],
     version = 6,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     // Phase 0

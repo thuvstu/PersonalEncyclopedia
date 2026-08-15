@@ -28,7 +28,8 @@ class ServerViewModel @Inject constructor(
     private val geminiClient: GeminiClient,
     private val settingsRepo: SettingsRepository,
     private val connectionEngine: ConnectionEngine,
-    private val embeddingQueue: EmbeddingQueue
+    private val embeddingQueue: EmbeddingQueue,
+    private val backupExporter: com.thuvstu.personalencyclopedia.backup.BackupExporter
 ) : ViewModel() {
 
     private val _isRunning = MutableStateFlow(false)
@@ -46,8 +47,36 @@ class ServerViewModel @Inject constructor(
     val autoConnectThreshold: StateFlow<Float> = settingsRepo.autoConnectThreshold
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.88f)
 
+    val backupSafUri: StateFlow<String?> = settingsRepo.backupSafUri
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val lastBackupTime: StateFlow<Long?> = settingsRepo.lastBackupTime
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val lastBackupStatus: StateFlow<String?> = settingsRepo.lastBackupStatus
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     private val _actionMessage = MutableSharedFlow<String>()
     val actionMessage: SharedFlow<String> = _actionMessage
+
+    fun setBackupSafUri(uri: String?) {
+        viewModelScope.launch {
+            settingsRepo.setBackupSafUri(uri)
+            _actionMessage.emit(if (uri.isNullOrBlank()) "バックアップ先フォルダの設定を解除しました" else "バックアップ先フォルダを設定しました")
+        }
+    }
+
+    fun restoreFromBackup(uri: android.net.Uri) {
+        viewModelScope.launch {
+            _actionMessage.emit("復元処理を開始中...")
+            val result = backupExporter.restoreFromEncryptedUri(uri)
+            if (result.isSuccess) {
+                _actionMessage.emit("✅ 復元が完了しました。アプリを再読み込みしてください。")
+            } else {
+                _actionMessage.emit("❌ 復元失敗: ${result.exceptionOrNull()?.message}")
+            }
+        }
+    }
 
     init {
         viewModelScope.launch { tokenManager.getOrCreateToken() }

@@ -46,6 +46,9 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
         super.onCreate()
         appScope.launch {
             try {
+                // ★ C1: APIキー暗号化移行（初回起動時に平文→EncryptedSharedPreferencesへ1回だけ実行）
+                settingsRepository.initApiKey()
+
                 // 設定復元
                 settingsRepository.geminiApiKey.first()?.takeIf { it.isNotBlank() }?.let {
                     geminiClient.setApiKey(it)

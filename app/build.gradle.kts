@@ -105,12 +105,6 @@ dependencies {
     // Security
     implementation(libs.security.crypto)
 
-    // Google Drive
-    implementation(libs.play.services.auth)
-    implementation(libs.google.api.client.android)
-    implementation(libs.google.api.services.drive)
-    implementation(libs.google.http.gson)
-
     implementation(libs.startup.runtime)
 
     // Web scraping
@@ -120,4 +114,8 @@ dependencies {
     implementation(libs.rhino)
 
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+
+    // Testing
+    testImplementation("junit:junit:4.13.2")
+    testImplementation(libs.kotlinx.coroutines.test)
 }
