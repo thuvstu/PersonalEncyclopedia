@@ -84,6 +84,13 @@ class SettingsRepository @Inject constructor(
         val BACKUP_SAF_URI = stringPreferencesKey("BACKUP_SAF_URI")
         val LAST_BACKUP_TIME = longPreferencesKey("LAST_BACKUP_TIME")
         val LAST_BACKUP_STATUS = stringPreferencesKey("LAST_BACKUP_STATUS")
+        // ★最適化R2: クイズ演習設定
+        val QUIZ_QUESTION_COUNT = intPreferencesKey("QUIZ_QUESTION_COUNT")
+        val QUIZ_SURVIVAL_COUNT = intPreferencesKey("QUIZ_SURVIVAL_COUNT")
+        val QUIZ_DIFFICULTY_MIN = intPreferencesKey("QUIZ_DIFFICULTY_MIN")
+        val QUIZ_TYPES = stringPreferencesKey("QUIZ_TYPES")
+        val QUIZ_PRESSURE_SECONDS = intPreferencesKey("QUIZ_PRESSURE_SECONDS")
+        val QUIZ_HINT_PENALTY = floatPreferencesKey("QUIZ_HINT_PENALTY")
     }
 
     val autoConnectEnabled: Flow<Boolean> =
@@ -113,6 +120,28 @@ class SettingsRepository @Inject constructor(
         context.settingsDataStore.data.map { it[Keys.LAST_BACKUP_TIME] }
     val lastBackupStatus: Flow<String?> =
         context.settingsDataStore.data.map { it[Keys.LAST_BACKUP_STATUS] }
+
+    // ★最適化R2: クイズ演習設定
+    val quizQuestionCount: Flow<Int> =
+        context.settingsDataStore.data.map { it[Keys.QUIZ_QUESTION_COUNT] ?: 10 }
+    val quizSurvivalCount: Flow<Int> =
+        context.settingsDataStore.data.map { it[Keys.QUIZ_SURVIVAL_COUNT] ?: 30 }
+    val quizDifficultyMin: Flow<Int> =
+        context.settingsDataStore.data.map { it[Keys.QUIZ_DIFFICULTY_MIN] ?: 1 }
+    val quizTypes: Flow<Set<String>> =
+        context.settingsDataStore.data.map { pref ->
+            pref[Keys.QUIZ_TYPES]?.split(",")?.map { it.trim() }?.filter { it in SUPPORTED_QUIZ_TYPES }
+                ?.toSet() ?: SUPPORTED_QUIZ_TYPES
+        }
+    val quizPressureSeconds: Flow<Int> =
+        context.settingsDataStore.data.map { it[Keys.QUIZ_PRESSURE_SECONDS] ?: 60 }
+    val quizHintPenalty: Flow<Float> =
+        context.settingsDataStore.data.map { it[Keys.QUIZ_HINT_PENALTY] ?: 0.3f }
+
+    companion object {
+        // ★最適化: 出題形式はqa/mcq/fill_blankの3種に正式収束（sort/cloze/customは生成・出題対象外）
+        val SUPPORTED_QUIZ_TYPES: Set<String> = setOf("qa", "mcq", "fill_blank")
+    }
 
     /** ★ C1: APIキーを暗号化ストアへ保存し、インメモリFlowを更新 */
     suspend fun setGeminiApiKey(key: String) = withContext(Dispatchers.IO) {
@@ -152,4 +181,25 @@ class SettingsRepository @Inject constructor(
             it[Keys.LAST_BACKUP_TIME] = time
             it[Keys.LAST_BACKUP_STATUS] = status
         }
+
+    // ★最適化R2: クイズ演習設定の書き込み
+    suspend fun setQuizQuestionCount(v: Int) =
+        context.settingsDataStore.edit { it[Keys.QUIZ_QUESTION_COUNT] = v.coerceIn(5, 50) }
+    suspend fun setQuizSurvivalCount(v: Int) =
+        context.settingsDataStore.edit { it[Keys.QUIZ_SURVIVAL_COUNT] = v.coerceIn(5, 50) }
+    suspend fun setQuizDifficultyMin(v: Int) =
+        context.settingsDataStore.edit { it[Keys.QUIZ_DIFFICULTY_MIN] = v.coerceIn(1, 5) }
+    suspend fun setQuizTypes(v: Set<String>) =
+        context.settingsDataStore.edit {
+            val kept = v.intersect(SUPPORTED_QUIZ_TYPES)
+            if (kept.isEmpty()) {
+                it.remove(Keys.QUIZ_TYPES)
+            } else {
+                it[Keys.QUIZ_TYPES] = kept.sorted().joinToString(",")
+            }
+        }
+    suspend fun setQuizPressureSeconds(v: Int) =
+        context.settingsDataStore.edit { it[Keys.QUIZ_PRESSURE_SECONDS] = v.coerceIn(15, 180) }
+    suspend fun setQuizHintPenalty(v: Float) =
+        context.settingsDataStore.edit { it[Keys.QUIZ_HINT_PENALTY] = v.coerceIn(0f, 0.5f) }
 }

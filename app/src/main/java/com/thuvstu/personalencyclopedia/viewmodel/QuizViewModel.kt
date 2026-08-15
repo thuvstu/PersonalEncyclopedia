@@ -7,6 +7,7 @@ import com.thuvstu.personalencyclopedia.db.dao.ProgressEventDao
 import com.thuvstu.personalencyclopedia.db.entity.ProgressEventEntity
 import com.thuvstu.personalencyclopedia.db.entity.QuizBankEntity
 import com.thuvstu.personalencyclopedia.repository.QuizRepository
+import com.thuvstu.personalencyclopedia.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -17,7 +18,8 @@ import javax.inject.Inject
 @HiltViewModel
 class QuizViewModel @Inject constructor(
     private val quizRepo: QuizRepository,
-    private val progressEventDao: ProgressEventDao   // ← Phase 3で追加
+    private val progressEventDao: ProgressEventDao,   // ← Phase 3で追加
+    private val settingsRepo: SettingsRepository      // ★最適化R2: クイズ演習設定
 ) : ViewModel() {
 
     enum class SessionMode { NORMAL, SURVIVAL }
@@ -85,7 +87,15 @@ class QuizViewModel @Inject constructor(
     fun startSession(topicId: String? = null) {
         viewModelScope.launch {
             _uiState.value = QuizUiState.Loading
-            quizzes = quizRepo.getNextQuizzes(topicId = topicId, limit = 10)
+            val count = settingsRepo.quizQuestionCount.first()
+            val difficultyMin = settingsRepo.quizDifficultyMin.first()
+            val types = settingsRepo.quizTypes.first().toList()
+            quizzes = quizRepo.getNextQuizzes(
+                topicId = topicId,
+                limit = count,
+                difficultyMin = if (difficultyMin <= 1) null else difficultyMin,
+                types = types
+            )
             currentIndex = 0
             correctCount = 0
             totalScore = 0f
@@ -104,7 +114,15 @@ class QuizViewModel @Inject constructor(
     fun startSurvivalSession(topicId: String? = null) {
         viewModelScope.launch {
             _uiState.value = QuizUiState.Loading
-            quizzes = quizRepo.getNextQuizzes(topicId = topicId, limit = 30)
+            val count = settingsRepo.quizSurvivalCount.first()
+            val difficultyMin = settingsRepo.quizDifficultyMin.first()
+            val types = settingsRepo.quizTypes.first().toList()
+            quizzes = quizRepo.getNextQuizzes(
+                topicId = topicId,
+                limit = count,
+                difficultyMin = if (difficultyMin <= 1) null else difficultyMin,
+                types = types
+            )
             currentIndex = 0
             correctCount = 0
             totalScore = 0f
@@ -139,7 +157,7 @@ class QuizViewModel @Inject constructor(
                 fieldLabel = challenge.field,
                 correctSet = challenge.answers,
                 matched = emptyList(),
-                timeLeftMs = 60_000L
+                timeLeftMs = settingsRepo.quizPressureSeconds.first() * 1000L
             )
             _uiState.value = initial
             enumerateJob?.cancel()
@@ -216,7 +234,8 @@ class QuizViewModel @Inject constructor(
                 quiz = quiz,
                 userAnswer = answer,
                 hintsRevealed = state.hintsRevealed,
-                answeredWithinMs = answeredWithinMs
+                answeredWithinMs = answeredWithinMs,
+                hintPenalty = settingsRepo.quizHintPenalty.first()
             )
             val attempt = result.attempt
 

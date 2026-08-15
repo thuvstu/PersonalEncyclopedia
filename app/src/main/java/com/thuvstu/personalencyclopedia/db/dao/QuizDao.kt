@@ -47,30 +47,53 @@ interface QuizDao {
     """)
     suspend fun getRandomQuizzes(types: List<String>, limit: Int = 10): List<QuizBankEntity>
 
+    // ★最適化R1: 出題プールを排他分類で構成する。
+    //   苦手(wrong) = 不正解履歴があり正解履歴が無い
+    //   未習(new)   = 一度も回答していない
+    //   ランダム(random) = 正解済みを除くアクティブ全件
     @Query("""
         SELECT qb.* FROM quiz_bank qb
+        LEFT JOIN entry_topic et ON et.entryId = qb.sourceEntryId
         WHERE qb.isActive = 1
-        AND qb.id NOT IN (
-            SELECT qa.quizId FROM quiz_attempts qa WHERE qa.isCorrect = 1
-        )
+        AND qb.id IN (SELECT qa.quizId FROM quiz_attempts qa WHERE qa.isCorrect = 0)
+        AND qb.id NOT IN (SELECT qa.quizId FROM quiz_attempts qa WHERE qa.isCorrect = 1)
+        AND (:topicId IS NULL OR :topicId = '' OR qb.topicId = :topicId OR et.topicId = :topicId)
+        AND (:difficultyMin IS NULL OR qb.difficulty >= :difficultyMin)
         ORDER BY RANDOM()
         LIMIT :limit
     """)
-    suspend fun getUnmasteredQuizzes(limit: Int = 10): List<QuizBankEntity>
+    suspend fun getWrongUnmasteredQuizzes(
+        topicId: String?, difficultyMin: Int?, limit: Int
+    ): List<QuizBankEntity>
 
     @Query("""
         SELECT qb.* FROM quiz_bank qb
+        LEFT JOIN entry_topic et ON et.entryId = qb.sourceEntryId
         WHERE qb.isActive = 1
-        AND qb.id IN (
-            SELECT qa.quizId FROM quiz_attempts qa
-            WHERE qa.isCorrect = 0
-            GROUP BY qa.quizId
-            HAVING COUNT(*) >= 1
-        )
+        AND qb.id NOT IN (SELECT quizId FROM quiz_attempts)
+        AND (:topicId IS NULL OR :topicId = '' OR qb.topicId = :topicId OR et.topicId = :topicId)
+        AND (:difficultyMin IS NULL OR qb.difficulty >= :difficultyMin)
         ORDER BY RANDOM()
         LIMIT :limit
     """)
-    suspend fun getWrongQuizzes(limit: Int = 10): List<QuizBankEntity>
+    suspend fun getNeverAttemptedQuizzes(
+        topicId: String?, difficultyMin: Int?, limit: Int
+    ): List<QuizBankEntity>
+
+    @Query("""
+        SELECT qb.* FROM quiz_bank qb
+        LEFT JOIN entry_topic et ON et.entryId = qb.sourceEntryId
+        WHERE qb.isActive = 1
+        AND qb.quizType IN (:types)
+        AND qb.id NOT IN (SELECT qa.quizId FROM quiz_attempts qa WHERE qa.isCorrect = 1)
+        AND (:topicId IS NULL OR :topicId = '' OR qb.topicId = :topicId OR et.topicId = :topicId)
+        AND (:difficultyMin IS NULL OR qb.difficulty >= :difficultyMin)
+        ORDER BY RANDOM()
+        LIMIT :limit
+    """)
+    suspend fun getRandomUnmasteredQuizzes(
+        topicId: String?, types: List<String>, difficultyMin: Int?, limit: Int
+    ): List<QuizBankEntity>
 
     // ★v12.0追加: 弱点分析のtopicId対応
     @Query("""

@@ -73,13 +73,24 @@ class QuizRepository @Inject constructor(
         return 0
     }
 
-    suspend fun getNextQuizzes(topicId: String? = null, limit: Int = 10): List<QuizBankEntity> {
-        val wrong = quizDao.getWrongQuizzes(limit / 3)
-        val unmastered = quizDao.getUnmasteredQuizzes(limit / 3)
-        val random = quizDao.getRandomQuizzes(
-            types = listOf("qa", "mcq", "fill_blank"), limit = limit
-        )
-        return (wrong + unmastered + random).distinctBy { it.id }.take(limit)
+    /**
+     * ★最適化R1: 出題プールを排他分類で構成する（topicId/難易度/形式プール対応）。
+     * - wrong: 不正解履歴あり・正解履歴なし（苦手）
+     * - new:   一度も回答していない（未習）
+     * - random: 正解済みを除くアクティブ全件（残りを補填）
+     * 分類間の重複・正解済みの混入を排除し、セッション内は distinctBy で重複しない。
+     */
+    suspend fun getNextQuizzes(
+        topicId: String? = null,
+        limit: Int = 10,
+        difficultyMin: Int? = null,
+        types: List<String> = listOf("qa", "mcq", "fill_blank")
+    ): List<QuizBankEntity> {
+        val slice = (limit / 3).coerceAtLeast(1)
+        val wrong = quizDao.getWrongUnmasteredQuizzes(topicId, difficultyMin, slice)
+        val unlearned = quizDao.getNeverAttemptedQuizzes(topicId, difficultyMin, slice)
+        val random = quizDao.getRandomUnmasteredQuizzes(topicId, types, difficultyMin, limit)
+        return (wrong + unlearned + random).distinctBy { it.id }.take(limit)
     }
 
     // §8.7.2 プレッシャーテスト(全列挙型)の出題セット
@@ -130,7 +141,8 @@ class QuizRepository @Inject constructor(
         quiz: QuizBankEntity,
         userAnswer: String,
         hintsRevealed: Int = 0,
-        answeredWithinMs: Long? = null   // §8.7.3 (v8): 設問表示〜回答までの経過時間
+        answeredWithinMs: Long? = null,   // §8.7.3 (v8): 設問表示〜回答までの経過時間
+        hintPenalty: Float = 0.3f         // ★最適化R2: ヒント減点率（設定で調整可能）
     ): QuizGradingResult {
         var gradeResult = multiStageGrader.grade(userAnswer, quiz.answer)
 
@@ -165,7 +177,7 @@ class QuizRepository @Inject constructor(
         }
 
         val baseScore = when {
-            gradeResult.isCorrect -> maxOf(0f, 1.0f - 0.3f * hintsRevealed)
+            gradeResult.isCorrect -> maxOf(0f, 1.0f - hintPenalty * hintsRevealed)
             userAnswer == "__UNLEARNED__" -> 0f
             else -> -1.0f
         }

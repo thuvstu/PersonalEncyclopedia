@@ -72,6 +72,20 @@ class ServerViewModel @Inject constructor(
     val ollamaEmbedModel: StateFlow<String> = settingsRepo.ollamaEmbedModel
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
+    // ★最適化R2: クイズ演習設定
+    val quizQuestionCount: StateFlow<Int> = settingsRepo.quizQuestionCount
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 10)
+    val quizSurvivalCount: StateFlow<Int> = settingsRepo.quizSurvivalCount
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 30)
+    val quizDifficultyMin: StateFlow<Int> = settingsRepo.quizDifficultyMin
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1)
+    val quizTypes: StateFlow<Set<String>> = settingsRepo.quizTypes
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsRepository.SUPPORTED_QUIZ_TYPES)
+    val quizPressureSeconds: StateFlow<Int> = settingsRepo.quizPressureSeconds
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 60)
+    val quizHintPenalty: StateFlow<Float> = settingsRepo.quizHintPenalty
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.3f)
+
     private val _actionMessage = MutableSharedFlow<String>()
     val actionMessage: SharedFlow<String> = _actionMessage
 
@@ -194,6 +208,26 @@ class ServerViewModel @Inject constructor(
             settingsRepo.setOllamaEmbedModel(v); syncOllamaClient()
             _actionMessage.emit("Ollama設定を保存しました")
         }
+    }
+
+    // ★最適化R2: クイズ演習設定
+    fun setQuizQuestionCount(v: Int) {
+        viewModelScope.launch { settingsRepo.setQuizQuestionCount(v) }
+    }
+    fun setQuizSurvivalCount(v: Int) {
+        viewModelScope.launch { settingsRepo.setQuizSurvivalCount(v) }
+    }
+    fun setQuizDifficultyMin(v: Int) {
+        viewModelScope.launch { settingsRepo.setQuizDifficultyMin(v) }
+    }
+    fun setQuizTypes(types: Set<String>) {
+        viewModelScope.launch { settingsRepo.setQuizTypes(types) }
+    }
+    fun setQuizPressureSeconds(v: Int) {
+        viewModelScope.launch { settingsRepo.setQuizPressureSeconds(v) }
+    }
+    fun setQuizHintPenalty(v: Float) {
+        viewModelScope.launch { settingsRepo.setQuizHintPenalty(v) }
     }
 
     fun rebuildSearchIndex() {

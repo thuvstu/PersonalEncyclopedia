@@ -55,6 +55,12 @@ fun SettingsScreen(
     val ollamaHost by viewModel.ollamaHost.collectAsState()
     val ollamaChatModel by viewModel.ollamaChatModel.collectAsState()
     val ollamaEmbedModel by viewModel.ollamaEmbedModel.collectAsState()
+    val quizQuestionCount by viewModel.quizQuestionCount.collectAsState()
+    val quizSurvivalCount by viewModel.quizSurvivalCount.collectAsState()
+    val quizDifficultyMin by viewModel.quizDifficultyMin.collectAsState()
+    val quizTypes by viewModel.quizTypes.collectAsState()
+    val quizPressureSeconds by viewModel.quizPressureSeconds.collectAsState()
+    val quizHintPenalty by viewModel.quizHintPenalty.collectAsState()
 
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -319,6 +325,100 @@ fun SettingsScreen(
                             label = { Text("FSRS-4.5") }
                         )
                     }
+                }
+            }
+
+            // ── クイズ演習設定（最適化R2）──
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("📝 クイズ演習", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "セッションの出題数・難易度・形式・時間を調整します（次回セッションから反映）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("通常演習の問題数: ${quizQuestionCount}問", style = MaterialTheme.typography.labelMedium)
+                    Slider(
+                        value = quizQuestionCount.toFloat(),
+                        onValueChange = { viewModel.setQuizQuestionCount(it.toInt()) },
+                        valueRange = 5f..20f,
+                        steps = 14
+                    )
+
+                    Text("サバイバルの上限: ${quizSurvivalCount}問", style = MaterialTheme.typography.labelMedium)
+                    Slider(
+                        value = quizSurvivalCount.toFloat(),
+                        onValueChange = { viewModel.setQuizSurvivalCount(it.toInt()) },
+                        valueRange = 5f..50f,
+                        steps = 44
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("難易度フィルタ（この難度以上を出題）", style = MaterialTheme.typography.labelMedium)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = quizDifficultyMin <= 1,
+                            onClick = { viewModel.setQuizDifficultyMin(1) },
+                            label = { Text("すべて") }
+                        )
+                        FilterChip(
+                            selected = quizDifficultyMin == 2,
+                            onClick = { viewModel.setQuizDifficultyMin(2) },
+                            label = { Text("やさしめ") }
+                        )
+                        FilterChip(
+                            selected = quizDifficultyMin == 3,
+                            onClick = { viewModel.setQuizDifficultyMin(3) },
+                            label = { Text("標準以上") }
+                        )
+                        FilterChip(
+                            selected = quizDifficultyMin >= 4,
+                            onClick = { viewModel.setQuizDifficultyMin(4) },
+                            label = { Text("むずかしめ") }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("出題形式", style = MaterialTheme.typography.labelMedium)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(
+                            "qa" to "記述式",
+                            "mcq" to "選択式",
+                            "fill_blank" to "穴埋め"
+                        ).forEach { (type, label) ->
+                            FilterChip(
+                                selected = type in quizTypes,
+                                onClick = {
+                                    val next = if (type in quizTypes) quizTypes - type else quizTypes + type
+                                    viewModel.setQuizTypes(next)
+                                },
+                                label = { Text(label) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("プレッシャーテストの制限時間: ${quizPressureSeconds}秒", style = MaterialTheme.typography.labelMedium)
+                    Slider(
+                        value = quizPressureSeconds.toFloat(),
+                        onValueChange = { viewModel.setQuizPressureSeconds(it.toInt()) },
+                        valueRange = 15f..120f,
+                        steps = 6
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("ヒント1回あたりの減点: ${(quizHintPenalty * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
+                    Slider(
+                        value = quizHintPenalty,
+                        onValueChange = viewModel::setQuizHintPenalty,
+                        valueRange = 0f..0.5f,
+                        steps = 9
+                    )
                 }
             }
 
