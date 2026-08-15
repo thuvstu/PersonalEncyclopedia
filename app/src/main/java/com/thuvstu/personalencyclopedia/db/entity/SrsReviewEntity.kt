@@ -14,13 +14,14 @@ data class SrsReviewEntity(
     val grade: Int,             // 0-5 (SM-2)
     val intervalDays: Int,
     val easeFactor: Float = 2.5f,
-    val nextReviewAt: Long
+    val nextReviewAt: Long,
+    val repetitionCount: Int = 0   // §5.8.5 (v8): このレビュー時点の累積成功反復回数(失敗時0)
 )
 
 @DatabaseView(
     """
     SELECT sr.entryId, sr.grade, sr.intervalDays, sr.easeFactor, sr.nextReviewAt,
-           sr.reviewedAt AS lastReviewedAt
+           sr.repetitionCount, sr.reviewedAt AS lastReviewedAt
     FROM srs_review sr
     INNER JOIN (
         SELECT entryId, MAX(reviewedAt) AS maxReviewedAt
@@ -35,5 +36,6 @@ data class SrsCurrentView(
     val intervalDays: Int,
     val easeFactor: Float,
     val nextReviewAt: Long,
+    val repetitionCount: Int,
     val lastReviewedAt: Long
 )

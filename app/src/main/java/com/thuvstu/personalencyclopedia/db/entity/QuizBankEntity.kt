@@ -39,7 +39,8 @@ data class QuizAttemptEntity(
     val score: Float,
     val gradingMethod: String,      // exact/fuzzy/semantic/llm
     val hintsRevealed: Int = 0,
-    val attemptedAt: Long = System.currentTimeMillis()
+    val attemptedAt: Long = System.currentTimeMillis(),
+    val answeredWithinMs: Long? = null   // §8.7.3 (v8): 設問表示〜回答までの経過時間(早押しスコア係数用)
 )
 
 @DatabaseView(

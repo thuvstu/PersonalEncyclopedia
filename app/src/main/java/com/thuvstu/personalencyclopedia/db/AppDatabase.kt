@@ -52,12 +52,14 @@ import com.thuvstu.personalencyclopedia.db.entity.*
         WikiArticleEntity::class,
         // v7 — 和暦マスタ (GAP-5)
         EraMasterEntity::class,
+        // v8 — カスタムフィールド (§5.8.3)
+        EntryCustomFieldEntity::class,
     ],
     views = [
         SrsCurrentView::class,
         QuizMasteryView::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -86,4 +88,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun wikiArticleDao(): WikiArticleDao
     // v7 — 和暦マスタ (GAP-5)
     abstract fun eraMasterDao(): EraMasterDao
+    // v8 — カスタムフィールド (§5.8.3)
+    abstract fun entryCustomFieldDao(): EntryCustomFieldDao
 }

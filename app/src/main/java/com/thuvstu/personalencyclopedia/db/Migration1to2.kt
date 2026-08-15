@@ -89,22 +89,20 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_quiz_attempts_quizId` ON `quiz_attempts` (`quizId`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_quiz_attempts_attemptedAt` ON `quiz_attempts` (`attemptedAt`)")
 
-                // ── Views（バッククォート必須） ──
-                db.execSQL("""
-            CREATE VIEW `SrsCurrentView` AS
-            SELECT sr.entryId, sr.grade, sr.intervalDays, sr.easeFactor, sr.nextReviewAt,
-                   sr.reviewedAt AS lastReviewedAt
-            FROM srs_review sr
-            INNER JOIN (
-                SELECT entryId, MAX(reviewedAt) AS maxReviewedAt
-                FROM srs_review
-                GROUP BY entryId
-            ) latest ON sr.entryId = latest.entryId AND sr.reviewedAt = latest.maxReviewedAt
-        """)
+                // ── Views（RoomスキーマJSONと文字列完全一致が必要なため形式を合わせる） ──
+                db.execSQL(
+                    "CREATE VIEW `SrsCurrentView` AS SELECT sr.entryId, sr.grade, sr.intervalDays, sr.easeFactor, sr.nextReviewAt,\n" +
+                        "           sr.reviewedAt AS lastReviewedAt\n" +
+                        "    FROM srs_review sr\n" +
+                        "    INNER JOIN (\n" +
+                        "        SELECT entryId, MAX(reviewedAt) AS maxReviewedAt\n" +
+                        "        FROM srs_review\n" +
+                        "        GROUP BY entryId\n" +
+                        "    ) latest ON sr.entryId = latest.entryId AND sr.reviewedAt = latest.maxReviewedAt"
+                )
 
-                db.execSQL("""
-            CREATE VIEW `QuizMasteryView` AS
-            SELECT quizId, MAX(score) AS masteryScore FROM quiz_attempts GROUP BY quizId
-        """)
+                db.execSQL(
+                    "CREATE VIEW `QuizMasteryView` AS SELECT quizId, MAX(score) AS masteryScore FROM quiz_attempts GROUP BY quizId"
+                )
         }
 }

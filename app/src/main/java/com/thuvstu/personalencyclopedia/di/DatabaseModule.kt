@@ -9,6 +9,7 @@ import com.thuvstu.personalencyclopedia.db.MIGRATION_3_4
 import com.thuvstu.personalencyclopedia.db.MIGRATION_4_5
 import com.thuvstu.personalencyclopedia.db.MIGRATION_5_6
 import com.thuvstu.personalencyclopedia.db.MIGRATION_6_7
+import com.thuvstu.personalencyclopedia.db.MIGRATION_7_8
 import com.thuvstu.personalencyclopedia.db.dao.*
 import dagger.Module
 import dagger.Provides
@@ -24,7 +25,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext ctx: Context): AppDatabase =
         Room.databaseBuilder(ctx, AppDatabase::class.java, "encyclopedia.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
             .build()
 
     @Provides fun provideEntryTypeDao(db: AppDatabase): EntryTypeDao = db.entryTypeDao()
@@ -48,4 +49,6 @@ object DatabaseModule {
     @Provides fun provideWikiArticleDao(db: AppDatabase): WikiArticleDao = db.wikiArticleDao()
     // v7 — 和暦マスタ (GAP-5)
     @Provides fun provideEraMasterDao(db: AppDatabase): EraMasterDao = db.eraMasterDao()
+    // v8 — カスタムフィールド (§5.8.3)
+    @Provides fun provideEntryCustomFieldDao(db: AppDatabase): EntryCustomFieldDao = db.entryCustomFieldDao()
 }
