@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.thuvstu.personalencyclopedia.ui.component.AttachmentSection
 import com.thuvstu.personalencyclopedia.ui.component.ConnectionSection
+import com.thuvstu.personalencyclopedia.ui.component.EntryPreviewPopup
 import com.thuvstu.personalencyclopedia.ui.component.EntryTypeSection
 import com.thuvstu.personalencyclopedia.ui.component.RichContentView
 import com.thuvstu.personalencyclopedia.ui.theme.entryTypeColor
@@ -61,6 +62,8 @@ fun EntryDetailScreen(
     var connectionStrength by remember { mutableStateOf(0.5f) }
     var showTagDialog by remember { mutableStateOf(false) }
     var tagInput by remember { mutableStateOf("") }
+    // §12.5: 自動リンク/[[wiki-link]]タップ時の定義プレビュー対象entryId
+    var previewEntryId by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
     val imagePicker = rememberLauncherForActivityResult(
@@ -147,9 +150,10 @@ fun EntryDetailScreen(
                         RichContentView(
                             content = e.content,
                             onWikiLinkClick = { target ->
+                                // §12.5: 直接遷移せず定義プレビューを表示
                                 val title = target.removePrefix("wiki/")
                                 viewModel.resolveWikiLink(title) { id ->
-                                    id?.let { onNavigateToEntry(it) }
+                                    id?.let { previewEntryId = it }
                                 }
                             },
                             modifier = Modifier
@@ -165,7 +169,13 @@ fun EntryDetailScreen(
                 type = e.type,
                 extension = extension,
                 thought = thought,
-                definition = definition
+                definition = definition,
+                onInternalLink = { title ->
+                    // §12.5: 定義文内の[[wiki-link]]もプレビュー表示
+                    viewModel.resolveWikiLink(title) { id ->
+                        id?.let { previewEntryId = it }
+                    }
+                }
             )
 
             // 添付画像
@@ -276,6 +286,15 @@ fun EntryDetailScreen(
                 }
             }
         }
+    }
+
+    // §12.5: 定義プレビューポップアップ（「開く」で詳細遷移）
+    previewEntryId?.let { id ->
+        EntryPreviewPopup(
+            entryId = id,
+            onOpen = { onNavigateToEntry(it) },
+            onDismiss = { previewEntryId = null }
+        )
     }
 
     // 接続追加ダイアログ
