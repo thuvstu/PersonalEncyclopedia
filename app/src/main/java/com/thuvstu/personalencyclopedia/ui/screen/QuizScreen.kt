@@ -295,6 +295,26 @@ fun QuizScreen(
                             }
                         }
 
+                        // ★新採点システム(試作): rubric採点の根拠
+                        if (!state.rubricRationale.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text("採点の根拠", style = MaterialTheme.typography.labelLarge)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        state.rubricRationale,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                        }
+
                         // Explanation
                         if (!state.quiz.explanation.isNullOrBlank()) {
                             Spacer(modifier = Modifier.height(12.dp))

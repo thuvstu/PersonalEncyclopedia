@@ -5,6 +5,8 @@ import com.thuvstu.personalencyclopedia.brain.quiz.LlmQuizGenerator
 import com.thuvstu.personalencyclopedia.brain.quiz.MultiStageGrader
 import com.thuvstu.personalencyclopedia.brain.quiz.RuleBasedQuizGenerator
 import com.thuvstu.personalencyclopedia.brain.quiz.SemanticGrader
+import com.thuvstu.personalencyclopedia.brain.quiz.rubric.RubricGrader
+import com.thuvstu.personalencyclopedia.brain.quiz.rubric.toJudgeJson
 import com.thuvstu.personalencyclopedia.db.dao.EntryDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryDefinitionDao
 import com.thuvstu.personalencyclopedia.db.dao.QuizDao
@@ -29,7 +31,8 @@ class QuizRepository @Inject constructor(
     private val llmQuizGenerator: LlmQuizGenerator,    // ★追加
     private val semanticGrader: SemanticGrader,        // ★追加（G）
     private val geminiClient: GeminiClient,             // ★追加
-    private val multiStageGrader: MultiStageGrader      // ★追加（E: era_master参照）
+    private val multiStageGrader: MultiStageGrader,      // ★追加（E: era_master参照）
+    private val rubricGrader: RubricGrader               // ★新採点システム(試作)
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -112,13 +115,43 @@ class QuizRepository @Inject constructor(
         }
     }
 
+    /**
+     * 採点結果(試作)に rubric の採点根拠を添えて返す。
+     * 既存呼び出し(QuizViewModel)は attempt を、新採点システムは rationale/evidence を使う。
+     */
+    data class QuizGradingResult(
+        val attempt: QuizAttemptEntity,
+        val rubricRationale: String? = null,
+        val rubricEvidenceJson: String? = null,
+        val rubricUsed: Boolean = false
+    )
+
     suspend fun gradeAndRecord(
         quiz: QuizBankEntity,
         userAnswer: String,
         hintsRevealed: Int = 0,
         answeredWithinMs: Long? = null   // §8.7.3 (v8): 設問表示〜回答までの経過時間
-    ): QuizAttemptEntity {
+    ): QuizGradingResult {
         var gradeResult = multiStageGrader.grade(userAnswer, quiz.answer)
+
+        // ★新採点システム(試作): 記述式はルーブリック採点を適用し、採点根拠を記録する。
+        // rubricが正解と判定した場合のみ正解に昇格する(safeな試作統合)。
+        var rubricRationale: String? = null
+        var rubricEvidenceJson: String? = null
+        var rubricUsed = false
+        if (rubricGrader.applicable(quiz.quizType, userAnswer)) {
+            val rubric = rubricGrader.grade(quiz.question, userAnswer, quiz.answer, quiz.gradingContextJson)
+            rubricUsed = true
+            rubricRationale = rubric.rationale
+            rubricEvidenceJson = rubric.evidence.toJudgeJson().toString()
+            if (rubric.isCorrect) {
+                gradeResult = MultiStageGrader.GradeResult(
+                    isCorrect = true,
+                    score = rubric.score.coerceAtLeast(gradeResult.score),
+                    method = "rubric"
+                )
+            }
+        }
 
         // ★G: 記述式で通常採点が不正解かつAPI利用可能な場合、意味的採点に昇格（§8.4第6段階）
         if (!gradeResult.isCorrect &&
@@ -153,7 +186,12 @@ class QuizRepository @Inject constructor(
             answeredWithinMs = answeredWithinMs
         )
         quizDao.insertAttempt(attempt)
-        return attempt
+        return QuizGradingResult(
+            attempt = attempt,
+            rubricRationale = rubricRationale,
+            rubricEvidenceJson = rubricEvidenceJson,
+            rubricUsed = rubricUsed
+        )
     }
 
     fun parseChoices(choicesJson: String): List<String> = try {

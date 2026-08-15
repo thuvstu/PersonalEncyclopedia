@@ -42,7 +42,10 @@ class QuizViewModel @Inject constructor(
             val score: Float,
             val gradingMethod: String,
             val questionNumber: Int,
-            val totalQuestions: Int
+            val totalQuestions: Int,
+            // ★新採点システム(試作): rubric採点の根拠(LLM/ヒューリスティックのrationale)
+            val rubricRationale: String? = null,
+            val rubricEvidenceJson: String? = null
         ) : QuizUiState()
         data class SessionComplete(
             val totalAnswered: Int,
@@ -209,12 +212,13 @@ class QuizViewModel @Inject constructor(
         viewModelScope.launch {
             // §8.7.3 (v8): 設問表示からの経過時間を記録
             val answeredWithinMs = SystemClock.elapsedRealtime() - questionShownAt
-            val attempt = quizRepo.gradeAndRecord(
+            val result = quizRepo.gradeAndRecord(
                 quiz = quiz,
                 userAnswer = answer,
                 hintsRevealed = state.hintsRevealed,
                 answeredWithinMs = answeredWithinMs
             )
+            val attempt = result.attempt
 
             // ★ Phase 3追加: 進捗イベント記録
             progressEventDao.insert(
@@ -246,7 +250,9 @@ class QuizViewModel @Inject constructor(
                 score = attempt.score,
                 gradingMethod = attempt.gradingMethod,
                 questionNumber = state.questionNumber,
-                totalQuestions = state.totalQuestions
+                totalQuestions = state.totalQuestions,
+                rubricRationale = result.rubricRationale,
+                rubricEvidenceJson = result.rubricEvidenceJson
             )
         }
     }
