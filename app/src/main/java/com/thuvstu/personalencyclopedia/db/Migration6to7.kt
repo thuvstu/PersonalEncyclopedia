@@ -87,7 +87,7 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
     private fun insertEra(db: SupportSQLiteDatabase, name: String, startYear: Int, endYear: Int?, sortOrder: Int) {
         db.execSQL(
             "INSERT OR REPLACE INTO `era_master` (`name`, `startYear`, `endYear`, `sortOrder`) VALUES (?, ?, ?, ?)",
-            arrayOf(name, startYear, endYear, sortOrder)
+            arrayOf<Any?>(name, startYear, endYear, sortOrder)
         )
     }
 }

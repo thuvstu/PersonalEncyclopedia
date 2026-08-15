@@ -573,9 +573,55 @@ G1 で `ServerDependencies` 導入後も `provideLocalServer(...)` が旧コン�
 
 ---
 
-## 8. 残タスクと次の一手
+## 8. 残タスクと次の一手(更新: Round F 完了後)
 
-1. **Round F(ライブラリ更新)** — Kotlin 2.1.0→2.4.0(KSP2移行)、Compose BOM 2025.01.01→2026最新、Room 2.7.1→2.8.4、Ktor 3.1.1→3.5.1、Hilt/AGP。計画どおり「1更新ごとに個別ビルド」。Room 2.8.x への更新は `room-testing` のコンストラクタ・`MigrationTestHelper` の振る舞いも再確認が必要。**Round F 前後で MigrationTest / MultiStageGraderTest がグリーンなままであることを確認する**
-2. **G2 の実行** — 実機接続後に `:app:connectedDebugAndroidTest` を実行し `MigrationTest` 3本をグリーンにする(エミュレータは `Encryption is requested...` で不可)
-3. **Round H(実機検証)** — H1〜H5 はエージェントでは実行不可。ユーザーが実機で確認
-4. **コミット** — 本セッションの変更は未コミット(計画v6の各Round🛑ごとにコミット推奨)。master は `7e228ff`、作業ツリーに Round B〜G の変更が積まれている
+1. **G2 の実行** — 実機接続後に `:app:connectedDebugAndroidTest` を実行し `MigrationTest` 3本をグリーンにする(エミュレータは `Encryption is requested...` で不可)。**Room 2.8.4 でもコンパイル済み**を確認済み(§9.3)
+2. **Round H(実機検証)** — H1〜H5 はエージェントでは実行不可。ユーザーが実機で確認
+3. **コミット** — Round B〜F の変更は未コミット(計画v6の各Round🛑ごとにコミット推奨)。master は `7e228ff`
+
+---
+
+## 9. Round F — ライブラリバージョン更新(2026-08-15 完了)
+
+計画v6 Round F を実装。**ユーザー選択により「完全最新」系(AGP 9.3.1 / Gradle 9.5.0 / compileSdk 37 / Compose 1.12.0)** を目標として実施した。
+
+### 9.1 更新内容
+
+| ライブラリ | 変更前 | 変更後 |
+|---|---|---|
+| Gradle(wrapper) | 9.3.1 | 9.5.0 |
+| AGP | 8.7.3 | 9.3.1 |
+| Kotlin | 2.1.0 | 2.4.10 |
+| KSP | 2.1.0-1.0.29(KSP1) | 2.3.11(**KSP2**) |
+| Compose BOM | 2025.01.01 | 2026.08.00(core 1.12.0 / material3 1.4.0 / icons 1.7.8) |
+| Room | 2.7.1 | 2.8.4(gradle plugin含む) |
+| Hilt | 2.54 | 2.60.1 |
+| Ktor | 3.1.1 | 3.5.2 |
+| compileSdk | 35 | 37 |
+
+### 9.2 実装時調査の要点
+
+- **Compose BOM → core のマッピングは pom 実体で確認**: `2026.06.01 → core 1.11.4`、`2026.08.00 → core 1.12.0`(先入観の「2026.06以降=1.12」は誤り)。**1.12.0 は compileSdk 37 + AGP 9.1.1+ を要求**するため、AGP 9.3.1 + compileSdk 37 を先に導入してから BOM を更新した(計画の F2↔F3 を前後)。
+- **AGP 9 移行**: ビルド構造変更を避けるため一時オプトアウトで対応。
+  ```properties
+  android.builtInKotlin=false   # 内蔵Kotlinを無効化し従来の kotlin-android プラグインを使用
+  android.newDsl=false          # 旧DSLを維持(legacy variant API)
+  ```
+  (AGP 10 まで有効な暫定手段。将来の内蔵Kotlin移行は別Roundとして計画する)
+- **Kotlin 2.4 の廃止 API 対応**: `kotlinOptions { jvmTarget = "17" }` を KGP 2.4 推奨の `kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }` へ置換。
+- **Kotlin 2.4 の型推論厳格化**: `Migration6to7.kt:90` の `arrayOf(name, startYear, endYear, sortOrder)` が *「reified型引数を intersection 型(Comparable<*>? & Serializable?) に推論」* のエラーに昇格 → `arrayOf<Any?>(...)` に明示して解決。他ソースに同型パターンなし(grep 確認済み)。
+- **SDK 自動インストール**: 本環境に cmdline-tools/sdkmanager は無いが、ライセンス(android-sdk-license)承認済みのため AGP が `platforms;android-37.0`(revision 2)と `build-tools;36.0.0` をビルド時に自動導入。
+- **Room 2.8.4**: `MigrationTestHelper` のコンストラクタ `(Instrumentation, Class, List)` は 2.7.1 と同一(androidTest コンパイルで確認)。スキーマJSON(v1〜v7)は **Room 2.8.4 でも出力が同一**(`git diff` なし)。
+
+### 9.3 検証結果(すべて成功)
+
+| 段階 | コマンド | 結果 |
+|---|---|---|
+| F1: Gradle 9.5.0 + AGP 9.3.1 + Kotlin 2.4.10 + KSP 2.3.11(KSP2) | `:app:compileDebugKotlin` | ✅ 成功 |
+| F2: compileSdk 37 + Compose BOM 2026.08.00(1.12.0) | `:app:compileDebugKotlin` | ✅ 成功 |
+| F3: Room 2.8.4 + Ktor 3.5.2 + Hilt 2.60.1 | `:app:compileDebugKotlin :app:testDebugUnitTest` | ✅ 成功 |
+| F4 全回帰 | `:app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` | ✅ 成功 |
+| Unit テスト | `:app:testDebugUnitTest` | ✅ 3スイート **13テスト 全グリーン**(MultiStageGraderTest 8 / InMemoryVectorIndexConcurrencyTest 4 / ExampleUnitTest 1) |
+
+- Hilt の KSP 処理(`hiltCollectClasses`/`hiltAggregateDeps`)・Room の KSP 処理は AGP 9.3.1 + KSP2 構成で正常動作。
+- 残る警告は既存の非推奨API起因のみ(Icons.AutoMirrored系・ClickableText・LocalClipboardManager の deprecation、`Json` 生成の冗長警告、WebScraper の解析警告、Duplicate branch 等)。**Round F の対象外として今回は放置**し、今後の改善Roundで対応。

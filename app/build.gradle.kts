@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
-    id("androidx.room") version "2.7.1"
+    id("androidx.room") version "2.8.4"
 }
 
 room {
@@ -13,7 +13,7 @@ room {
 }
 android {
     namespace = "com.thuvstu.personalencyclopedia"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.thuvstu.personalencyclopedia"
@@ -49,8 +49,13 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
 }
 
 dependencies {
