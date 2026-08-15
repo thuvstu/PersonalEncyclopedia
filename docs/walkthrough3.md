@@ -1,3 +1,99 @@
+Personal Encyclopedia — GAP以降実行計画 v6 実装計画
+docs/PersonalEncyclopedia-GAP以降実行計画-v6.md に基づき、GAP-1〜6および関連改善を「重大度順」「1機能1ビルド」の原則に則って実装・検証します。
+
+実施フェーズ一覧
+Round A: 動作確認・整理 ✅完了済
+Round B: GAP-1 SAFバックアップ
+Round C: GAP-3 APIキー暗号化 + GAP-2 exportSchema復帰
+Round D: GAP-4 InMemoryVectorIndex スレッドセーフ化
+Round E: GAP-5 和暦マスタ era_master v6→v7
+Round F: ライブラリバージョン更新
+Round G: GAP-6 LocalServer分割 + マイグレーションテスト
+Round H: 実機検証フェーズ
+Round B: GAP-1 SAFバックアップ（最優先・データ保護）
+概要
+暗号化(AES-256-GCM)・30世代保持まで実装済みのバックアップ処理にSAF(Storage Access Framework)フォルダ書き込みを完全接続し、端末外（Google DriveやSDカード・外部ストレージ等）への自動・手動バックアップを有効化します。
+
+変更予定ファイル
+[MODIFY]
+SettingsRepository.kt
+BACKUP_SAF_URI (ツリーURI文字列) の保存・読込 Flow
+LAST_BACKUP_TIMESTAMP, LAST_BACKUP_SUCCESS の状態管理 Flow
+[MODIFY]
+BackupWorker.kt
+// TODO の箇所に BackupExporter またはツリーURIへの書き込み処理を接続
+SAFツリーURIが設定されている場合は外部フォルダへ .enc を出力、未設定時は端末内バックアップを維持しつつ通知・ステータス更新
+バックアップ実行完了時に SettingsRepository の最終バックアップ日時と成否を更新
+[MODIFY]
+SettingsScreen.kt
+バックアップ先フォルダ選択（ActivityResultContracts.OpenDocumentTree + takePersistableUriPermission）
+最終バックアップ成功日時とステータスバッジの表示（24時間以上未実施時の注意表示）
+[MODIFY]
+ServerViewModel.kt
+SAF URI保存、バックアップ手動トリガー、バックアップ状態の公開
+[MODIFY]
+app/build.gradle.kts
+/
+gradle/libs.versions.toml
+未使用の Drive API 関連ライブラリ（play-services-auth, google-api-client-android, google-api-services-drive, google-http-gson）を削除（B6）
+Round C: GAP-3 APIキー暗号化 + GAP-2 exportSchema復帰
+概要
+GAP-3: SettingsRepository の GEMINI_API_KEY を EncryptedSharedPreferences / Android Keystore 暗号化へ移行。既存平文キーのワンタイム自動マイグレーションを実施。
+GAP-2: AppDatabase.kt の exportSchema = false を true に戻し、ビルド時に schemas/ に最新スキーマJSONを出力。
+変更予定ファイル
+[MODIFY]
+SettingsRepository.kt
+EncryptedSharedPreferences または Keystore AES-GCM によるAPIキーの暗号化保存
+DataStore平文キーの自動検出・暗号化移行・平文削除ロジック
+[MODIFY]
+AppDatabase.kt
+@Database(..., exportSchema = true) に設定
+Round D: GAP-4 InMemoryVectorIndex スレッドセーフ化
+概要
+InMemoryVectorIndex の並行検索・追加処理において、ids/vectors の直接ミューテーションによる不整合を防ぐため、イミュータブルスナップショット＋AtomicReference方式（CAS更新）へリファクタリングし、並行アクセステストを追加します。
+
+変更予定ファイル
+[MODIFY]
+InMemoryVectorIndex.kt
+AtomicReference<Snapshot> 構造へ変更
+[NEW]
+InMemoryVectorIndexConcurrencyTest.kt
+複数コルーチンからの同時 topK, addVector, removeVector テスト
+Round E: GAP-5 和暦マスタ（v6→v7マイグレーション + 採点エンジン）
+概要
+era_master エンティティおよび v6→v7 マイグレーションを追加。
+江戸期以降および主要古典元号（慶長、天正、元禄など）のシードデータを投入。
+Grader.kt の固定リストを DB / Dao またはリポジトリ経由の和暦変換に拡張。
+採点テスト（慶長5年=1600年等）の作成と検証。
+変更予定ファイル
+[NEW] com/thuvstu/personalencyclopedia/db/entity/EraMasterEntity.kt
+[NEW] com/thuvstu/personalencyclopedia/db/dao/EraMasterDao.kt
+[NEW] com/thuvstu/personalencyclopedia/db/migration/Migration6to7.kt
+[MODIFY]
+AppDatabase.kt
+&
+DatabaseModule.kt
+[MODIFY]
+Grader.kt
+[NEW]
+GraderTest.kt
+Round F: ライブラリバージョン更新（独立ラウンド）
+概要
+機能変更を含めず、依存関係（Kotlin, Compose BOM, Room, Ktor, Hilt, AGP）を最新安定版へ段階的に更新し、各段階でビルドとテストの整合性を確認します。
+
+Round G: GAP-6 LocalServer分割 + マイグレーションテスト整備
+概要
+LocalServer.kt をエンドポイント単位（Search, Entries, Backup, Quiz, Graph等）に分割。
+MigrationTestHelper による v1〜v7 マイグレーション整合性テストの整備。
+検証手順
+各ラウンド完了ごとに以下を実施：
+
+./gradlew.bat testDebugUnitTest で単体テスト実行
+./gradlew.bat assembleDebug でAPKビルド確認
+設定・UI・バックアップの挙動確認
+
+RoundB~Dは上記の計画立てた人
+ここから別の人の、結果
 # Walkthrough 3 — GAP以降ラウンド実装(Round E / G1 / G2)とテスト整備
 
 **対象:** `docs/PersonalEncyclopedia-GAP以降実行計画-v6.md` の Round E(和暦マスタ)・Round G1(LocalServer分割)・Round G2(マイグレーションテスト)、および既存テストの修正。
