@@ -14,6 +14,7 @@ package com.thuvstu.personalencyclopedia.brain.quiz.rubric.provider
  * を同じ Interface で追加し、設定で切り替える。
  */
 interface IEmbeddingProvider {
+    val name: String
     val available: Boolean
     /** テキストの埋め込みベクトル。利用不可時は null */
     suspend fun embed(text: String): FloatArray?
@@ -51,6 +52,7 @@ data class JudgeOutput(
 
 /** 最終LLM judge。Gemini / Ollama / ローカルLLM を切替可能にする */
 interface IJudgerProvider {
+    val name: String
     val available: Boolean
     /** null = judge不可(決定論的フォールバックへ) */
     suspend fun judge(prompt: String): JudgeOutput?

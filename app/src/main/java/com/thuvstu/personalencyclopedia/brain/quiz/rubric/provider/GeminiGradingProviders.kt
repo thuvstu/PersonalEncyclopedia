@@ -31,6 +31,7 @@ class GeminiGradingProviders @Inject constructor(
         const val PROVIDER_NAME = "gemini"
     }
 
+    override val name: String = PROVIDER_NAME
     override val available: Boolean get() = geminiClient.isConfigured()
 
     override suspend fun embed(text: String): FloatArray? = geminiClient.embed(text)

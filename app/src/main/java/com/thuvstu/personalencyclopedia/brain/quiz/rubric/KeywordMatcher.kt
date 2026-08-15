@@ -15,8 +15,8 @@ object KeywordMatcher {
     }
 
     /**
-     * キーワードの達成度(0..1)。
-     * 1.0 = 正規化部分一致 / 0.85以上 = 誤字脱字許容での近傍一致 / 0.0 = 未検出
+     * キーワードの達成度(0..1)。類似度を生値で返す(閾値判定は呼び出し側)。
+     * 1.0 = 正規化部分一致 / 0.85以上 = 誤字脱字許容での近傍一致 / それ以下 = 未検出寄り
      */
     fun match(text: String, keyword: String): Float {
         if (keyword.isBlank()) return 0f
@@ -25,8 +25,7 @@ object KeywordMatcher {
         if (nk.isEmpty()) return 0f
         if (nt.contains(nk)) return 1.0f
         // 誤字脱字許容: 回答の空白区切りトークンとキーワードの類似度の最大値
-        val best = TextNorm.tokens(text).maxOfOrNull { TextNorm.similarity(it, nk) } ?: 0f
-        return if (best >= 0.85f) best else 0f
+        return TextNorm.tokens(text).maxOfOrNull { TextNorm.similarity(it, nk) } ?: 0f
     }
 
     /** 全必須キーワードが含まれるか */
