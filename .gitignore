@@ -9,3 +9,8 @@
 .cxx
 local.properties
 combined_code.txt
+
+# web (React + Vite + bun)
+web/node_modules/
+web/dist/
+web/*.tsbuildinfo
