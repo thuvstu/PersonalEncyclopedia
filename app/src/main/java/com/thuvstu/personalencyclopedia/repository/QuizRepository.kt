@@ -28,7 +28,8 @@ class QuizRepository @Inject constructor(
     private val entryDao: EntryDao,                    // ★追加
     private val llmQuizGenerator: LlmQuizGenerator,    // ★追加
     private val semanticGrader: SemanticGrader,        // ★追加（G）
-    private val geminiClient: GeminiClient             // ★追加
+    private val geminiClient: GeminiClient,             // ★追加
+    private val multiStageGrader: MultiStageGrader      // ★追加（E: era_master参照）
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -83,7 +84,7 @@ class QuizRepository @Inject constructor(
         userAnswer: String,
         hintsRevealed: Int = 0
     ): QuizAttemptEntity {
-        var gradeResult = MultiStageGrader.grade(userAnswer, quiz.answer)
+        var gradeResult = multiStageGrader.grade(userAnswer, quiz.answer)
 
         // ★G: 記述式で通常採点が不正解かつAPI利用可能な場合、意味的採点に昇格（§8.4第6段階）
         if (!gradeResult.isCorrect &&

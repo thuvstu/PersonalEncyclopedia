@@ -40,6 +40,12 @@ navigation-compose = { group = "androidx.navigation", name = "navigation-compose
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
+
+# AndroidX Test (instrumented)
+androidx-test-runner = { group = "androidx.test", name = "runner", version = "1.6.2" }
+androidx-test-core = { group = "androidx.test", name = "core", version = "1.6.1" }
+androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version = "1.2.1" }
 
 # Hilt
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }

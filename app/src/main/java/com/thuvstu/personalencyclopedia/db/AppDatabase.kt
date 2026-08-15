@@ -50,12 +50,14 @@ import com.thuvstu.personalencyclopedia.db.entity.*
         WhiteboardNodeEntity::class,
         WhiteboardSectionEntity::class,
         WikiArticleEntity::class,
+        // v7 — 和暦マスタ (GAP-5)
+        EraMasterEntity::class,
     ],
     views = [
         SrsCurrentView::class,
         QuizMasteryView::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -82,4 +84,6 @@ abstract class AppDatabase : RoomDatabase() {
     // Phase 4 — v12.0 追加
     abstract fun whiteboardDao(): WhiteboardDao
     abstract fun wikiArticleDao(): WikiArticleDao
+    // v7 — 和暦マスタ (GAP-5)
+    abstract fun eraMasterDao(): EraMasterDao
 }

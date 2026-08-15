@@ -1,15 +1,26 @@
 package com.thuvstu.personalencyclopedia.brain.quiz
 
 import kotlin.math.min
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object MultiStageGrader {
+/**
+ * 多段階採点エンジン(§8.4)。
+ * ★ E2 (GAP-5): 和暦変換をハードコード配列から `era_master` 参照へ置き換えた。
+ * 元号データが不足している場合(判定不能)は「不一致」ではなく `undeterminable=true` で明示する(設計書§8.9)。
+ */
+@Singleton
+class MultiStageGrader @Inject constructor(
+    private val eraConverter: EraConverter
+) {
 
     data class GradeResult(
         val isCorrect: Boolean,
         val score: Float,
         val method: String,
         val normalizedUser: String = "",
-        val normalizedAnswer: String = ""
+        val normalizedAnswer: String = "",
+        val undeterminable: Boolean = false
     )
 
     fun normalize(text: String): String {
@@ -45,19 +56,18 @@ object MultiStageGrader {
         return GradeResult(false, 0f, "exact", nu, na)
     }
 
-    private val japaneseEras = listOf(
-        "令和" to 2018, "平成" to 1988, "昭和" to 1925,
-        "大正" to 1911, "明治" to 1867
-    )
-
-    fun parseYear(text: String): Int? {
+    /**
+     * 和暦→西暦変換。 era_master のデータを元に `元年の西暦 + (yearInEra - 1)` で換算する。
+     */
+    suspend fun parseYear(text: String): Int? {
         Regex("(\\d{3,4})年?").find(text)?.let { return it.groupValues[1].toIntOrNull() }
-        for ((era, baseYear) in japaneseEras) {
-            Regex("$era(\\d{1,2})年?").find(text)?.let { m ->
-                val yearInEra = m.groupValues[1].toIntOrNull() ?: return@let
-                return baseYear + yearInEra
+        for (era in eraConverter.getAll()) {
+            val m = Regex("${era.name}(\\d{1,2})年?").find(text)
+            if (m != null) {
+                val yearInEra = m.groupValues[1].toIntOrNull() ?: continue
+                return era.startYear + (yearInEra - 1)
             }
-            if (text.contains("${era}元")) return baseYear + 1
+            if (text.contains("${era.name}元")) return era.startYear
         }
         Regex("紀元前(\\d+)年?").find(text)?.let {
             return -(it.groupValues[1].toIntOrNull() ?: return null)
@@ -65,7 +75,21 @@ object MultiStageGrader {
         return null
     }
 
-    fun gradeNumeric(userAnswer: String, correctAnswer: String): GradeResult? {
+    /**
+     * 元号らしき表記が存在するのに era_master に該当データがない場合(判定不能)を検出する。
+     */
+    private suspend fun detectUnknownEra(text: String): Boolean {
+        if (text.isBlank()) return false
+        val known = eraConverter.getAll().map { it.name }
+        val eraPattern = Regex("([\\u4E00-\\u9FFF]{2,3})(\\d{1,2})年?|([\\u4E00-\\u9FFF]{2,3})元")
+        for (m in eraPattern.findAll(text)) {
+            val candidate = m.groupValues[1].ifBlank { m.groupValues[3] }
+            if (candidate.isNotBlank() && candidate !in known) return true
+        }
+        return false
+    }
+
+    suspend fun gradeNumeric(userAnswer: String, correctAnswer: String): GradeResult? {
         val userYear = parseYear(userAnswer)
         val correctYear = parseYear(correctAnswer)
         if (userYear != null && correctYear != null) {
@@ -77,6 +101,13 @@ object MultiStageGrader {
         if (userNum != null && correctNum != null) {
             val correct = kotlin.math.abs(userNum - correctNum) < 1e-9
             return GradeResult(correct, if (correct) 1.0f else 0f, "numeric")
+        }
+        // 元号データ不足による「判定不能」の明示(設計書§8.9)
+        if (userYear == null && detectUnknownEra(userAnswer)) {
+            return GradeResult(false, 0f, "numeric", undeterminable = true)
+        }
+        if (correctYear == null && detectUnknownEra(correctAnswer)) {
+            return GradeResult(false, 0f, "numeric", undeterminable = true)
         }
         return null
     }
@@ -147,7 +178,7 @@ object MultiStageGrader {
         return parts.distinct()
     }
 
-    fun grade(
+    suspend fun grade(
         userAnswer: String,
         correctAnswer: String,
         mode: String = "standard"
@@ -170,7 +201,10 @@ object MultiStageGrader {
         if (mode == "strict") return exactResult
 
         val numericResult = gradeNumeric(userAnswer, correctAnswer)
-        if (numericResult != null && numericResult.isCorrect) return numericResult
+        if (numericResult != null) {
+            if (numericResult.isCorrect) return numericResult
+            if (numericResult.undeterminable) return numericResult
+        }
 
         val synonymResult = gradeSynonym(userAnswer, correctAnswer)
         if (synonymResult != null && synonymResult.isCorrect) return synonymResult
