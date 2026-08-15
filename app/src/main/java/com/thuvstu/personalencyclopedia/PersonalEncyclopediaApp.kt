@@ -34,7 +34,7 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var geminiClient: GeminiClient
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -44,44 +44,61 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        // §3.4 起動シーケンスの段階的初期化。各フェーズの失敗を隔離し、
+        // 1箇所の失敗(APIキー未設定等)がアプリ全体の起動を止めないようにする。
         appScope.launch {
-            try {
-                // ★ C1: APIキー暗号化移行（初回起動時に平文→EncryptedSharedPreferencesへ1回だけ実行）
-                settingsRepository.initApiKey()
-
-                // 設定復元
-                settingsRepository.geminiApiKey.first()?.takeIf { it.isNotBlank() }?.let {
-                    geminiClient.setApiKey(it)
-                }
-                connectionEngine.autoConnectEnabled = settingsRepository.autoConnectEnabled.first()
-                connectionEngine.autoConnectThreshold = settingsRepository.autoConnectThreshold.first()
-
-                connectionEngine.seedTypeDefs()
-                pluginEngine.installBuiltinPlugins()
-
-                DemoData.seed(
-                    entryDao = database.entryDao(),
-                    thoughtDao = database.entryThoughtDao(),
-                    definitionDao = database.entryDefinitionDao(),
-                    topicDao = database.topicDao(),
-                    quizDao = database.quizDao(),
-                    connectionDao = database.connectionDao()
-                )
-                database.entryTypeDao().insertAll(SeedData.entryTypes)
-
-                vectorIndex.load()
-                embeddingQueue.recoverJobs()
-                embeddingQueue.startWorker()
-                embeddingQueue.rebuildAllSearchDocuments()
-            } catch (e: Exception) {
-                Log.e("App", "Init failed", e)
-            }
+            runStep("Phase A: DB初期化・シード") { initDatabase() }
+            runStep("Phase B: Brain Layer初期化") { initBrainLayer() }
+            runStep("Phase C: バックグラウンドサービス") { scheduleBackgroundWorkers() }
         }
+    }
+
+    /** §3.4: 各ステップを個別にtry-catch。失敗はAppLogger(Log.e)に記録し、UIは「一部機能が制限されています」の非致命的表示に留める。 */
+    private suspend fun runStep(name: String, block: suspend () -> Unit) {
         try {
-            BackupWorker.schedule(this)
-            PortableExportWorker.schedule(this)
+            block()
         } catch (e: Exception) {
-            Log.e("App", "WorkManager schedule failed", e)
+            Log.e("App", "$name 初期化失敗", e)
         }
+    }
+
+    /** Phase A: DB初期化・シード。APIキー暗号化移行(§6.6)もここで行う。 */
+    private suspend fun initDatabase() {
+        // ★ C1: APIキー暗号化移行（初回起動時に平文→EncryptedSharedPreferencesへ1回だけ実行）
+        settingsRepository.initApiKey()
+
+        // 設定復元
+        settingsRepository.geminiApiKey.first()?.takeIf { it.isNotBlank() }?.let {
+            geminiClient.setApiKey(it)
+        }
+        connectionEngine.autoConnectEnabled = settingsRepository.autoConnectEnabled.first()
+        connectionEngine.autoConnectThreshold = settingsRepository.autoConnectThreshold.first()
+
+        connectionEngine.seedTypeDefs()
+        pluginEngine.installBuiltinPlugins()
+
+        DemoData.seed(
+            entryDao = database.entryDao(),
+            thoughtDao = database.entryThoughtDao(),
+            definitionDao = database.entryDefinitionDao(),
+            topicDao = database.topicDao(),
+            quizDao = database.quizDao(),
+            connectionDao = database.connectionDao()
+        )
+        database.entryTypeDao().insertAll(SeedData.entryTypes)
+    }
+
+    /** Phase B: Brain Layer初期化。ベクトルインデックス・埋め込みキューの回復。 */
+    private suspend fun initBrainLayer() {
+        vectorIndex.load()
+        embeddingQueue.recoverJobs()
+        embeddingQueue.startWorker()
+        embeddingQueue.rebuildAllSearchDocuments()
+    }
+
+    /** Phase C: バックグラウンドサービス(WorkManagerスケジュール)。 */
+    private suspend fun scheduleBackgroundWorkers() {
+        BackupWorker.schedule(this)
+        PortableExportWorker.schedule(this)
     }
 }
