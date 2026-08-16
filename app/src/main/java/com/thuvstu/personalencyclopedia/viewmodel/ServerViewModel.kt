@@ -10,6 +10,7 @@ import com.thuvstu.personalencyclopedia.backup.PortableExportWorker
 import com.thuvstu.personalencyclopedia.brain.ai.EmbeddingQueue
 import com.thuvstu.personalencyclopedia.brain.ai.GeminiClient
 import com.thuvstu.personalencyclopedia.brain.connection.ConnectionEngine
+import com.thuvstu.personalencyclopedia.integration.StudyPlusClient
 import com.thuvstu.personalencyclopedia.repository.SettingsRepository
 import com.thuvstu.personalencyclopedia.server.LocalServer
 import com.thuvstu.personalencyclopedia.server.TokenManager
@@ -29,7 +30,8 @@ class ServerViewModel @Inject constructor(
     private val settingsRepo: SettingsRepository,
     private val connectionEngine: ConnectionEngine,
     private val embeddingQueue: EmbeddingQueue,
-    private val backupExporter: com.thuvstu.personalencyclopedia.backup.BackupExporter
+    private val backupExporter: com.thuvstu.personalencyclopedia.backup.BackupExporter,
+    private val studyPlusClient: StudyPlusClient   // ★§7.8
 ) : ViewModel() {
 
     private val _isRunning = MutableStateFlow(false)
@@ -86,6 +88,16 @@ class ServerViewModel @Inject constructor(
     val quizHintPenalty: StateFlow<Float> = settingsRepo.quizHintPenalty
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.3f)
 
+    // §7.8 StudyPlus連携
+    val studyPlusEnabled: StateFlow<Boolean> = settingsRepo.studyPlusEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val studyPlusConsumerKey: StateFlow<String?> = settingsRepo.studyPlusConsumerKey
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val studyPlusConsumerSecret: StateFlow<String?> = settingsRepo.studyPlusConsumerSecret
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val studyPlusPendingSyncCount: StateFlow<Int> = studyPlusClient.observePendingSyncCount()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     private val _actionMessage = MutableSharedFlow<String>()
     val actionMessage: SharedFlow<String> = _actionMessage
 
@@ -109,7 +121,10 @@ class ServerViewModel @Inject constructor(
     }
 
     init {
-        viewModelScope.launch { tokenManager.getOrCreateToken() }
+        viewModelScope.launch {
+            tokenManager.getOrCreateToken()
+            settingsRepo.loadStudyPlusCredentials()  // §7.8
+        }
     }
 
     fun toggleServer() {
@@ -228,6 +243,36 @@ class ServerViewModel @Inject constructor(
     }
     fun setQuizHintPenalty(v: Float) {
         viewModelScope.launch { settingsRepo.setQuizHintPenalty(v) }
+    }
+
+    // §7.8 StudyPlus連携
+    fun setStudyPlusEnabled(v: Boolean) {
+        viewModelScope.launch {
+            settingsRepo.setStudyPlusEnabled(v)
+            _actionMessage.emit(
+                if (v) "StudyPlus連携をONにしました（タスク完了時に学習時間を投稿）"
+                else "StudyPlus連携をOFFにしました"
+            )
+        }
+    }
+
+    fun setStudyPlusConsumerKey(key: String) {
+        viewModelScope.launch { settingsRepo.setStudyPlusConsumerKey(key) }
+    }
+
+    fun setStudyPlusConsumerSecret(secret: String) {
+        viewModelScope.launch { settingsRepo.setStudyPlusConsumerSecret(secret) }
+    }
+
+    /** 未同期の学習時間を一括投稿（§7.8.2）。 */
+    fun syncStudyPlusNow() {
+        viewModelScope.launch {
+            val n = studyPlusClient.syncAllPending()
+            _actionMessage.emit(
+                if (n > 0) "✅ $n 件の学習時間をStudyplusへ送信しました"
+                else "送信できる記録がありません（SDK未導入または未設定）"
+            )
+        }
     }
 
     fun rebuildSearchIndex() {

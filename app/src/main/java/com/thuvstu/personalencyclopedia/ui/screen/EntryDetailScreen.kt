@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.thuvstu.personalencyclopedia.db.entity.EntryHistoryEntity
 import com.thuvstu.personalencyclopedia.ui.component.AttachmentSection
 import com.thuvstu.personalencyclopedia.ui.component.ConnectionSection
 import com.thuvstu.personalencyclopedia.ui.component.EntryPreviewPopup
@@ -53,6 +55,10 @@ fun EntryDetailScreen(
     val searchResults by viewModel.searchResults.collectAsState()
     val attachments by viewModel.attachments.collectAsState()
     val tagSuggestions by viewModel.tagSuggestions.collectAsState()
+    val history by viewModel.history.collectAsState()
+
+    // §11.13: 編集履歴プレビュー（読み取り専用）
+    var previewHistory by remember { mutableStateOf<EntryHistoryEntity?>(null) }
 
     var showConnectionDialog by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
@@ -285,6 +291,56 @@ fun EntryDetailScreen(
                     }
                 }
             }
+
+            // ★§5.9.2/§11.13: 編集履歴（entry.content のスナップショット）
+            if (history.isNotEmpty()) {
+                OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("🕘 編集履歴（${history.size}件）", style = MaterialTheme.typography.labelLarge)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "スナップショットは閲覧のみ。復元（巻き戻し）はv15.0のスコープ外です（§11.13）",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        history.take(20).forEach { h ->
+                            val delta = h.charCountDelta
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { previewHistory = h }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        h.titleSnapshot.ifBlank { "（タイトルなし）" },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        sdf.format(Date(h.recordedAt)),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Text(
+                                    when {
+                                        delta > 0 -> "+$delta 文字"
+                                        delta < 0 -> "$delta 文字"
+                                        else -> "±0"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (delta >= 0) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.error
+                                )
+                            }
+                            HorizontalDivider()
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -394,6 +450,31 @@ fun EntryDetailScreen(
                     showConnectionDialog = false; searchQuery = ""
                     selectedTargetEntryId = null; connectionNote = ""; connectionStrength = 0.5f
                 }) { Text("キャンセル") }
+            }
+        )
+    }
+
+    // §11.13: 編集履歴プレビュー（読み取り専用）
+    previewHistory?.let { h ->
+        AlertDialog(
+            onDismissRequest = { previewHistory = null },
+            title = { Text("過去のスナップショット（閲覧のみ）") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(h.titleSnapshot.ifBlank { "（タイトルなし）" },
+                        style = MaterialTheme.typography.titleMedium)
+                    HorizontalDivider()
+                    Text(
+                        h.contentSnapshot?.ifBlank { "（本文なし）" } ?: "（本文なし）",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { previewHistory = null }) { Text("閉じる") }
             }
         )
     }

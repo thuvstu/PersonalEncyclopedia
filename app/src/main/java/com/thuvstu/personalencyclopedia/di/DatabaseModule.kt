@@ -4,13 +4,17 @@ import android.content.Context
 import androidx.room.Room
 import com.thuvstu.personalencyclopedia.db.AppDatabase
 import com.thuvstu.personalencyclopedia.db.MIGRATION_1_2
+import com.thuvstu.personalencyclopedia.db.ReadOnlySqlExecutor
 import com.thuvstu.personalencyclopedia.db.MIGRATION_2_3
 import com.thuvstu.personalencyclopedia.db.MIGRATION_3_4
 import com.thuvstu.personalencyclopedia.db.MIGRATION_4_5
 import com.thuvstu.personalencyclopedia.db.MIGRATION_5_6
 import com.thuvstu.personalencyclopedia.db.MIGRATION_6_7
 import com.thuvstu.personalencyclopedia.db.MIGRATION_7_8
+import com.thuvstu.personalencyclopedia.db.MIGRATION_8_9
 import com.thuvstu.personalencyclopedia.db.dao.*
+import com.thuvstu.personalencyclopedia.integration.NoOpStudyPlusBridge
+import com.thuvstu.personalencyclopedia.integration.StudyPlusSdkBridge
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -25,7 +29,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext ctx: Context): AppDatabase =
         Room.databaseBuilder(ctx, AppDatabase::class.java, "encyclopedia.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
             .build()
 
     @Provides fun provideEntryTypeDao(db: AppDatabase): EntryTypeDao = db.entryTypeDao()
@@ -51,4 +55,14 @@ object DatabaseModule {
     @Provides fun provideEraMasterDao(db: AppDatabase): EraMasterDao = db.eraMasterDao()
     // v8 — カスタムフィールド (§5.8.3)
     @Provides fun provideEntryCustomFieldDao(db: AppDatabase): EntryCustomFieldDao = db.entryCustomFieldDao()
+    // v9 — v15.0: タスク管理・編集履歴 (§5.9) + SQL Explorer保存クエリ (§11.12)
+    @Provides fun provideTaskDao(db: AppDatabase): TaskDao = db.taskDao()
+    @Provides fun provideTaskTimeLogDao(db: AppDatabase): TaskTimeLogDao = db.taskTimeLogDao()
+    @Provides fun provideEntryHistoryDao(db: AppDatabase): EntryHistoryDao = db.entryHistoryDao()
+    @Provides fun provideSavedQueryDao(db: AppDatabase): SavedQueryDao = db.savedQueryDao()
+    // §11.12 SQL Explorer（読み取り専用）
+    @Provides fun provideReadOnlySqlExecutor(db: AppDatabase): ReadOnlySqlExecutor = ReadOnlySqlExecutor(db)
+    // §7.8 StudyPlus SDKブリッジ（SDK未導入時はNoOp。JitPack到達可能環境でSdkStudyPlusBridgeへ差し替え）
+    @Provides @Singleton
+    fun provideStudyPlusSdkBridge(noOp: NoOpStudyPlusBridge): StudyPlusSdkBridge = noOp
 }

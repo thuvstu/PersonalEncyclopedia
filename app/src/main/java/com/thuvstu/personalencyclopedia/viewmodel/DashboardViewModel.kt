@@ -3,6 +3,9 @@ package com.thuvstu.personalencyclopedia.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.thuvstu.personalencyclopedia.brain.ResurfacingEngine
+import com.thuvstu.personalencyclopedia.brain.task.EstimationBias
+import com.thuvstu.personalencyclopedia.brain.task.TaskEngine
+import com.thuvstu.personalencyclopedia.db.dao.TaskDao
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
 import com.thuvstu.personalencyclopedia.importer.WebScraper
 import com.thuvstu.personalencyclopedia.repository.ConnectionRepository
@@ -22,7 +25,9 @@ class DashboardViewModel @Inject constructor(
     private val quizRepo: QuizRepository,
     private val webScraper: WebScraper,
     private val connectionRepo: ConnectionRepository,
-    private val resurfacingEngine: ResurfacingEngine    // ★§7.5
+    private val resurfacingEngine: ResurfacingEngine,    // ★§7.5
+    private val taskEngine: TaskEngine,                   // ★§8.10/§11.11 タスク
+    private val taskDao: TaskDao
 ) : ViewModel() {
 
     val recentEntries: StateFlow<List<EntryEntity>> =
@@ -60,8 +65,24 @@ class DashboardViewModel @Inject constructor(
     private val _quickAddTitle = MutableStateFlow("")
     val quickAddTitle: StateFlow<String> = _quickAddTitle
 
+    // ★§8.10.1 / §11.11: 見積もり精度レポートカード
+    private val _estimationBias =
+        MutableStateFlow(EstimationBias(averageRatio = null, sampleSize = 0))
+    val estimationBias: StateFlow<EstimationBias> = _estimationBias
+
+    // ★§11.11: アクティブタスク件数（ダッシュボードのToDoボタンに表示）
+    val activeTaskCount: StateFlow<Int> = taskDao.observeActiveCount()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     init {
         loadResurfacing()
+        refreshTaskStats()
+    }
+
+    fun refreshTaskStats() {
+        viewModelScope.launch {
+            _estimationBias.value = taskEngine.estimationBiasReport()
+        }
     }
 
     fun loadResurfacing() {

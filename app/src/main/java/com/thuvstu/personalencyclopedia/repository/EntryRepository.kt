@@ -32,8 +32,32 @@ class EntryRepository @Inject constructor(
     private val extensionDao: EntryExtensionDao,
     private val tagDao: TagDao,
     private val entryTypeDao: EntryTypeDao,
+    private val entryHistoryDao: EntryHistoryDao,
     private val embeddingQueue: com.thuvstu.personalencyclopedia.brain.ai.EmbeddingQueue
 ) {
+
+    /**
+     * §5.9.2: 編集履歴のスナップショットを記録する（entry.content のみ対象）。
+     * prev == null の場合は作成時（charCountDelta = 本文文字数）。
+     */
+    private suspend fun recordHistory(
+        entryId: String,
+        prev: EntryEntity?,
+        newTitle: String,
+        newContent: String?
+    ) {
+        val prevLen = prev?.content?.length ?: 0
+        val newLen = newContent?.length ?: 0
+        entryHistoryDao.insert(
+            EntryHistoryEntity(
+                entryId = entryId,
+                titleSnapshot = newTitle,
+                contentSnapshot = newContent,
+                changeSummary = "",
+                charCountDelta = newLen - prevLen
+            )
+        )
+    }
     // ── Observe ──
     fun observeRecent(limit: Int = 10): Flow<List<EntryEntity>> =
         entryDao.observeRecent(limit)
@@ -104,6 +128,9 @@ class EntryRepository @Inject constructor(
             )
         )
 
+        // §5.9.2: 編集履歴（作成時スナップショット）
+        recordHistory(id, null, draft.title, draft.content)
+
         // ★ Phase 2: 検索インデックス更新 + Embeddingキュー投入
         embeddingQueue.enqueue(id)
 
@@ -134,6 +161,9 @@ class EntryRepository @Inject constructor(
                 examplesJson = Json.encodeToString(draft.examples)
             )
         )
+
+        // §5.9.2: 編集履歴（作成時スナップショット）
+        recordHistory(id, null, draft.term, null)
 
         // ★ Phase 2: 検索インデックス更新 + Embeddingキュー投入
         embeddingQueue.enqueue(id)
@@ -244,7 +274,8 @@ class EntryRepository @Inject constructor(
     // ── Update ──
     suspend fun updateThought(entryId: String, draft: ThoughtDraft) {
         val now = System.currentTimeMillis()
-        entryDao.getById(entryId)?.let { existing ->
+        val prev = entryDao.getById(entryId)
+        prev?.let { existing ->
             entryDao.update(
                 existing.copy(
                     title = draft.title,
@@ -259,13 +290,17 @@ class EntryRepository @Inject constructor(
             )
         }
 
+        // §5.9.2: 編集履歴（前回スナップショットとの差分）
+        recordHistory(entryId, prev, draft.title, draft.content)
+
         // ★ Phase 2: 更新後にインデックス再構築
         embeddingQueue.enqueue(entryId)
     }
 
     suspend fun updateDefinition(entryId: String, draft: DefinitionDraft) {
         val now = System.currentTimeMillis()
-        entryDao.getById(entryId)?.let { existing ->
+        val prev = entryDao.getById(entryId)
+        prev?.let { existing ->
             entryDao.update(
                 existing.copy(
                     title = draft.term,
@@ -284,6 +319,9 @@ class EntryRepository @Inject constructor(
                 )
             )
         }
+
+        // §5.9.2: 編集履歴（前回スナップショットとの差分）
+        recordHistory(entryId, prev, draft.term, null)
 
         // ★ Phase 2: 更新後にインデックス再構築
         embeddingQueue.enqueue(entryId)
@@ -327,6 +365,8 @@ class EntryRepository @Inject constructor(
         val existing = entryDao.getById(entryId) ?: return
         entryDao.update(existing.copy(
             title = title, content = content, updatedAt = System.currentTimeMillis()))
+        // §5.9.2: 編集履歴（前回スナップショットとの差分）
+        recordHistory(entryId, existing, title, content)
         embeddingQueue.enqueue(entryId)
     }
 

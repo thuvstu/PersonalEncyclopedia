@@ -9,11 +9,12 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * G2 (GAP-2/6) + walkthrough4 Round1: v1→v8 の全マイグレーションチェーンを検証する。
+ * G2 (GAP-2/6) + walkthrough4 Round1 + v15.0: v1→v9 の全マイグレーションチェーンを検証する。
  * - Round C2で復帰させたスキーマJSON(app/schemas)を使って起点DBを作成
  * - Round Eで追加した MIGRATION_6_7 (era_master) が含まれる
  * - walkthrough4で追加した MIGRATION_7_8 (entry_custom_field / repetitionCount / answeredWithinMs) が含まれる
- * - 注意: runMigrationsAndValidate の version は「終了バージョン」。walkthrough4で v1→v7 系の引数を修正した。
+ * - v15.0で追加した MIGRATION_8_9 (task / task_time_log / entry_history / saved_query) が含まれる
+ * - 注意: runMigrationsAndValidate の version は「終了バージョン」。
  */
 @RunWith(AndroidJUnit4::class)
 class MigrationTest {
@@ -34,11 +35,12 @@ class MigrationTest {
         MIGRATION_4_5,
         MIGRATION_5_6,
         MIGRATION_6_7,
-        MIGRATION_7_8
+        MIGRATION_7_8,
+        MIGRATION_8_9
     )
 
     @Test
-    fun migrate1To8_preservesDataAndAddsEraMasterAndV8() {
+    fun migrate1To9_preservesDataAndAddsEraMasterAndV8AndV9() {
         // 1. v1 スキーマ(1.json)でDBを作成し、Phase-0データを投入
         helper.createDatabase(testDb, 1).use { db ->
             db.execSQL(
@@ -54,8 +56,8 @@ class MigrationTest {
             db.execSQL("INSERT INTO entry_tag (entryId, tagId) VALUES ('e1', 't1')")
         }
 
-        // 2. v1→v8 の全マイグレーションを適用し、v8スキーマ(8.json)と構造が一致することを検証
-        helper.runMigrationsAndValidate(testDb, 8, true, *allMigrations).use { db ->
+        // 2. v1→v9 の全マイグレーションを適用し、v9スキーマ(9.json)と構造が一致することを検証
+        helper.runMigrationsAndValidate(testDb, 9, true, *allMigrations).use { db ->
             // Phase-0データが保持されている
             val entryCount = db.query("SELECT COUNT(*) FROM entry WHERE id = 'e1'").use { c ->
                 c.moveToFirst(); c.getInt(0)
@@ -109,6 +111,76 @@ class MigrationTest {
                 "SELECT COUNT(*) FROM pragma_table_info('SrsCurrentView') WHERE name = 'repetitionCount'"
             ).use { c -> c.moveToFirst(); c.getInt(0) }
             assertEquals("SrsCurrentViewにrepetitionCountが含まれること", 1, viewColumn)
+
+            // v15.0: v9 の新規テーブル群（§5.9 / §11.12）
+            listOf("task", "task_time_log", "entry_history", "saved_query").forEach { table ->
+                val exists = db.query(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='$table'"
+                ).use { c -> c.moveToFirst(); c.getInt(0) }
+                assertEquals("$table が存在すること", 1, exists)
+            }
+            val taskIndex = db.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='index_task_status'"
+            ).use { c -> c.moveToFirst(); c.getInt(0) }
+            assertEquals("index_task_status が存在すること", 1, taskIndex)
+        }
+    }
+
+    @Test
+    fun migrate8To9_addsTaskHistoryAndSavedQueryTables() {
+        // v8 スキーマ(8.json)でDBを作成し、既存データを投入
+        helper.createDatabase(testDb, 8).use { db ->
+            db.execSQL(
+                "INSERT INTO entry (id, type, title, content, summary, sourceUrl, lang, isFavorite, isMuted, metadataJson, createdAt, updatedAt) VALUES ('e1', 'thought', 'v8のデータ', '本文', null, null, 'ja', 0, 0, '{}', 1, 1)"
+            )
+        }
+
+        // v8→v9 を適用し、9.json と構造が一致することを検証
+        helper.runMigrationsAndValidate(testDb, 9, true, MIGRATION_8_9).use { db ->
+            // 既存データが保持されている
+            val entryCount = db.query("SELECT COUNT(*) FROM entry WHERE id = 'e1'").use { c ->
+                c.moveToFirst(); c.getInt(0)
+            }
+            assertEquals("v8のentryが保持されていること", 1, entryCount)
+
+            // task に書き込み・読み出しができる
+            db.execSQL(
+                "INSERT INTO task (id, title, estimatedMinutes, deadlineAt, status, postponeCount, createdAt) " +
+                    "VALUES ('tk1', 'テストタスク', 30, 200, 'pending', 0, 100)"
+            )
+            val taskCount = db.query("SELECT COUNT(*) FROM task WHERE id = 'tk1'").use { c ->
+                c.moveToFirst(); c.getInt(0)
+            }
+            assertEquals("taskに投入できること", 1, taskCount)
+
+            // task_time_log に書き込み・読み出しができる
+            db.execSQL(
+                "INSERT INTO task_time_log (id, taskId, startedAt, endedAt, studyPlusSynced) " +
+                    "VALUES ('tl1', 'tk1', 100, 200, 0)"
+            )
+            val logCount = db.query(
+                "SELECT COUNT(*) FROM task_time_log WHERE taskId = 'tk1'"
+            ).use { c -> c.moveToFirst(); c.getInt(0) }
+            assertEquals("task_time_logに投入できること", 1, logCount)
+
+            // entry_history に書き込み・読み出しができる
+            db.execSQL(
+                "INSERT INTO entry_history (id, entryId, recordedAt, titleSnapshot, contentSnapshot, changeSummary, charCountDelta) " +
+                    "VALUES ('h1', 'e1', 100, 'v8のデータ', '本文', '', 0)"
+            )
+            val historyCount = db.query(
+                "SELECT COUNT(*) FROM entry_history WHERE entryId = 'e1'"
+            ).use { c -> c.moveToFirst(); c.getInt(0) }
+            assertEquals("entry_historyに投入できること", 1, historyCount)
+
+            // saved_query に書き込み・読み出しができる
+            db.execSQL(
+                "INSERT INTO saved_query (id, name, sql, createdAt) VALUES ('sq1', '例', 'SELECT 1', 100)"
+            )
+            val savedCount = db.query(
+                "SELECT COUNT(*) FROM saved_query WHERE id = 'sq1'"
+            ).use { c -> c.moveToFirst(); c.getInt(0) }
+            assertEquals("saved_queryに投入できること", 1, savedCount)
         }
     }
 

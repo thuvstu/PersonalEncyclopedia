@@ -49,6 +49,7 @@ fun DashboardScreen(
     onNavigateToWhiteboard: () -> Unit,
     onNavigateToWiki: () -> Unit,          // ★追加
     onNavigateToQuizList: () -> Unit,      // ★追加
+    onNavigateToTodo: () -> Unit,          // ★v15.0 §11.11
     viewModel: DashboardViewModel = hiltViewModel()
 
 ) {
@@ -61,6 +62,8 @@ fun DashboardScreen(
     val quizCount by viewModel.quizCount.collectAsState()
     val pendingConnectionCount by viewModel.pendingConnectionCount.collectAsState()
     val quickAddTitle by viewModel.quickAddTitle.collectAsState()
+    val activeTaskCount by viewModel.activeTaskCount.collectAsState()
+    val estimationBias by viewModel.estimationBias.collectAsState()
     var showQuickAddDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(scrapeState) {
@@ -147,6 +150,28 @@ fun DashboardScreen(
                     }
                 }
             }
+            // ★§8.10.1 / §11.11: 見積もり精度レポートカード
+            estimationBias.averageRatio?.let { ratio ->
+                item(key = "estimation-bias") {
+                    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                "📏 直近${estimationBias.sampleSize}件の見積もり精度: 平均${String.format("%.1f", ratio)}倍",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                when {
+                                    ratio > 1.2 -> "見積もりを過小評価傾向。タスク画面で実績を確認しましょう"
+                                    ratio < 0.8 -> "余裕を持ちすぎの傾向です"
+                                    else -> "良好な見積もり精度です"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
@@ -188,6 +213,16 @@ fun DashboardScreen(
                             onClick = onNavigateToConnections,
                             modifier = Modifier.weight(1f)
                         ) { Text("🕸️ すべての接続") }
+                    }
+                    // ★v15.0 §11.11: タスク（ToDo）
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilledTonalButton(
+                            onClick = onNavigateToTodo,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("✅ タスク${if (activeTaskCount > 0) " ($activeTaskCount)" else ""}") }
                     }
                     if (pendingConnectionCount > 0) {
                         OutlinedButton(

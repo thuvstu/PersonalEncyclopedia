@@ -29,6 +29,7 @@ import java.util.*
 @Composable
 fun DatabaseManagementScreen(
     onBack: () -> Unit,
+    onNavigateToSqlExplorer: () -> Unit = {},
     viewModel: DatabaseManagementViewModel = hiltViewModel()
 ) {
     val typeCounts by viewModel.typeCounts.collectAsState()
@@ -106,6 +107,24 @@ fun DatabaseManagementScreen(
                         Text(s.dbPath, style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } ?: CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                }
+            }
+
+            // ── SQL Explorer（§11.12 読み取り専用）──
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("🧪 SQL Explorer（読み取り専用）", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "SELECT / WITH のみ実行可能なデバッグ用SQLコンソール。スキーマ閲覧・DB統計も確認できます。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = onNavigateToSqlExplorer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("開く") }
                 }
             }
 

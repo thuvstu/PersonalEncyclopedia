@@ -38,6 +38,9 @@ object Routes {
     const val WIKI_LIST = "wiki_list"
     const val WIKI_ARTICLE = "wiki/{articleId}"
     const val WIKI_NEW = "wiki_new"
+    // ★v15.0 §11.11 / §11.12
+    const val TODO = "todo"
+    const val SQL_EXPLORER = "sql_explorer"
 }
 
 @Composable
@@ -68,8 +71,18 @@ fun AppNavGraph(navController: NavHostController) {
                 // ★v12.0 追加
                 onNavigateToQuizList = { navController.navigate(Routes.QUIZ_LIST) },
                 onNavigateToWhiteboard = { navController.navigate(Routes.WHITEBOARD_LIST) },
-                onNavigateToWiki = { navController.navigate(Routes.WIKI_LIST) }
+                onNavigateToWiki = { navController.navigate(Routes.WIKI_LIST) },
+                // ★v15.0 §11.11
+                onNavigateToTodo = { navController.navigate(Routes.TODO) }
             )
+        }
+        // ★v15.0 §11.11: タスク（ToDo）
+        composable(Routes.TODO) {
+            ToDoScreen(onBack = { navController.popBackStack() })
+        }
+        // ★v15.0 §11.12: SQL Explorer（読み取り専用）
+        composable(Routes.SQL_EXPLORER) {
+            SqlExplorerScreen(onBack = { navController.popBackStack() })
         }
         composable(Routes.SEARCH) {
             SearchScreen(
@@ -172,7 +185,10 @@ fun AppNavGraph(navController: NavHostController) {
             ImportScreen(onBack = { navController.popBackStack() })
         }
         composable(Routes.DB_MANAGEMENT) {
-            DatabaseManagementScreen(onBack = { navController.popBackStack() })
+            DatabaseManagementScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToSqlExplorer = { navController.navigate(Routes.SQL_EXPLORER) }
+            )
         }
         composable(Routes.THOUGHT_NEW) {
             ThoughtEditScreen(

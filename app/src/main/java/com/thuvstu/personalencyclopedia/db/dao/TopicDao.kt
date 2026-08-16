@@ -20,6 +20,12 @@ interface TopicDao {
     @Query("SELECT * FROM topic WHERE name = :name AND parentId IS :parentId LIMIT 1")
     suspend fun findByName(name: String, parentId: String?): TopicEntity?
 
+    @Query("SELECT * FROM topic WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): TopicEntity?
+
+    @Query("SELECT * FROM topic ORDER BY name")
+    fun observeAll(): Flow<List<TopicEntity>>
+
     @Query("""
         SELECT t.* FROM topic t
         INNER JOIN entry_topic et ON et.topicId = t.id

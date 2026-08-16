@@ -54,12 +54,17 @@ import com.thuvstu.personalencyclopedia.db.entity.*
         EraMasterEntity::class,
         // v8 — カスタムフィールド (§5.8.3)
         EntryCustomFieldEntity::class,
+        // v9 — v15.0: タスク管理・編集履歴 (§5.9) + SQL Explorer保存クエリ (§11.12)
+        TaskEntity::class,
+        TaskTimeLogEntity::class,
+        EntryHistoryEntity::class,
+        SavedQueryEntity::class,
     ],
     views = [
         SrsCurrentView::class,
         QuizMasteryView::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -90,4 +95,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun eraMasterDao(): EraMasterDao
     // v8 — カスタムフィールド (§5.8.3)
     abstract fun entryCustomFieldDao(): EntryCustomFieldDao
+    // v9 — v15.0: タスク管理・編集履歴 (§5.9) + SQL Explorer保存クエリ (§11.12)
+    abstract fun taskDao(): TaskDao
+    abstract fun taskTimeLogDao(): TaskTimeLogDao
+    abstract fun entryHistoryDao(): EntryHistoryDao
+    abstract fun savedQueryDao(): SavedQueryDao
 }

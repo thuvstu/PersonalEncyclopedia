@@ -61,6 +61,11 @@ fun SettingsScreen(
     val quizTypes by viewModel.quizTypes.collectAsState()
     val quizPressureSeconds by viewModel.quizPressureSeconds.collectAsState()
     val quizHintPenalty by viewModel.quizHintPenalty.collectAsState()
+    // §7.8 StudyPlus連携
+    val studyPlusEnabled by viewModel.studyPlusEnabled.collectAsState()
+    val studyPlusConsumerKey by viewModel.studyPlusConsumerKey.collectAsState()
+    val studyPlusConsumerSecret by viewModel.studyPlusConsumerSecret.collectAsState()
+    val studyPlusPendingSyncCount by viewModel.studyPlusPendingSyncCount.collectAsState()
 
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -486,6 +491,68 @@ fun SettingsScreen(
                 }
             }
 
+            // ── StudyPlus連携（§7.8 v15.0）──
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("📚 StudyPlus連携", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "タスク完了時の学習時間をStudyplusへ自動投稿（§7.8）",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(checked = studyPlusEnabled, onCheckedChange = viewModel::setStudyPlusEnabled)
+                    }
+                    if (studyPlusEnabled) {
+                        Spacer(Modifier.height(8.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(
+                                "⚠️ 実際の投稿には ①Studyplusアプリ(7.0+)のインストール ②教材アプリ開発者登録による" +
+                                    "consumerKey/consumerSecret が必要です。開発者登録が承認されるまで連携はOFFのままでも" +
+                                    "他の機能は利用できます。未同期の記録はこの画面から後で一括送信できます。",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.fillMaxWidth().padding(12.dp)
+                            )
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = studyPlusConsumerKey ?: "",
+                            onValueChange = viewModel::setStudyPlusConsumerKey,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Consumer Key") },
+                            singleLine = true
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = studyPlusConsumerSecret ?: "",
+                            onValueChange = viewModel::setStudyPlusConsumerSecret,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Consumer Secret") },
+                            singleLine = true
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "未同期の学習記録: $studyPlusPendingSyncCount 件",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (studyPlusPendingSyncCount > 0) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Button(
+                            onClick = { viewModel.syncStudyPlusNow() },
+                            enabled = studyPlusPendingSyncCount > 0,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("一括同期") }
+                    }
+                }
+            }
+
             // ── メンテナンス ──
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -513,8 +580,8 @@ fun SettingsScreen(
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("ℹ️ アプリ情報", style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("Personal Encyclopedia v0.5.0", style = MaterialTheme.typography.bodyMedium)
-                    Text("Phase 3 — 知識接続・全13型・統合エディタ",
+                    Text("Personal Encyclopedia v0.6.0", style = MaterialTheme.typography.bodyMedium)
+                    Text("Phase 4 — タスク管理・SQL Explorer・編集履歴・StudyPlus (v15.0)",
                         style = MaterialTheme.typography.bodySmall)
                     Text("データは端末内SQLiteに保存。UIが消えてもデータは無傷（§6.4）",
                         style = MaterialTheme.typography.bodySmall,

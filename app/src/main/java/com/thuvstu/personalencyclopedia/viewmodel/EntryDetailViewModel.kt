@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.thuvstu.personalencyclopedia.brain.TagSuggestionEngine
 import com.thuvstu.personalencyclopedia.db.dao.ConnectionWithEntry
 import com.thuvstu.personalencyclopedia.db.dao.EntryDao
+import com.thuvstu.personalencyclopedia.db.dao.EntryHistoryDao
 import com.thuvstu.personalencyclopedia.db.entity.*
 import com.thuvstu.personalencyclopedia.importer.AutoLinker
 import com.thuvstu.personalencyclopedia.repository.AttachmentRepository
@@ -30,6 +31,7 @@ class EntryDetailViewModel @Inject constructor(
     private val quizRepo: QuizRepository,
     private val tagSuggestionEngine: TagSuggestionEngine,
     private val entryDao: EntryDao,    // ★ AutoLinker 構築用
+    private val entryHistoryDao: EntryHistoryDao,   // ★§5.9.2/§11.13 編集履歴
     private val wikiArticleDao: WikiArticleDao,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -85,6 +87,11 @@ class EntryDetailViewModel @Inject constructor(
 
     val attachments: StateFlow<List<EntryAttachmentEntity>> =
         attachmentRepo.observeForEntry(entryId)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // ★§5.9.2/§11.13: 編集履歴（新しい順）
+    val history: StateFlow<List<EntryHistoryEntity>> =
+        entryHistoryDao.observeByEntryId(entryId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _searchResults = MutableStateFlow<List<EntryEntity>>(emptyList())

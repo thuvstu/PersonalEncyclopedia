@@ -12,6 +12,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -23,6 +24,9 @@ private val Context.settingsDataStore by preferencesDataStore(name = "app_settin
 
 private const val ENCRYPTED_PREFS_FILE = "secure_settings"
 private const val KEY_GEMINI_API = "GEMINI_API_KEY"
+// §7.8 StudyPlus連携: コンシューマキー/シークレットも暗号化ストアで管理
+private const val KEY_STUDYPLUS_CONSUMER_KEY = "STUDYPLUS_CONSUMER_KEY"
+private const val KEY_STUDYPLUS_CONSUMER_SECRET = "STUDYPLUS_CONSUMER_SECRET"
 private const val TAG = "SettingsRepository"
 
 @Singleton
@@ -91,6 +95,8 @@ class SettingsRepository @Inject constructor(
         val QUIZ_TYPES = stringPreferencesKey("QUIZ_TYPES")
         val QUIZ_PRESSURE_SECONDS = intPreferencesKey("QUIZ_PRESSURE_SECONDS")
         val QUIZ_HINT_PENALTY = floatPreferencesKey("QUIZ_HINT_PENALTY")
+        // §7.8 StudyPlus連携（v15.0）
+        val STUDYPLUS_ENABLED = booleanPreferencesKey("STUDYPLUS_ENABLED")
     }
 
     val autoConnectEnabled: Flow<Boolean> =
@@ -137,6 +143,14 @@ class SettingsRepository @Inject constructor(
         context.settingsDataStore.data.map { it[Keys.QUIZ_PRESSURE_SECONDS] ?: 60 }
     val quizHintPenalty: Flow<Float> =
         context.settingsDataStore.data.map { it[Keys.QUIZ_HINT_PENALTY] ?: 0.3f }
+
+    // §7.8 StudyPlus連携（v15.0）。consumerKey/Secret は認証情報のため暗号化ストアに保存する
+    val studyPlusEnabled: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[Keys.STUDYPLUS_ENABLED] ?: false }
+    private val _studyPlusConsumerKey = MutableStateFlow<String?>(null)
+    val studyPlusConsumerKey: StateFlow<String?> = _studyPlusConsumerKey.asStateFlow()
+    private val _studyPlusConsumerSecret = MutableStateFlow<String?>(null)
+    val studyPlusConsumerSecret: StateFlow<String?> = _studyPlusConsumerSecret.asStateFlow()
 
     companion object {
         // ★最適化: 出題形式はqa/mcq/fill_blankの3種に正式収束（sort/cloze/customは生成・出題対象外）
@@ -202,4 +216,23 @@ class SettingsRepository @Inject constructor(
         context.settingsDataStore.edit { it[Keys.QUIZ_PRESSURE_SECONDS] = v.coerceIn(15, 180) }
     suspend fun setQuizHintPenalty(v: Float) =
         context.settingsDataStore.edit { it[Keys.QUIZ_HINT_PENALTY] = v.coerceIn(0f, 0.5f) }
+
+    // §7.8 StudyPlus連携（v15.0）
+    suspend fun setStudyPlusEnabled(v: Boolean) =
+        context.settingsDataStore.edit { it[Keys.STUDYPLUS_ENABLED] = v }
+
+    /** 起動時に暗号化ストアからStudyPlus認証情報を読み込む（ServerViewModel.init から呼ぶ）。 */
+    suspend fun loadStudyPlusCredentials() = withContext(Dispatchers.IO) {
+        _studyPlusConsumerKey.value = encryptedPrefs.getString(KEY_STUDYPLUS_CONSUMER_KEY, null)
+        _studyPlusConsumerSecret.value = encryptedPrefs.getString(KEY_STUDYPLUS_CONSUMER_SECRET, null)
+    }
+
+    suspend fun setStudyPlusConsumerKey(key: String) = withContext(Dispatchers.IO) {
+        encryptedPrefs.edit().putString(KEY_STUDYPLUS_CONSUMER_KEY, key.trim()).apply()
+        _studyPlusConsumerKey.value = key.trim()
+    }
+    suspend fun setStudyPlusConsumerSecret(secret: String) = withContext(Dispatchers.IO) {
+        encryptedPrefs.edit().putString(KEY_STUDYPLUS_CONSUMER_SECRET, secret.trim()).apply()
+        _studyPlusConsumerSecret.value = secret.trim()
+    }
 }
