@@ -12,6 +12,10 @@ interface EntryThoughtDao {
     @Insert
     suspend fun insert(thought: EntryThoughtEntity)
 
+    /** Round 0 (M-1): SyntheticDataSeeder用の一括挿入 */
+    @Insert
+    suspend fun insertAll(thoughts: List<EntryThoughtEntity>)
+
     @Update
     suspend fun update(thought: EntryThoughtEntity)
 

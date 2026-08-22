@@ -12,6 +12,10 @@ interface EntryDefinitionDao {
     @Insert
     suspend fun insert(def: EntryDefinitionEntity)
 
+    /** Round 0 (M-1): SyntheticDataSeeder用の一括挿入 */
+    @Insert
+    suspend fun insertAll(defs: List<EntryDefinitionEntity>)
+
     @Update
     suspend fun update(def: EntryDefinitionEntity)
 

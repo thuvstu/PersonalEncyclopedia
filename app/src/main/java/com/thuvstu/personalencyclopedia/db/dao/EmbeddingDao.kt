@@ -11,6 +11,10 @@ interface EmbeddingDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(embedding: EmbeddingEntity)
 
+    /** Round 0 (M-1): SyntheticDataSeeder用の一括挿入 */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAll(embeddings: List<EmbeddingEntity>)
+
     @Query("SELECT * FROM embedding WHERE entryId = :entryId")
     suspend fun getByEntryId(entryId: String): EmbeddingEntity?
 

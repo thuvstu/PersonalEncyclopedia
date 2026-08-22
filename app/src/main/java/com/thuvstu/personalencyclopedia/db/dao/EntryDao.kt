@@ -13,6 +13,10 @@ interface EntryDao {
     @Insert
     suspend fun insert(entry: EntryEntity)
 
+    /** Round 0 (M-1): SyntheticDataSeeder用の一括挿入 */
+    @Insert
+    suspend fun insertAll(entries: List<EntryEntity>)
+
     @Update
     suspend fun update(entry: EntryEntity)
 
@@ -100,6 +104,14 @@ WHERE deletedAt IS NULL GROUP BY type ORDER BY cnt DESC
 
     @Query("SELECT * FROM entry WHERE sourceUrl = :url AND deletedAt IS NULL LIMIT 1")
     suspend fun findBySourceUrl(url: String): EntryEntity?
+
+    /** Round 0 (M-1): 全件数（deletedAtを含む）。シーダーの進捗・検証用 */
+    @Query("SELECT COUNT(*) FROM entry")
+    suspend fun countAll(): Int
+
+    /** Round 0 (M-1): SyntheticDataSeeder生成データの一括削除。子テーブルはFK CASCADEで削除される */
+    @Query("DELETE FROM entry WHERE metadataJson LIKE '%\"synthetic\":true%'")
+    suspend fun deleteSynthetic()
 }
 
 data class TypeCount(val type: String, val cnt: Int)
