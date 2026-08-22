@@ -20,6 +20,7 @@
 11. [テスト戦略](#11-テスト戦略)
 12. [設計パターン集大成](#12-設計パターン集大成)
 13. [注目点・課題・将来性](#13-注目点・課題・将来性)
+14. [パフォーマンス計測基盤 (Round 0)](#14-パフォーマンス計測基盤-round-0)
 
 ---
 
@@ -694,6 +695,43 @@ MainActivity.onCreate → handleIncomingIntent (ACTION_SEND: URL→scrape, テ�
 
 ---
 
+## 14. パフォーマンス計測基盤 (Round 0)
+
+2026-08-22 開始の「パフォーマンス大改良計画」(`docs/NextTasks.md`)のRound 0として、
+**計測してから最適化する**ための土台を実装した。詳細な実装記録は `docs/walkthrough8.md`。
+
+### 14.1 SyntheticDataSeeder — 合成負荷データ生成 (debug専用)
+
+- `app/src/debug/java/.../perf/` に配置し、**release APKには一切含まれない**
+- adb broadcast (`PerfSeedReceiver`) 経由で 1,000 / 10,000 / **50,000** 件を段階的投入
+- entry・定義・思考・webpage/book拡張・search_document+FTS(Nグラム)・embedding(768次元疑似ベクトル)を作成
+- search_document/FTSは本番と同じ `EmbeddingTextBuilder.build()` + `NgramTokenizer.tokenize()` で生成するため
+  起動時の `rebuildAllSearchDocuments()` が差分なしでスキップできる
+- 全行を `metadataJson={"synthetic":true}` でマーク。ユーザーの実データには触れず、CLEARで一括削除できる
+  (FTSのみ手動rowid同期方式のため `deleteSyntheticFts()` を明示実行)
+- Randomシード=count固定で同一規模は常に同一データ → 計測の再現性を保証
+
+### 14.2 `:benchmark` モジュール — Macrobenchmark
+
+- `com.android.test` プラグイン + `targetProjectPath(":app")` のself-instrumenting構成
+- 対象アプリ側に `<profileable android:shell="true"/>` と release buildTypeへのdebug署名(計測用)が必要
+- 計測テスト4種:
+  | テスト | 内容 | メトリクス |
+  |---|---|---|
+  | StartupBenchmark | cold start | StartupTimingMetric |
+  | NavigationBenchmark | ボトムナビ遷移 | FrameTimingMetric |
+  | ScrollBenchmark | 一覧フリング | FrameTimingMetric |
+  | SearchBenchmark | FTS検索応答 | FrameTimingMetric |
+- managed device `pixel8Api34`(ATDイメージ)を同梱。CIでも実行可能
+
+### 14.3 ベースライン運用ルール
+
+- 実測値の手順・記録表は **`docs/perf/BASELINE.md`** に置く
+- 以降のRound(PERF-1〜8)は全て「50,000件でのこの数値がどう変わったか」で評価する
+- 数値が悪化したまま次へ進まない
+
+---
+
 ## 付録A. ディレクトリ構造マップ
 
 ```
@@ -720,7 +758,9 @@ PersonalEncyclopedia/
 │       │   │   └── viewmodel/ (21本)
 │       │   └── res/ …
 │       ├── test/               # JVM ユニットテスト (rubric/クイズ/索引並行性)
-│       └── androidTest/        # MigrationTest ほか
+│       ├── androidTest/        # MigrationTest ほか
+│       └── debug/              # SyntheticDataSeeder + PerfSeedReceiver (releaseに含まれない)
+├── benchmark/                   # Macrobenchmarkモジュール (§14.2, cold start/遷移/検索/スクロール)
 ├── web/                        # React Webクライアント (DBなし・Ktor APIクライアント)
 │   ├── package.json / vite.config.ts / tsconfig.json
 │   └── src/  api/client.ts, lib/, components/ (EntryList, EntryDetail, GraphView,

@@ -61,9 +61,12 @@
 
 **確定条件(2026-08-22)**: 最適化対象は自端末/高スペック端末。低スペック機への配慮は優先度を下げてよい。目標データ規模は**50,000 entry**。
 
-- [ ] **M-1: 合成負荷データ生成スクリプト作成** `debug`ビルドのみで有効な`SyntheticDataSeeder`を追加し、1,000→10,000→**50,000**件と段階的に投入できるようにする(最終確認は必ず50,000件で行う。中間段階は問題の早期発見用)
-- [ ] **M-2: Macrobenchmarkモジュール追加** cold start・主要画面遷移・検索応答時間を計測できるようにする
+- [x] **M-1: 合成負荷データ生成スクリプト作成** `debug`ビルドのみで有効な`SyntheticDataSeeder`を追加し、1,000→10,000→**50,000**件と段階的に投入できるようにする(最終確認は必ず50,000件で行う。中間段階は問題の早期発見用)
+  ✅ 実装済み(walkthrough8)。`adb shell am broadcast -n com.thuvstu.personalencyclopedia/.perf.PerfSeedReceiver -a com.thuvstu.personalencyclopedia.perf.SEED --ei count 50000`
+- [x] **M-2: Macrobenchmarkモジュール追加** cold start・主要画面遷移・検索応答時間を計測できるようにする
+  ✅ 実装済み(walkthrough8)。`:benchmark`モジュール(Startup/Navigation/Scroll/Searchの4テスト)+`<profileable>`+release署名
 - [ ] **M-3: 50,000件データでの実測値を記録する**(このRoundの成果物は「直す」ことではなく「今どれだけ遅いか/速いかを数字で持つ」こと)
+  🛑 計測手順と記録表は `docs/perf/BASELINE.md` に準備済み。**自端末での実行と数値の記入が残**(次セッションの最初に実施する)
   🛑 ここで得た実測値をベースラインとし、以降のRoundは全て「この数値がどう変わったか」で評価する
 
 **高スペック前提での方針調整**: WAL接続プール数やCoilのキャッシュサイズは、低スペック機を想定した保守的な値ではなく、自端末のRAM/CPUに見合った値まで踏み込んでよい(Round 1/3で具体値を決める際にこの前提を使う)。

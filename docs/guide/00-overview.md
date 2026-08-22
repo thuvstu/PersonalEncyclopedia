@@ -31,6 +31,16 @@
 
 どの段階で失敗してもアプリが落ちないよう、各段階は独立してトライされ、失敗はログに残る。
 
+## パフォーマンス計測(Round 0で追加)
+
+「直す前に測る」ための仕組みが2つある(詳細は `DESIGN.md` §14 / `docs/perf/BASELINE.md`)。
+
+- **合成データ投入(debugビルド限定)**: `app/src/debug/` の `SyntheticDataSeeder` が、実データ規模
+  (最大50,000 entry)の疑似データを entry・検索ドキュメント・FTS・768次元embedding込みで作る。
+  adb broadcast 1発で投入・全削除ができる。release APKには含まれない。
+- **`:benchmark` モジュール**: Macrobenchmark で cold start・画面遷移・スクロール・検索応答を
+  release相当の APK で計測する。最適化の前後で必ずこの数字を取り、悪化したら理由を残す。
+
 ## ネットワーク
 
 - アプリ内に **Ktor サーバー**(`server/LocalServer.kt`)を内蔵しており、明示的に ON にしたときだけ LAN 上に API を公開する(§4.3)。
