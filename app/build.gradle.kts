@@ -43,6 +43,9 @@ android {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Round 0 (M-2): Macrobenchmarkはrelease APKをインストールするため署名が必要。
+            // 配布用リリースではこの設定を差し替えること。
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {

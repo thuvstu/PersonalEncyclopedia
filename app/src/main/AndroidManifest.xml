@@ -16,6 +16,11 @@
         android:theme="@style/Theme.Encyclopedia"
         tools:targetApi="34">
 
+        <!-- Round 0 (M-2): Macrobenchmarkがreleaseビルドをプロファイリングするために必要 -->
+        <profileable
+            android:shell="true"
+            tools:targetApi="29" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
