@@ -109,6 +109,10 @@ WHERE deletedAt IS NULL GROUP BY type ORDER BY cnt DESC
     @Query("SELECT COUNT(*) FROM entry")
     suspend fun countAll(): Int
 
+    /** Round 0 (M-1): 合成データ件数。再投入時に置き換え判定に使う */
+    @Query("SELECT COUNT(*) FROM entry WHERE metadataJson LIKE '%\"synthetic\":true%'")
+    suspend fun countSynthetic(): Int
+
     /** Round 0 (M-1): SyntheticDataSeeder生成データの一括削除。子テーブルはFK CASCADEで削除される */
     @Query("DELETE FROM entry WHERE metadataJson LIKE '%\"synthetic\":true%'")
     suspend fun deleteSynthetic()

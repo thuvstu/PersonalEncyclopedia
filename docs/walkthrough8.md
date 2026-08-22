@@ -61,9 +61,21 @@ C. M-3: docs/perf/BASELINE.md
 
 検証
 - :app:assembleDebug / :app:assembleRelease: 成功(R8修復後)
-- :app:assembleBenchmark? → :benchmark:assemble / :benchmark:assembleAndroidTest: 成功
+- :benchmark:assemble / :benchmark:assembleAndroidTest: 成功
   benchmark-benchmark.apk 生成まで確認(self-instrumenting構成)
+- マニフェスト分離: debugのマージ済みマニフェストに PerfSeedReceiver あり /
+  releaseには無し + <profileable> あり を確認
+- :app:testDebugUnitTest: 全テスト green(99本)
 - release APKに seeder が含まれないことをソースセット分離で担保(app/src/debug 配置)
+
+全体再確認(2026-08-22)で発見・対処した不具合
+- EmbeddingDao.insertAll 追加により InMemoryVectorIndexConcurrencyTest の手書きスタブが
+  コンパイルエラー → スタブに override を追加(99本すべてgreen)
+- 段階投入(1k→10k)でID接頭辞が同一のためPK衝突する潜在バグ → seed()冒頭で
+  countSynthetic()>0 なら clear() してから投入する「置き換え」方式に変更
+  (各SEEDで合成データは常にちょうどcount件。BASELINE.mdの手順も追記)
+- java.util.Random.nextLong(bound) は minSdk 28 のAndroidランタイムに存在しない可能性
+  (API 34系で追加) → nextDouble()ベースの自前実装に置換
 
 実装中に発見・対処した不具合
 - Kotlin文字列テンプレートの貪欲な識別子解釈: "$count件" が $count件(1識別子扱い)になりコンパイルエラー

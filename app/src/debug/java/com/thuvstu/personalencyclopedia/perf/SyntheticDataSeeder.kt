@@ -68,11 +68,21 @@ object SyntheticDataSeeder {
     /**
      * [count]件の合成entryを段階的に投入する。
      * 既存DB（ユーザーの実データ・デモデータ）には触れず、必ず合成フラグ付きで追記する。
+     *
+     * 合成データが既に存在する場合は、ID衝突を避けるため**先に全削除してから**投入する
+     * （= 各SEED呼び出しで合成データはちょうど[count]件になる。1,000→10,000→50,000の
+     * 段階計測では、都度この関数を呼ぶだけでよい。CLEARは任意）。
      */
     suspend fun seed(db: AppDatabase, count: Int, onProgress: (Int) -> Unit = {}) {
         require(count > 0) { "count must be > 0" }
         val start = System.currentTimeMillis()
         Log.i(TAG, "seed(count=$count) 開始")
+
+        val existing = db.entryDao().countSynthetic()
+        if (existing > 0) {
+            Log.i(TAG, "既存の合成データ $existing 件を削除してから投入する")
+            clear(db)
+        }
 
         val rng = java.util.Random(count.toLong())
         var inserted = 0
@@ -239,7 +249,11 @@ object SyntheticDataSeeder {
         return (1..n).joinToString("") { SENTENCES[rng.nextInt(SENTENCES.size)] }
     }
 
-    private fun randomAgeMs(rng: Random): Long = rng.nextLong(365L * 24 * 60 * 60 * 1000)
+    // java.util.Random.nextLong(bound) は minSdk 28 のAndroidランタイムに存在しないため自前で作る
+    private fun nextLongBounded(rng: Random, bound: Long): Long =
+        (rng.nextDouble() * bound).toLong().coerceIn(0, bound - 1)
+
+    private fun randomAgeMs(rng: Random): Long = nextLongBounded(rng, 365L * 24 * 60 * 60 * 1000)
 
     private fun randomKatakana(rng: Random): String =
         (1..4).joinToString("") { ((0x30A2 + rng.nextInt(80)).toChar()).toString() }

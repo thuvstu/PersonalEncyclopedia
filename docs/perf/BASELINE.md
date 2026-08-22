@@ -28,8 +28,10 @@ adb shell am broadcast -n com.thuvstu.personalencyclopedia/.perf.PerfSeedReceive
 adb shell am broadcast -n com.thuvstu.personalencyclopedia/.perf.PerfSeedReceiver -a com.thuvstu.personalencyclopedia.perf.SEED --ei count 50000
 ```
 
+- **各SEED呼び出しは既存の合成データを全削除してから投入する**(合成データは常にちょうど`count`件になる)。
+  段階計測の際にCLEARを挟む必要はない。ユーザーの実データ・デモデータには触れない
 - 進捗: `adb logcat -s SyntheticSeeder` (完了時にToast表示)
-- 削除: `... -a com.thuvstu.personalencyclopedia.perf.CLEAR`
+- 全削除のみ: `... -a com.thuvstu.personalencyclopedia.perf.CLEAR`
 - 投入内容: entry / entry_definition / entry_thought / entry_webpage / entry_book /
   search_document + FTS(Nグラム) / embedding(768次元の疑似単位ベクトル, model=`synthetic-768`)
 - 同一countは常に同一データ(Randomシード固定)。計測は再現可能
