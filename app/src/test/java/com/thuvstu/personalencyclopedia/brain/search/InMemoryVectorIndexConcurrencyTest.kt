@@ -25,6 +25,7 @@ class InMemoryVectorIndexConcurrencyTest {
     /** EmbeddingDao のテスト用スタブ（DB 不要） */
     private val fakeDao = object : EmbeddingDao {
         override suspend fun upsert(embedding: EmbeddingEntity) {}
+        override suspend fun insertAll(embeddings: List<EmbeddingEntity>) {}
         override suspend fun getByEntryId(entryId: String): EmbeddingEntity? = null
         override suspend fun getAll(): List<EmbeddingEntity> = emptyList()
         override suspend fun deleteByEntryId(entryId: String) {}
