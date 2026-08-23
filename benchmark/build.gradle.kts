@@ -58,4 +58,7 @@ kotlin {
 
 dependencies {
     implementation(libs.androidx.benchmark.macro.junit4)
+    // AGP 9ではcom.android.testモジュールのソースはsrc/main配下になり、
+    // 旧androidTest由来の暗黙依存が無くなるため明示する
+    implementation(libs.androidx.test.ext.junit)
 }
