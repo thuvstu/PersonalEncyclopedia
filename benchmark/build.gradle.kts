@@ -17,7 +17,10 @@ android {
         minSdk = 28
         targetSdk = 35
 
-        testInstrumentationRunner = "androidx.benchmark.macro.junit4.MacrobenchmarkRunner"
+        // 注意: androidx.benchmark.macro.junit4.MacrobenchmarkRunner は実在しない
+        // (benchmark-macro-junit4 のAAR/ソースツリーに含まれない)。計測は
+        // MacrobenchmarkRule 側で完結するため、標準ランナーを使用する
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
