@@ -39,28 +39,39 @@ adb shell am broadcast -n com.thuvstu.personalencyclopedia/.perf.PerfSeedReceive
 **注意:** seed直後の初回起動では Phase B の `rebuildAllSearchDocuments()` が全件走査する。
 「初回起動(再構築あり)」と「2回目以降」は別の数値として記録すること。
 
-## 3. ベンチマーク実行 (M-2: :benchmarkモジュール)
+## 3. 計測実行(2026-08-24改訂: 軽量計測方式)
+
+Macrobenchmarkは個人開発には複雑すぎると判断し撤回。以下のadb標準機能+簡易ラッパーで代替する。コード追加はほぼゼロ、Gradle Managed Deviceも不要。
+
+### コールドスタート
 
 ```powershell
-# 物理端末(接続した自端末)の場合
-.\gradlew.bat :benchmark:connectedBenchmarkAndroidTest --console=plain
+# アプリを完全に停止してから実行(force-stopしないとコールドにならない)
+adb shell am force-stop com.thuvstu.personalencyclopedia
+adb shell am start -W -n com.thuvstu.personalencyclopedia/.MainActivity
+```
+`TotalTime`(体感起動時間)・`WaitTime`が出力される。ばらつきを見るため3〜5回実行し、中央値を記録する。
 
-# 管理エミュレータの場合
-.\gradlew.bat :benchmark:pixel8Api34BenchmarkAndroidTest --console=plain
+### スクロールのジャンク(フレーム落ち)
+
+```powershell
+adb shell dumpsys gfxinfo com.thuvstu.personalencyclopedia reset
+# ここでダッシュボード一覧を実際にフリングスクロールする(手動操作)
+adb shell dumpsys gfxinfo com.thuvstu.personalencyclopedia
+```
+`Janky frames`の数・割合が出力される。
+
+### 検索応答時間・InMemoryVectorIndex.load()等の個別処理
+
+`util/Timed.kt`の`timed()`ラッパー(NextTasks.md §0参照)を該当箇所に仕込み、`adb logcat -s App`で確認する。1機能1ビルドの原則に従い、計測したい箇所ごとに小さく追加してよい(計測用コードは`if (BuildConfig.DEBUG)`等で本番ビルドに影響しないようにする)。
+
+### DBサイズ
+
+```powershell
+adb shell run-as com.thuvstu.personalencyclopedia du -h databases/
 ```
 
-| テスト | 計測内容 | メトリクス |
-|---|---|---|
-| `StartupBenchmark#coldStartup` | cold start | StartupTimingMetric |
-| `NavigationBenchmark#navigateBottomTabs` | 検索→統計→ホーム 遷移 | FrameTimingMetric |
-| `ScrollBenchmark#scrollDashboardList` | ダッシュボード一覧フリング×3 | FrameTimingMetric |
-| `SearchBenchmark#searchQueryResponse` | 検索画面でのクエリ入力→結果再描画 | FrameTimingMetric |
-
-結果の出力先: 実行コンソール(Studio) / `benchmark/build/outputs/managed_device_results/`(管理エミュレータ)
-
-補助観測(任意だが推奨):
-- `InMemoryVectorIndex.load()` の所要時間 → 起動時logcat(Appタグ)
-- DBサイズ → `adb shell run-as com.thuvstu.personalencyclopedia ls -l databases/`(debugビルドのみ可)
+結果の出力先: すべてコンソール出力+`adb logcat`。ファイル転送・追加のGradleタスクは不要。
 
 ## 4. 記録表
 
@@ -73,46 +84,36 @@ adb shell am broadcast -n com.thuvstu.personalencyclopedia/.perf.PerfSeedReceive
 | RAM / SoC | |
 | 計測日 | |
 
-### Startup (cold start, ms)
+### Startup (cold start, ms、`am start -W`のTotalTime、3〜5回中央値)
 
-| データ規模 | P50 | P90 | P99 | 初回起動(rebuildあり) |
-|---|---|---|---|---|
-| 1,000 | | | | |
-| 10,000 | | | | |
-| 50,000 | | | | |
+| データ規模 | TotalTime(中央値) | 初回起動(rebuildあり) |
+|---|---|---|
+| 1,000 | | |
+| 10,000 | | |
+| 50,000 | | |
 
-### Frame timing — 画面遷移 (frameDurationMs)
+### スクロール(ダッシュボード一覧、`dumpsys gfxinfo`)
 
-| データ規模 | P50 | P90 | P99 | jank率(>16ms) |
-|---|---|---|---|---|
-| 1,000 | | | | |
-| 10,000 | | | | |
-| 50,000 | | | | |
+| データ規模 | Janky frames | 総フレーム数 | jank率 |
+|---|---|---|---|
+| 1,000 | | | |
+| 10,000 | | | |
+| 50,000 | | | |
 
-### Frame timing — 一覧スクロール
+### 個別処理時間(`timed()`ラッパー、ms)
 
-| データ規模 | P50 | P90 | P99 | jank率 |
-|---|---|---|---|---|
-| 1,000 | | | | |
-| 10,000 | | | | |
-| 50,000 | | | | |
-
-### Frame timing — 検索応答
-
-| データ規模 | P50 | P90 | P99 | jank率 |
-|---|---|---|---|---|
-| 1,000 | | | | |
-| 10,000 | | | | |
-| 50,000 | | | | |
+| データ規模 | 検索応答(hybridSearch) | InMemoryVectorIndex.load() |
+|---|---|---|
+| 1,000 | | |
+| 10,000 | | |
+| 50,000 | | |
 
 ### 補足
 
 | 項目 | 1,000 | 10,000 | 50,000 |
 |---|---|---|---|
-| InMemoryVectorIndex.load() 所要時間 | | | |
 | DBファイルサイズ | | | |
-| FTSインデックスサイズ(search_document_fts) | | | |
-| アプリRAM使用量(VectorIndex含む) | | | |
+| アプリRAM使用量(`adb shell dumpsys meminfo`) | | | |
 
 ## 5. 運用ルール
 

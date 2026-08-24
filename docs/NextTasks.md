@@ -6,9 +6,46 @@
 
 ---
 
-## 0. 大前提: 計測してから最適化する
+## 0. 大前提: 計測してから最適化する(2026-08-24方針転換)
 
-調査した最新記事群が繰り返し強調していたのは「Macrobenchmarkが真実を示す。Baseline Profileがそれを固定する」という順序です。現状、デモデータはentry数件程度しかなく、**実データ規模(何十巻もの百科事典=数万entry相当)での挙動が一度も計測されていません**。勘での最適化は避け、まず負荷を再現してから直すべきです。これが今回のRound 0になります。
+「測ってから最適化する」という方針自体は維持する。ただし**Macrobenchmarkは個人開発1人で回すには複雑すぎる(Gradle Managed Device・additional test outputの端末→ホストへの自動転送・profileable manifest等)と判断し、放棄する。** 複数セッションのトラブルシュートでも解決に至らなかったため、ツール選定そのものが誤りだったと結論づける。`:benchmark`モジュールは撤去し、以下の軽量計測に置き換える。
+
+### 軽量計測ツールキット(コード追加ほぼゼロ)
+
+| 目的 | 方法 |
+|---|---|
+| コールドスタート時間 | `adb shell am start -W -n com.thuvstu.personalencyclopedia/.MainActivity` → `TotalTime`/`WaitTime`がその場で出力される。ビルド・コード変更不要 |
+| スクロールのジャンク(フレーム落ち) | `adb shell dumpsys gfxinfo com.thuvstu.personalencyclopedia reset` → 操作 → `adb shell dumpsys gfxinfo com.thuvstu.personalencyclopedia` でJanky frames数・パーセンタイルが取得できる。Android標準機能でライブラリ不要 |
+| 検索・画面遷移などの個別処理時間 | `AppLogger`に計測用の薄いラッパーを1つ追加し、`adb logcat`で確認する(下記コード) |
+| DBファイルサイズ(FTSインデックス膨張確認) | `adb shell run-as com.thuvstu.personalencyclopedia du -h databases/` |
+
+```kotlin
+// util/Timed.kt(新規、数行で完結)
+inline fun <T> timed(tag: String, label: String, block: () -> T): T {
+  val start = System.currentTimeMillis()
+  return block().also { AppLogger.d(tag, "$label: ${System.currentTimeMillis() - start}ms") }
+}
+// 使用例: timed("Search", "hybridSearch") { searchEngine.hybridSearch(query) }
+```
+
+### 撤去・変更するもの
+
+- [ ] **`:benchmark`モジュールを削除**(`settings.gradle.kts`から参照を外し、`benchmark/`ディレクトリごと削除)
+- [ ] `app/build.gradle.kts`の`benchmark`ビルドタイプ関連設定があれば整理(必要ならR8/proguard-rules.proの`Round 0 M-2の前提`コメント付き変更は流用可能なので残してよい。R8修正自体はrelease buildの健全化として単独で価値がある)
+- [ ] `docs/perf/BASELINE.md`を上記の軽量計測手順に書き換える
+- [ ] `AGENTS.md`(現在0バイト)に実際の内容を再コミットする(§4のプロトコル参照。まだ直っていない)
+
+### 維持するもの(変更不要)
+
+- **M-1: SyntheticDataSeeder**はそのまま活かす。Macrobenchmarkの前提として作ったが、軽量計測でも50,000件データの生成元として引き続き必要
+- Round 1〜5のタスク内容自体は変更なし。計測方法だけが変わる
+
+- [x] **M-1: 合成負荷データ生成スクリプト作成** ✅ 実装済み(walkthrough8)。そのまま使う
+- [x] ~~M-2: Macrobenchmarkモジュール追加~~ **撤回。上記の軽量計測に置き換え**
+- [ ] **M-3(改訂): 50,000件データでの実測値を軽量計測で記録する** `adb shell am start -W`でコールドスタート、`dumpsys gfxinfo`でスクロール、`timed()`ラッパーで検索応答時間を計測し、`docs/perf/BASELINE.md`(軽量版)に記入する
+  🛑 ここで得た実測値をベースラインとし、以降のRoundは全て「この数値がどう変わったか」で評価する
+
+**高スペック前提での方針調整**: WAL接続プール数やCoilのキャッシュサイズは、低スペック機を想定した保守的な値ではなく、自端末のRAM/CPUに見合った値まで踏み込んでよい(Round 1/3で具体値を決める際にこの前提を使う)。
 
 ---
 
@@ -47,7 +84,7 @@
 ## 2. 2026年時点のベストプラクティス調査(反映済み)
 
 - **Baseline Profiles**: 初回起動コードを事前コンパイルし、体感で約30%起動を高速化(Android公式、2026年6月時点)。Play Storeのクラウドコンパイルにより端末側コンパイル前でも効果が及ぶ
-- **Macrobenchmark → 最適化 → Baseline Profile再生成 → CIで固定**、という運用ループが2026年の定番(複数の実務記事で一致)
+- ~~**Macrobenchmark → 最適化 → Baseline Profile再生成 → CIで固定**、という運用ループが2026年の定番(複数の実務記事で一致)~~ **2026-08-24: 個人開発では複雑すぎると判断し撤回。§0の軽量計測に置き換え済み**
 - **WAL + synchronous=NORMAL + Executor分離**: ある実測記事ではWAL単体で4倍の改善。ただし「WALは実際に読み書きが競合する場面でしか効かない」「コネクション数を増やしすぎない(低スペック機で先に検証)」という留保が付く
 - **RoomのInvalidationTrackerはテーブル粒度**: 更新頻度の高いテーブルを購読するUIが多いと過剰再クエリの原因になる。手動の変更検知の方が有利な場合がある、との指摘あり
 - **Strong Skipping mode**: Compose Compilerの安定化オプション。ラムダの安定性判定が緩和され、開発者が`@Stable`を意識しすぎなくても再コンポジションを抑制しやすくなる(2026年時点で実務チームの標準装備という評価)
@@ -57,19 +94,13 @@
 
 ## 3. タスクリスト(Round形式、実装原則§2.5準拠)
 
-### Round 0 — 計測基盤(最優先。これがないと以降が勘に頼った改良になる)
+### Round 0 — 計測基盤(内容は§0参照。ここでは進捗のみ管理)
 
 **確定条件(2026-08-22)**: 最適化対象は自端末/高スペック端末。低スペック機への配慮は優先度を下げてよい。目標データ規模は**50,000 entry**。
 
-- [x] **M-1: 合成負荷データ生成スクリプト作成** `debug`ビルドのみで有効な`SyntheticDataSeeder`を追加し、1,000→10,000→**50,000**件と段階的に投入できるようにする(最終確認は必ず50,000件で行う。中間段階は問題の早期発見用)
-  ✅ 実装済み(walkthrough8)。`adb shell am broadcast -n com.thuvstu.personalencyclopedia/.perf.PerfSeedReceiver -a com.thuvstu.personalencyclopedia.perf.SEED --ei count 50000`
-- [x] **M-2: Macrobenchmarkモジュール追加** cold start・主要画面遷移・検索応答時間を計測できるようにする
-  ✅ 実装済み(walkthrough8)。`:benchmark`モジュール(Startup/Navigation/Scroll/Searchの4テスト)+`<profileable>`+release署名
-- [ ] **M-3: 50,000件データでの実測値を記録する**(このRoundの成果物は「直す」ことではなく「今どれだけ遅いか/速いかを数字で持つ」こと)
-  🛑 計測手順と記録表は `docs/perf/BASELINE.md` に準備済み。**自端末での実行と数値の記入が残**(次セッションの最初に実施する)
-  🛑 ここで得た実測値をベースラインとし、以降のRoundは全て「この数値がどう変わったか」で評価する
-
-**高スペック前提での方針調整**: WAL接続プール数やCoilのキャッシュサイズは、低スペック機を想定した保守的な値ではなく、自端末のRAM/CPUに見合った値まで踏み込んでよい(Round 1/3で具体値を決める際にこの前提を使う)。
+- [x] M-1: SyntheticDataSeeder ✅ 実装済み(walkthrough8)。§0「維持するもの」参照
+- [x] ~~M-2: Macrobenchmarkモジュール~~ 撤回済み(2026-08-24)。§0「軽量計測ツールキット」に置き換え
+- [ ] M-3(改訂): 50,000件データでの軽量計測実測値の記録。§0参照、次セッションで実施
 
 ### Round 1 — DB層(低リスク・高確度)
 
@@ -92,13 +123,13 @@
 
 ### Round 4 — 起動最適化
 
-- [ ] **PERF-6** Baseline Profile生成・導入(Round 0のMacrobenchmarkモジュールを流用)
-- [ ] §3.4の段階的初期化(Phase A/B/C)の各所要時間をログ化し、ボトルネックのフェーズを特定する
-  🛑 cold start計測値がBaseline Profile導入前後でどう変わったか記録
+- [ ] **PERF-6** Baseline Profile生成・導入。**注意: Macrobenchmarkモジュールは撤去済みのため、Round 0で使っていた前提が崩れている**。Baseline Profile生成は`androidx.benchmark.baselineprofile`プラグイン単体でも可能だが、同様にGradle Managed Device関連の複雑さを伴う可能性があるため、着手前に軽量な代替(`pm compile --reset`や手動プロファイル収集等)がないか改めて調査してから判断する。効果(初回起動30%高速化)は魅力的だが、Round 0の教訓(道具の複雑さが見合うか)を必ず踏まえる
+- [ ] §3.4の段階的初期化(Phase A/B/C)の各所要時間を`timed()`ラッパー(§0参照)でログ化し、ボトルネックのフェーズを特定する
+  🛑 cold start計測値(`adb shell am start -W`)がBaseline Profile導入前後でどう変わったか記録
 
 ### Round 5 — 検索・Embedding層(実データ規模での検証)
 
-- [ ] **PERF-8** M-1の1万件データで`InMemoryVectorIndex`のtopK応答時間、FTS4+Nグラムのインデックスサイズ・検索速度を実測
+- [ ] **PERF-8** M-1の50,000件データで`timed()`ラッパー(§0)を`InMemoryVectorIndex.topK`呼び出し前後に仕込み、応答時間を実測。FTS4+Nグラムのインデックスサイズは`adb shell run-as ... du -h databases/`で確認する
 - [ ] 実測結果が§7.1.5の想定(数万件までブルートフォースで実用速度)を下回った場合のみ、sqlite-vec拡張への移行(§15既存の拡張ポイント)を検討する。上回っていれば何もしない(過剰最適化を避ける)
 
 ---
