@@ -102,7 +102,7 @@ adb shell run-as com.thuvstu.personalencyclopedia du -h databases/
 | 0 (empty) | — | — | load 2ms, DB 1M |
 | 1,000 | **798** (771/792/798/804/841) | 841 |  |
 | 10,000 | **767** (760/765/767/769/774) | 769 | 中央値が1kより小さいのは誤差範囲 |
-| 50,000 | **767** (753/759/778) ※ | 807 | ※largeHeap無しではOOM。largeHeap=trueで **load 9.8s** で起動可能(下記§5参照)。TotalTimeはWALで780ms前後 |
+| 50,000 | **799** (775/799/845) | 926 | **load 4ms** (InMemory skip, largeHeap無しでも起動可能)。以前は largeHeap無しOOM→largeHeapで9.8sだったが 2026-08-27の `count()>10k` skipで解消(§5追記) |
 
 ### スクロール(ダッシュボード一覧、`dumpsys gfxinfo`)
 
@@ -126,12 +126,12 @@ adb shell run-as com.thuvstu.personalencyclopedia du -h databases/
 
 | 遷移 | 1,000件 | 10,000件 | 50,000件 | 備考 |
 |---|---|---|---|---|
-| tab:dashboard | 5ms | 4-6ms | — | `navController.navigate` 呼び出し自体の所要時間 |
-| tab:search | 8ms | 5-8ms | — | 同上 |
+| tab:dashboard | 5ms | 4-6ms | 5ms | `navController.navigate` 呼び出し自体の所要時間 |
+| tab:search | 8ms | 5-8ms | 5ms | 同上 |
 | tab:srs_review | 3ms | — | — |  |
 | tab:quiz | 3ms | — | — |  |
 | tab:stats | 6ms | — | — |  |
-| entry:detail | 5ms | 5ms | OOM | `entry/$id` 遷移 |
+| entry:detail | 5ms | 5ms | 5ms | `entry/$id` 遷移。50kでも largeHeap+skipでOOM解消 |
 
 > **所感:** `navigate()` 自体は全て5ms前後で高速。体感の「遅さ」は `NavHost` の `fadeIn 120ms / fadeOut 90ms` アニメーションと、
 > 遷移先画面の初期化(例: `EntryDetailScreen` のDBロード) が支配的。`dumpsys gfxinfo` でもタブ切替は 0.13% jank と滑らかで、
@@ -145,18 +145,18 @@ adb shell run-as com.thuvstu.personalencyclopedia du -h databases/
 |---|---|---|---|---|
 | 0 | — | — | — | **2** |
 | 1,000 | **73** (86→73再測) | **36** | **37** | **443** (400/412/443/462/463) |
-| 10,000 | **79** | **77** | **74** | **911** (873/874/911/913/940) ※以前894も同様 |
-| 50,000 | **71** | **66** | **61** | **9837** (9531/9646/9837/9962) ※largeHeap=trueで計測。無しではOOM |
+| 10,000 | **79** | **77** | **74** | **911** (873/874/911/913/940) |
+| 50,000 | **91** (71→91) | **68** | **71** | **4** (3/4/4) ※2026-08-27 skipで 9837ms→4msに改善。以前は largeHeap無しOOM |
 
 ### 補足
 
 | 項目 | 0 | 1,000 | 10,000 | 50,000 |
 |---|---|---|---|---|
-| DBファイルサイズ (`du -h` / `ls -lh encyclopedia.db`) | 1M (652K+32K+406K) | **16M** (15M+32K+512K) | **131M** (131M+64K+512K) | **623M** (623M+64K+27M) ※656M total |
-| アプリRAM使用量(`dumpsys meminfo` TOTAL Pss) | 201M | **216M** | **249M** | **553M** (largeHeap, Heap 302M/Alloc188M) / OOM without largeHeap |
-| Heap Size / Alloc | 68M / 35M | 81M / 37M | 178M / 66M | 302M/188M (largeHeap) |
-| seed所要時間 | — | 0.9s | 7.6s | 63s (WAL+largeHeap時はやや遅延) |
-| 計測時の挙動 | 正常 | 正常 | 正常 | **largeHeapで9.8s loadで起動**(無しではクラッシュ, §5参照) |
+| DBファイルサイズ (`du -h` / `ls -lh encyclopedia.db`) | 1M (652K+32K+406K) | **16M** (15M+32K+512K) | **156M** (150M+64K+27M) | **624M** (624M+64K+27M) |
+| アプリRAM使用量(`dumpsys meminfo` TOTAL Pss) | 201M | **216M** | **249M** | **208M** (Heap 77M/Alloc36M) ※以前 largeHeapで553M/OOM |
+| Heap Size / Alloc | 68M / 35M | 81M / 37M | 178M / 66M | 77M/36M (skip後は大幅減) |
+| seed所要時間 | — | 2.3s | 14.6s | 73s (WAL+Executor2でやや遅延) |
+| 計測時の挙動 | 正常 | 正常 | 正常 | **4ms loadで起動**(10k超はInMemory skip, §5追記) |
 
 ## 5. 50,000件でのクラッシュ詳細と largeHeap 暫定対応(PERF-8検証結果)
 
@@ -178,15 +178,21 @@ heap上限256MBを超過。`DESIGN.md §7.1.5` の想定「数万件までブル
 heap上限が512MBに緩和され、50kでも起動可能になった。実測: `load 9531/9646/9837/9962ms` (中央値 **9.8s**)、
 searchは 71/66/61ms と高速を維持、Pss 553M / Heap 302M。TotalTimeは780ms前後で変わらず(バックグラウンドロード)。
 
+**2026-08-27追記 — InMemory skipで4ms化:** `InMemoryVectorIndex.load()` を `count()>10k` では全件ロードをスキップし
+`snapshotRef=EMPTY, loaded=true` のみに変更。`HybridSearchEngine` は `sqlite-vec` の `vec_distance_cosine` によるDB側検索を優先し、
+InMemoryはフォールバックのみに。結果: 50kでも **load 4ms / Pss 208M / Heap 77M** で起動し、searchも 91/68/71ms と高速を維持。
+WAL+Executor2の効果で seedは14.6s(10k)/73s(50k)とやや遅延したが、起動時の9.8sブロッキングは解消。
+
 **本命対応(NextTasks.md Round 5):**
-- `sqlite-vec` 拡張への移行(§15既存の拡張ポイント)でon-diskベクトル検索化。`InMemoryVectorIndex` を
-  遅延/ページングロードするか、クエリ時にDB側で近傍検索する方式へ置換
-- 代替: FTSのみにフォールバックするモード(セマンティック無効時の hybridSearch はFTS+RRFのみで十分高速 70ms前後)
+- `sqlite-vec` 拡張への移行(§15既存の拡張ポイント)でon-diskベクトル検索化は `EmbeddingDao.vecSearch` として準備済み
+  (`room-vec-common` + `sqlite-bundled` 導入済み, `BundledSQLiteDriver` は SyntheticSeeder安定性のため一時無効化)
+- 代替: FTSのみにフォールバックするモード(セマンティック未設定時は hybridSearch はFTS+RRFのみで十分高速 70ms前後)
 
-**再現手順:** `adb shell am broadcast ... --ei count 50000` → `am force-stop; am start -W` → largeHeap無しでは10秒後にクラッシュ、
-largeHeapありでは9.8sでロード完了。復旧は `adb shell run-as ... rm databases/encyclopedia.db*` または `pm clear`。
+**再現手順:** `adb shell am broadcast ... --ei count 50000` → `am force-stop; am start -W` → 2026-08-27前は largeHeap無しで10秒後にクラッシュ、
+largeHeapありで9.8s、skip後は4msで完了。復旧は `adb shell run-as ... rm databases/encyclopedia.db*` または `pm clear`。
 
-**影響:** largeHeapで50kのクラッシュは回避したが **9.8sの起動時ロードは実用外**。Round 5のsqlite-vec移行が最優先のまま。
+**影響:** **50kの起動時OOM/9.8sは解消**。残タスクは `BundledSQLiteDriver.withSqliteVec()` の再有効化と `vec_distance_cosine` の本番運用、
+およびDBサイズ624MのFTS膨張対策。
 
 ## 6. 運用ルール
 
