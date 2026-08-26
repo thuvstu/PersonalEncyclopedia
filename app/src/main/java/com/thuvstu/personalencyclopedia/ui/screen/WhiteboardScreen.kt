@@ -1,6 +1,7 @@
 package com.thuvstu.personalencyclopedia.ui.screen
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,9 +13,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.thuvstu.personalencyclopedia.viewmodel.WhiteboardViewModel
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,7 +68,7 @@ fun WhiteboardListScreen(
 
     if (showCreateDialog) {
         AlertDialog(
-            onDismissRequest = { showCreateDialog = false },
+            onDismissRequest = { showCreateDialog = false; newTitle = "" },
             title = { Text("新規ボード") },
             text = {
                 OutlinedTextField(
@@ -74,13 +78,17 @@ fun WhiteboardListScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.createBoard(newTitle)
-                    showCreateDialog = false
-                }) { Text("作成") }
+                TextButton(
+                    onClick = {
+                        viewModel.createBoard(newTitle.trim())
+                        newTitle = ""
+                        showCreateDialog = false
+                    },
+                    enabled = newTitle.isNotBlank()
+                ) { Text("作成") }
             },
             dismissButton = {
-                TextButton(onClick = { showCreateDialog = false }) { Text("キャンセル") }
+                TextButton(onClick = { showCreateDialog = false; newTitle = "" }) { Text("キャンセル") }
             }
         )
     }
@@ -96,6 +104,7 @@ fun WhiteboardBoardScreen(
     val nodes by viewModel.nodes.collectAsState()
     val sections by viewModel.sections.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
+    val density = LocalDensity.current
 
     Scaffold(
         topBar = {
@@ -115,33 +124,43 @@ fun WhiteboardBoardScreen(
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))) {
-            // Sections
+            // Sections — pxをdpに正しく変換
             sections.forEach { section ->
                 Box(
                     modifier = Modifier
-                        .offset(x = section.x.dp, y = section.y.dp)
-                        .size(section.width.dp, section.height.dp)
+                        .offset { IntOffset(with(density) { section.x.toDp().roundToPx() }, with(density) { section.y.toDp().roundToPx() }) }
+                        .size(with(density) { section.width.toDp() }, with(density) { section.height.toDp() })
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
                 ) {
                     Text(section.title, modifier = Modifier.padding(8.dp))
                 }
             }
-            // Nodes
+            // Nodes — ドラッグは蓄積し、終了時にDBへコミット。クリックでエントリーへ遷移
             nodes.forEach { node ->
+                var dragOffset by remember(node.id) { mutableStateOf(androidx.compose.ui.geometry.Offset(node.x, node.y)) }
+                // node.x/yが外部から更新されたら追従
+                LaunchedEffect(node.x, node.y) { dragOffset = androidx.compose.ui.geometry.Offset(node.x, node.y) }
                 Box(
                     modifier = Modifier
-                        .offset(x = node.x.dp, y = node.y.dp)
-                        .size(node.width.dp, node.height.dp)
+                        .offset { IntOffset(dragOffset.x.roundToInt(), dragOffset.y.roundToInt()) }
+                        .size(with(density) { node.width.toDp() }, with(density) { node.height.toDp() })
                         .pointerInput(node.id) {
-                            detectDragGestures { change, dragAmount ->
-                                change.consume()
-                                viewModel.moveNode(node.id, node.x + dragAmount.x, node.y + dragAmount.y)
-                            }
+                            detectDragGestures(
+                                onDragStart = { dragOffset = androidx.compose.ui.geometry.Offset(node.x, node.y) },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    dragOffset += dragAmount
+                                },
+                                onDragEnd = {
+                                    viewModel.moveNode(node.id, dragOffset.x, dragOffset.y)
+                                }
+                            )
                         }
+                        .clickable(enabled = node.entryId != null) { node.entryId?.let { onNavigateToEntry(it) } }
                 ) {
                     Card(modifier = Modifier.fillMaxSize()) {
                         Box(modifier = Modifier.fillMaxSize().padding(8.dp), contentAlignment = Alignment.Center) {
-                            Text(node.noteId ?: node.entryId ?: "?")
+                            Text(node.noteId?.let { "📝 メモ" } ?: node.entryId?.let { "📄 エントリー" } ?: "?")
                         }
                     }
                 }
@@ -162,10 +181,13 @@ fun WhiteboardBoardScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.addFreeNote(noteContent)
-                    showAddDialog = false
-                }) { Text("追加") }
+                TextButton(
+                    onClick = {
+                        viewModel.addFreeNote(noteContent.trim())
+                        showAddDialog = false
+                    },
+                    enabled = noteContent.isNotBlank()
+                ) { Text("追加") }
             },
             dismissButton = {
                 TextButton(onClick = { showAddDialog = false }) { Text("キャンセル") }
