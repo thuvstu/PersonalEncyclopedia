@@ -11,4 +11,3 @@ dependencyResolutionManagement {
 }
 rootProject.name = "PersonalEncyclopedia"
 include(":app")
-include(":benchmark")

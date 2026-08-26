@@ -16,7 +16,7 @@
         android:theme="@style/Theme.Encyclopedia"
         tools:targetApi="34">
 
-        <!-- Round 0 (M-2): Macrobenchmarkがreleaseビルドをプロファイリングするために必要 -->
+        <!-- perf計測用: shellからのプロファイリング(simpleperf/CPU Profiler)をreleaseビルドでも可能にする -->
         <profileable
             android:shell="true"
             tools:targetApi="29" />
