@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.thuvstu.personalencyclopedia.db.AppDatabase
+import io.github.hubbla.roomvec.withSqliteVec
 import com.thuvstu.personalencyclopedia.db.MIGRATION_1_2
 import com.thuvstu.personalencyclopedia.db.ReadOnlySqlExecutor
 import com.thuvstu.personalencyclopedia.db.MIGRATION_2_3
@@ -36,6 +38,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext ctx: Context): AppDatabase =
         Room.databaseBuilder(ctx, AppDatabase::class.java, "encyclopedia.db")
+            .setDriver(BundledSQLiteDriver().withSqliteVec())
             .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
             .setQueryExecutor(queryExecutor)
