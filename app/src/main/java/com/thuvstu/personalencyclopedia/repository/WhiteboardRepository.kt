@@ -53,6 +53,8 @@ class WhiteboardRepository @Inject constructor(
 
     suspend fun deleteNode(nodeId: String) = whiteboardDao.deleteNode(nodeId)
 
+    suspend fun touchBoard(boardId: String) = whiteboardDao.touchBoard(boardId)
+
     suspend fun addSection(boardId: String, title: String, x: Float, y: Float, colorHex: String? = null): String {
         val section = WhiteboardSectionEntity(
             boardId = boardId, title = title, x = x, y = y, colorHex = colorHex

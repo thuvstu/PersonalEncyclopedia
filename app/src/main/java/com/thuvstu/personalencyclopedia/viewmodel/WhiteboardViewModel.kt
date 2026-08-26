@@ -40,35 +40,36 @@ class WhiteboardViewModel @Inject constructor(
     } ?: MutableStateFlow(emptyList())
 
     fun createBoard(title: String) {
+        val t = title.trim()
+        if (t.isBlank()) return
         viewModelScope.launch {
-            val id = UUID.randomUUID().toString()
-            whiteboardDao.upsertBoard(WhiteboardEntity(id = id, title = title))
+            repo.createBoard(t)
         }
     }
 
     fun addFreeNote(content: String) {
         val bId = boardId ?: return
+        val c = content.trim()
+        if (c.isBlank()) return
         viewModelScope.launch {
-            val noteId = UUID.randomUUID().toString()
-            whiteboardDao.upsertNote(WhiteboardNoteEntity(id = noteId, contentMd = content))
-            whiteboardDao.upsertNode(WhiteboardNodeEntity(
-                id = UUID.randomUUID().toString(),
-                boardId = bId,
-                noteId = noteId,
-                x = 100f, y = 100f
-            ))
+            // ランダムにずらして重なりを避ける
+            val rx = 80f + (0..3).random() * 40f
+            val ry = 80f + (0..3).random() * 40f
+            repo.addFreeNote(bId, c, x = rx, y = ry)
         }
     }
 
     fun moveNode(nodeId: String, x: Float, y: Float) {
         viewModelScope.launch {
             whiteboardDao.moveNode(nodeId, x, y)
+            boardId?.let { repo.touchBoard(it) }
         }
     }
 
     fun deleteNode(nodeId: String) {
         viewModelScope.launch {
             whiteboardDao.deleteNode(nodeId)
+            boardId?.let { repo.touchBoard(it) }
         }
     }
 }
