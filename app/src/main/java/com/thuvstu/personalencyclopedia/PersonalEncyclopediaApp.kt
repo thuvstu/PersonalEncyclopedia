@@ -15,6 +15,7 @@ import com.thuvstu.personalencyclopedia.db.DemoData
 import com.thuvstu.personalencyclopedia.db.SeedData
 import com.thuvstu.personalencyclopedia.plugins.PluginEngine
 import com.thuvstu.personalencyclopedia.repository.SettingsRepository
+import com.thuvstu.personalencyclopedia.util.timed
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -90,7 +91,7 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
 
     /** Phase B: Brain Layer初期化。ベクトルインデックス・埋め込みキューの回復。 */
     private suspend fun initBrainLayer() {
-        vectorIndex.load()
+        timed("App", "InMemoryVectorIndex.load") { vectorIndex.load() }
         embeddingQueue.recoverJobs()
         embeddingQueue.startWorker()
         embeddingQueue.rebuildAllSearchDocuments()

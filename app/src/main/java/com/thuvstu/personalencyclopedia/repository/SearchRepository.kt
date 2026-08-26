@@ -6,6 +6,7 @@ import com.thuvstu.personalencyclopedia.brain.search.SearchMode
 import com.thuvstu.personalencyclopedia.brain.search.SearchResult
 import com.thuvstu.personalencyclopedia.db.dao.EntryDao
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
+import com.thuvstu.personalencyclopedia.util.timed
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,7 +22,7 @@ class SearchRepository @Inject constructor(
         mode: SearchMode = SearchMode.HYBRID,
         limit: Int = 20
     ): List<EntryEntity> {
-        val results = hybridSearch.search(query, mode, limit)
+        val results = timed("App", "hybridSearch") { hybridSearch.search(query, mode, limit) }
         return results.mapNotNull { result ->
             entryDao.getById(result.entryId)
         }.filter { it.deletedAt == null }
