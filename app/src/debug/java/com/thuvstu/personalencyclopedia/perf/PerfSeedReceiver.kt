@@ -3,6 +3,8 @@ package com.thuvstu.personalencyclopedia.perf
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.widget.Toast
 import com.thuvstu.personalencyclopedia.brain.search.HybridSearchEngine
 import com.thuvstu.personalencyclopedia.brain.search.SearchMode
@@ -14,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
@@ -53,22 +56,34 @@ class PerfSeedReceiver : BroadcastReceiver() {
                     val start = System.currentTimeMillis()
                     runCatching { SyntheticDataSeeder.seed(db, count) }
                         .onSuccess {
-                            Toast.makeText(
-                                context,
-                                "合成データ $count 件 投入完了 (${(System.currentTimeMillis() - start) / 1000}s)",
-                                Toast.LENGTH_LONG
-                            ).show()
+                            Handler(Looper.getMainLooper()).post {
+                                Toast.makeText(
+                                    context,
+                                    "合成データ $count 件 投入完了 (${(System.currentTimeMillis() - start) / 1000}s)",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
                         }
                         .onFailure {
-                            Toast.makeText(context, "投入失敗: ${it.message}", Toast.LENGTH_LONG).show()
+                            Handler(Looper.getMainLooper()).post {
+                                Toast.makeText(context, "投入失敗: ${it.message}", Toast.LENGTH_LONG).show()
+                            }
                         }
                 }
             }
             ACTION_CLEAR -> {
                 scope.launch {
                     runCatching { SyntheticDataSeeder.clear(db) }
-                        .onSuccess { Toast.makeText(context, "合成データを削除しました", Toast.LENGTH_SHORT).show() }
-                        .onFailure { Toast.makeText(context, "削除失敗: ${it.message}", Toast.LENGTH_LONG).show() }
+                        .onSuccess {
+                            Handler(Looper.getMainLooper()).post {
+                                Toast.makeText(context, "合成データを削除しました", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        .onFailure {
+                            Handler(Looper.getMainLooper()).post {
+                                Toast.makeText(context, "削除失敗: ${it.message}", Toast.LENGTH_LONG).show()
+                            }
+                        }
                 }
             }
             ACTION_SEARCH -> {
@@ -86,7 +101,9 @@ class PerfSeedReceiver : BroadcastReceiver() {
                             android.util.Log.d("PerfSearch", "query='$q' results=${results.size} elapsed=${elapsed}ms")
                         }
                     }.onFailure {
-                        Toast.makeText(context, "検索失敗: ${it.message}", Toast.LENGTH_LONG).show()
+                        Handler(Looper.getMainLooper()).post {
+                            Toast.makeText(context, "検索失敗: ${it.message}", Toast.LENGTH_LONG).show()
+                        }
                         android.util.Log.e("PerfSearch", "search failed", it)
                     }
                 }

@@ -27,6 +27,22 @@ interface EmbeddingDao {
     @Query("SELECT COUNT(*) FROM embedding")
     fun observeCount(): Flow<Int>
 
+    @Query("SELECT COUNT(*) FROM embedding")
+    suspend fun count(): Int
+
+    // PERF-8: sqlite-vec によるDB側近傍検索。InMemoryの全件ロード(50kでOOM/9.8s)を置換
+    // Roomのクエリ検証は vec_distance_cosine を知らないため RawQuery で回避
+    data class VecDistanceRow(val entryId: String, val distance: Double)
+
+    @RawQuery
+    suspend fun vecSearchRaw(query: androidx.sqlite.db.SupportSQLiteQuery): List<VecDistanceRow>
+
+    suspend fun vecSearch(queryBlob: ByteArray, limit: Int): List<VecDistanceRow> {
+        val sql = "SELECT entryId, vec_distance_cosine(vectorBlob, ?) AS distance FROM embedding ORDER BY distance ASC LIMIT ?"
+        val q = androidx.sqlite.db.SimpleSQLiteQuery(sql, arrayOf(queryBlob, limit))
+        return vecSearchRaw(q)
+    }
+
     // ── Embedding Job Queue ──
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertJob(job: EmbeddingJobEntity)

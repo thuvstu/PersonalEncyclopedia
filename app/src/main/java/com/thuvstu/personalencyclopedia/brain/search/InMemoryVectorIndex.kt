@@ -38,12 +38,24 @@ class InMemoryVectorIndex @Inject constructor(
     @Volatile private var loaded = false
 
     suspend fun load() {
-        val all = embeddingDao.getAll()
-        val snap = Snapshot(
-            ids     = Array(all.size) { all[it].entryId },
-            vectors = Array(all.size) { all[it].vectorBlob.toFloatArray() }
-        )
-        snapshotRef.set(snap)
+        // PERF-8: sqlite-vec移行で全件ロードは不要。DB側で vec_distance_cosine 検索するため
+        // 起動時の 50k×768×4B=147MB×2のヒープ確保(9.8s/553M)を回避。
+        try {
+            val count = embeddingDao.count()
+            if (count <= 10_000) {
+                val all = embeddingDao.getAll()
+                val snap = Snapshot(
+                    ids     = Array(all.size) { all[it].entryId },
+                    vectors = Array(all.size) { all[it].vectorBlob.toFloatArray() }
+                )
+                snapshotRef.set(snap)
+            } else {
+                // 50kでは InMemory を空のままにし、sqlite-vec に委譲
+                snapshotRef.set(Snapshot.EMPTY)
+            }
+        } catch (_: Exception) {
+            snapshotRef.set(Snapshot.EMPTY)
+        }
         loaded = true
     }
 

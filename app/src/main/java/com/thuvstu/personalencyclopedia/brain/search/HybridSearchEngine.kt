@@ -1,6 +1,8 @@
 package com.thuvstu.personalencyclopedia.brain.search
 
 import com.thuvstu.personalencyclopedia.brain.ai.GeminiClient
+import com.thuvstu.personalencyclopedia.brain.ai.toBlob
+import com.thuvstu.personalencyclopedia.db.dao.EmbeddingDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryDao
 import com.thuvstu.personalencyclopedia.db.dao.SearchDocumentDao
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
@@ -24,6 +26,7 @@ enum class SearchMode {
 class HybridSearchEngine @Inject constructor(
     private val searchDocumentDao: SearchDocumentDao,
     private val vectorIndex: InMemoryVectorIndex,
+    private val embeddingDao: EmbeddingDao,
     private val geminiClient: GeminiClient,
     private val entryDao: EntryDao
 ) {
@@ -66,11 +69,18 @@ class HybridSearchEngine @Inject constructor(
     }
 
     private suspend fun semanticSearch(query: String, limit: Int): List<SearchResult> {
-        if (!geminiClient.isConfigured() || !vectorIndex.isLoaded()) return emptyList()
-
+        if (!geminiClient.isConfigured()) return emptyList()
+        // PERF-8: sqlite-vec によるDB側検索を優先。InMemoryはフォールバック
         val queryVector = geminiClient.embed(query) ?: return emptyList()
-        return vectorIndex.topK(queryVector, limit)
-            .map { (id, sim) -> SearchResult(id, sim.toDouble()) }
+        return try {
+            val rows = embeddingDao.vecSearch(queryVector.toBlob(), limit)
+            rows.map { SearchResult(it.entryId, 1.0 - it.distance) }
+        } catch (e: Exception) {
+            // vec extension未ロードやエラー時は InMemory にフォールバック
+            if (!vectorIndex.isLoaded()) return emptyList()
+            vectorIndex.topK(queryVector, limit)
+                .map { (id, sim) -> SearchResult(id, sim.toDouble()) }
+        }
     }
 
     private suspend fun hybridSearch(query: String, limit: Int): List<SearchResult> {
@@ -84,13 +94,20 @@ class HybridSearchEngine @Inject constructor(
             } catch (e: Exception) { emptyMap() }
         } else emptyMap()
 
-        // 2. Semantic results
-        val semanticRanked: Map<String, Int> = if (geminiClient.isConfigured() && vectorIndex.isLoaded()) {
+        // 2. Semantic results — sqlite-vec優先
+        val semanticRanked: Map<String, Int> = if (geminiClient.isConfigured()) {
             val queryVector = geminiClient.embed(query)
             if (queryVector != null) {
-                vectorIndex.topK(queryVector, 50)
-                    .mapIndexed { i, (id, _) -> id to (i + 1) }
-                    .toMap()
+                try {
+                    embeddingDao.vecSearch(queryVector.toBlob(), 50)
+                        .mapIndexed { i, row -> row.entryId to (i + 1) }
+                        .toMap()
+                } catch (e: Exception) {
+                    if (!vectorIndex.isLoaded()) emptyMap()
+                    else vectorIndex.topK(queryVector, 50)
+                        .mapIndexed { i, (id, _) -> id to (i + 1) }
+                        .toMap()
+                }
             } else emptyMap()
         } else emptyMap()
 
