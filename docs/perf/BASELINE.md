@@ -112,9 +112,29 @@ adb shell run-as com.thuvstu.personalencyclopedia du -h databases/
 | データ規模 | Janky frames | 総フレーム数 | jank率 | 50th/90th | 備考 |
 |---|---|---|---|---|---|
 | 1,000 | 7 | 16 | 43.7% | 150ms/200ms | 自動swipe, サンプル少 |
+| 1,000 タブ切替(10回) | 1 | 758 | 0.13% | 7ms/9ms | `timed(Nav)` 3-8ms, レンダリングは滑らか |
+| 10,000 タブ切替(8回) | 1 | 708 | 0.14% | 7ms/8ms | 同上、データ増でもJankほぼ無し |
 | 10,000 | — | — | — | — | 未計測(手動要) |
 | 50,000 | — | — | — | — | クラッシュのため計測不可 |
 | (参考)1k手動前 | 12 | 205 | 5.85% | 17ms/73ms | `gfxinfo` リセット前の自然操作 |
+
+### ウィンドウ切替(`timed("Nav")`, ms) — 2026-08-26追加
+
+> `MainActivity` ボトムタブ5件と `NavGraph` の entry詳細遷移に `timed("Nav", ...)` を仕込み。`adb logcat -s Nav` で確認。
+> `adb shell input tap x y` で自動タップし5〜8回切替の中央値を取る。
+
+| 遷移 | 1,000件 | 10,000件 | 50,000件 | 備考 |
+|---|---|---|---|---|
+| tab:dashboard | 5ms | 4-6ms | — | `navController.navigate` 呼び出し自体の所要時間 |
+| tab:search | 8ms | 5-8ms | — | 同上 |
+| tab:srs_review | 3ms | — | — |  |
+| tab:quiz | 3ms | — | — |  |
+| tab:stats | 6ms | — | — |  |
+| entry:detail | 5ms | 5ms | OOM | `entry/$id` 遷移 |
+
+> **所感:** `navigate()` 自体は全て5ms前後で高速。体感の「遅さ」は `NavHost` の `fadeIn 120ms / fadeOut 90ms` アニメーションと、
+> 遷移先画面の初期化(例: `EntryDetailScreen` のDBロード) が支配的。`dumpsys gfxinfo` でもタブ切替は 0.13% jank と滑らかで、
+> フレーム落ちではなくアニメーション時間が「のっそり感」の原因と推定。短縮(例: 80/60ms)で体感改善が見込める。
 
 ### 個別処理時間(`timed()`ラッパー、ms)
 
