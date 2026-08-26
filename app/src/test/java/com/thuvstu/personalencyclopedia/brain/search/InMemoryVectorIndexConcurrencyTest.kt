@@ -30,6 +30,8 @@ class InMemoryVectorIndexConcurrencyTest {
         override suspend fun getAll(): List<EmbeddingEntity> = emptyList()
         override suspend fun deleteByEntryId(entryId: String) {}
         override fun observeCount(): Flow<Int> = flowOf(0)
+        override suspend fun count(): Int = 0
+        override suspend fun vecSearchRaw(query: androidx.sqlite.db.SupportSQLiteQuery): List<EmbeddingDao.VecDistanceRow> = emptyList()
         override suspend fun upsertJob(job: EmbeddingJobEntity) {}
         override suspend fun getPendingJobs(): List<EmbeddingJobEntity> = emptyList()
         override suspend fun updateJobStatus(entryId: String, status: String, attempts: Int, error: String?, doneAt: Long?) {}
