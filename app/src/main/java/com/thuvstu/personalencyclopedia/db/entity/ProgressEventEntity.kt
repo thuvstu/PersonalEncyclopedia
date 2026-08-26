@@ -7,7 +7,7 @@ import java.util.UUID
 
 @Entity(
     tableName = "progress_events",
-    indices = [Index("entityType"), Index("eventType"), Index("createdAt")]
+    indices = [Index("entityType"), Index("eventType"), Index("createdAt"), Index("entityId")]
 )
 data class ProgressEventEntity(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),

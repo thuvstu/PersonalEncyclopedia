@@ -64,7 +64,7 @@ import com.thuvstu.personalencyclopedia.db.entity.*
         SrsCurrentView::class,
         QuizMasteryView::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
