@@ -612,7 +612,7 @@ private fun EntryPickerDialog(
         title = { Text("関連エントリーを選択") },
         text = {
             LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
-                items(entries) { e ->
+                items(entries, key = { it.id }) { e ->
                     TextButton(onClick = { onSelect(e.id) }, modifier = Modifier.fillMaxWidth()) {
                         Text(
                             "${entryTypeIcon(e.type)} ${e.title}",
@@ -640,7 +640,7 @@ private fun TopicPickerDialog(
         title = { Text("科目を選択") },
         text = {
             LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
-                items(topics) { t ->
+                items(topics, key = { it.id }) { t ->
                     TextButton(onClick = { onSelect(t.id) }, modifier = Modifier.fillMaxWidth()) {
                         Text(t.name, modifier = Modifier.fillMaxWidth())
                     }
