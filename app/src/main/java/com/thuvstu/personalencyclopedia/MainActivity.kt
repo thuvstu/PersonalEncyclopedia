@@ -9,9 +9,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -137,7 +137,7 @@ private fun MainContent(incomingNavigation: IncomingNavigation) {
                         }
                     )
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.PlaylistPlay, contentDescription = null) },
+                        icon = { Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null) },
                         label = { Text("クイズ") },
                         selected = currentRoute == Routes.QUIZ,
                         onClick = {
