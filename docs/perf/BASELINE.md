@@ -102,7 +102,7 @@ adb shell run-as com.thuvstu.personalencyclopedia du -h databases/
 | 0 (empty) | — | — | load 2ms, DB 1M |
 | 1,000 | **798** (771/792/798/804/841) | 841 |  |
 | 10,000 | **767** (760/765/767/769/774) | 769 | 中央値が1kより小さいのは誤差範囲 |
-| 50,000 | **780** (771/779/780/865/897) ※ | 897 ※ | ※TotalTimeは出力されるが直後に`InMemoryVectorIndex.load()`でOOMクラッシュ |
+| 50,000 | **767** (753/759/778) ※ | 807 | ※largeHeap無しではOOM。largeHeap=trueで **load 9.8s** で起動可能(下記§5参照)。TotalTimeはWALで780ms前後 |
 
 ### スクロール(ダッシュボード一覧、`dumpsys gfxinfo`)
 
@@ -115,7 +115,8 @@ adb shell run-as com.thuvstu.personalencyclopedia du -h databases/
 | 1,000 タブ切替(10回) | 1 | 758 | 0.13% | 7ms/9ms | `timed(Nav)` 3-8ms, レンダリングは滑らか |
 | 10,000 タブ切替(8回) | 1 | 708 | 0.14% | 7ms/8ms | 同上、データ増でもJankほぼ無し |
 | 10,000 | — | — | — | — | 未計測(手動要) |
-| 50,000 | — | — | — | — | クラッシュのため計測不可 |
+| 50,000 タブ切替 | — | — | — | — | largeHeapで起動可能だが未計測 |
+| (参考)largeHeap無し50k | — | — | — | — | クラッシュのため計測不可 |
 | (参考)1k手動前 | 12 | 205 | 5.85% | 17ms/73ms | `gfxinfo` リセット前の自然操作 |
 
 ### ウィンドウ切替(`timed("Nav")`, ms) — 2026-08-26追加
@@ -145,21 +146,21 @@ adb shell run-as com.thuvstu.personalencyclopedia du -h databases/
 | 0 | — | — | — | **2** |
 | 1,000 | **73** (86→73再測) | **36** | **37** | **443** (400/412/443/462/463) |
 | 10,000 | **79** | **77** | **74** | **911** (873/874/911/913/940) ※以前894も同様 |
-| 50,000 | OOMで計測不可 | OOM | OOM | **OOM** — `Failed to allocate ... target footprint 268435456` |
+| 50,000 | **71** | **66** | **61** | **9837** (9531/9646/9837/9962) ※largeHeap=trueで計測。無しではOOM |
 
 ### 補足
 
 | 項目 | 0 | 1,000 | 10,000 | 50,000 |
 |---|---|---|---|---|
-| DBファイルサイズ (`du -h` / `ls -lh encyclopedia.db`) | 1M (652K+32K+406K) | **16M** (15M+32K+512K) | **131M** (131M+64K+512K) | **625M** (625M+256K+30M) ※656M total |
-| アプリRAM使用量(`dumpsys meminfo` TOTAL Pss) | 201M | **216M** | **249M** | OOM (heap limit 256M) |
-| Heap Size / Alloc | 68M / 35M | 81M / 37M | 178M / 66M | — |
-| seed所要時間 | — | 0.9s | 7.6s | 38.3s |
-| 計測時の挙動 | 正常 | 正常 | 正常 | **起動時クラッシュ**(下記§6参照) |
+| DBファイルサイズ (`du -h` / `ls -lh encyclopedia.db`) | 1M (652K+32K+406K) | **16M** (15M+32K+512K) | **131M** (131M+64K+512K) | **623M** (623M+64K+27M) ※656M total |
+| アプリRAM使用量(`dumpsys meminfo` TOTAL Pss) | 201M | **216M** | **249M** | **553M** (largeHeap, Heap 302M/Alloc188M) / OOM without largeHeap |
+| Heap Size / Alloc | 68M / 35M | 81M / 37M | 178M / 66M | 302M/188M (largeHeap) |
+| seed所要時間 | — | 0.9s | 7.6s | 63s (WAL+largeHeap時はやや遅延) |
+| 計測時の挙動 | 正常 | 正常 | 正常 | **largeHeapで9.8s loadで起動**(無しではクラッシュ, §5参照) |
 
-## 5. 50,000件でのクラッシュ詳細(PERF-8検証結果)
+## 5. 50,000件でのクラッシュ詳細と largeHeap 暫定対応(PERF-8検証結果)
 
-**現象:** 50k投入後、コールドスタートで `TotalTime` は 780ms前後で出力されるが、約10秒後に
+**現象(largeHeap無し):** 50k投入後、コールドスタートで `TotalTime` は 780ms前後で出力されるが、約10秒後に
 `InMemoryVectorIndex.load()` 中に `OutOfMemoryError` でクラッシュ。
 
 ```
@@ -173,16 +174,19 @@ target footprint 268435456, growth limit 268435456
 さらに `ByteArray→FloatArray` 変換で一時的に二重に保持。50kでは 147MB×2 + オーバーヘッドで
 heap上限256MBを超過。`DESIGN.md §7.1.5` の想定「数万件までブルートフォースで実用」は **10kまでは成立、50kで破綻**。
 
-**対処方針(NextTasks.md Round 5):**
-- 短期: `AndroidManifest` に `largeHeap=true` で上限緩和(暫定、根本解決ではない)
-- 本命: `sqlite-vec` 拡張への移行(§15既存の拡張ポイント)でon-diskベクトル検索化。`InMemoryVectorIndex` を
+**暫定対応(2026-08-27):** `AndroidManifest` に `android:largeHeap="true"` を追加。
+heap上限が512MBに緩和され、50kでも起動可能になった。実測: `load 9531/9646/9837/9962ms` (中央値 **9.8s**)、
+searchは 71/66/61ms と高速を維持、Pss 553M / Heap 302M。TotalTimeは780ms前後で変わらず(バックグラウンドロード)。
+
+**本命対応(NextTasks.md Round 5):**
+- `sqlite-vec` 拡張への移行(§15既存の拡張ポイント)でon-diskベクトル検索化。`InMemoryVectorIndex` を
   遅延/ページングロードするか、クエリ時にDB側で近傍検索する方式へ置換
-- 代替: FT Sのみにフォールバックするモード(セマンティック無効時の hybridSearch はFTS+RRFのみで十分高速 70ms前後)
+- 代替: FTSのみにフォールバックするモード(セマンティック無効時の hybridSearch はFTS+RRFのみで十分高速 70ms前後)
 
-**再現手順:** `adb shell am broadcast ... --ei count 50000` → `am force-stop; am start -W` → 10秒後にクラッシュ。
-復旧は `adb shell run-as ... rm databases/encyclopedia.db*` または `pm clear`。
+**再現手順:** `adb shell am broadcast ... --ei count 50000` → `am force-stop; am start -W` → largeHeap無しでは10秒後にクラッシュ、
+largeHeapありでは9.8sでロード完了。復旧は `adb shell run-as ... rm databases/encyclopedia.db*` または `pm clear`。
 
-**影響:** 現状の `InMemoryVectorIndex` は10k超での実運用不可。Round 1〜4の他PERF項目と並行してRound 5を最優先で着手すべき。
+**影響:** largeHeapで50kのクラッシュは回避したが **9.8sの起動時ロードは実用外**。Round 5のsqlite-vec移行が最優先のまま。
 
 ## 6. 運用ルール
 
