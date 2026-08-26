@@ -49,11 +49,11 @@ fun AppNavGraph(navController: NavHostController) {
     NavHost(
         navController = navController,
         startDestination = Routes.DASHBOARD,
-        // ★v12.0: 遷移アニメーション高速化（のっそり感対策）
-        enterTransition = { fadeIn(animationSpec = tween(120)) },
-        exitTransition = { fadeOut(animationSpec = tween(90)) },
-        popEnterTransition = { fadeIn(animationSpec = tween(120)) },
-        popExitTransition = { fadeOut(animationSpec = tween(90)) }
+        // ★v12.0: 遷移アニメーション高速化（のっそり感対策） 2026-08-27: 120/90→80/60へ短縮で体感改善
+        enterTransition = { fadeIn(animationSpec = tween(80)) },
+        exitTransition = { fadeOut(animationSpec = tween(60)) },
+        popEnterTransition = { fadeIn(animationSpec = tween(80)) },
+        popExitTransition = { fadeOut(animationSpec = tween(60)) }
     ) {
         composable(Routes.DASHBOARD) {
             DashboardScreen(
