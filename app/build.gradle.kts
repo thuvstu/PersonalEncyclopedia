@@ -116,6 +116,9 @@ dependencies {
 
     implementation(libs.startup.runtime)
 
+    // Coil (PERF-7) — サムネイルのメモリ/速度両面。原寸デコードを置換
+    implementation(libs.coil.compose)
+
     // Web scraping
     implementation(libs.okhttp)
     implementation(libs.jsoup)

@@ -17,6 +17,7 @@ security-crypto = "1.1.0-alpha06"
 okhttp = "4.12.0"
 jsoup = "1.18.3"
 rhino = "1.7.15"
+coil = "2.7.0"
 
 [libraries]
 # Compose
@@ -87,6 +88,9 @@ rhino = { group = "org.mozilla", name = "rhino", version.ref = "rhino" }
 
 # Startup (WorkManager + Hilt initialization)
 startup-runtime = { group = "androidx.startup", name = "startup-runtime", version = "1.2.0" }
+
+# Coil (PERF-7)
+coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
