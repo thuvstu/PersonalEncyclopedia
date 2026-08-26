@@ -711,18 +711,21 @@ MainActivity.onCreate → handleIncomingIntent (ACTION_SEND: URL→scrape, テ�
   (FTSのみ手動rowid同期方式のため `deleteSyntheticFts()` を明示実行)
 - Randomシード=count固定で同一規模は常に同一データ → 計測の再現性を保証
 
-### 14.2 `:benchmark` モジュール — Macrobenchmark
+### 14.2 軽量計測ツールキット(2026-08-24改訂)
 
-- `com.android.test` プラグイン + `targetProjectPath(":app")` のself-instrumenting構成
-- 対象アプリ側に `<profileable android:shell="true"/>` と release buildTypeへのdebug署名(計測用)が必要
-- 計測テスト4種:
-  | テスト | 内容 | メトリクス |
-  |---|---|---|
-  | StartupBenchmark | cold start | StartupTimingMetric |
-  | NavigationBenchmark | ボトムナビ遷移 | FrameTimingMetric |
-  | ScrollBenchmark | 一覧フリング | FrameTimingMetric |
-  | SearchBenchmark | FTS検索応答 | FrameTimingMetric |
-- managed device `pixel8Api34`(ATDイメージ)を同梱。CIでも実行可能
+Macrobenchmarkは個人開発1人で回すには複雑すぎる(Gradle Managed Device・結果転送・profileable manifest等)と判断し、
+`:benchmark` モジュールは撤去した。代わりにadb標準機能+数行の計測ラッパーで代替する:
+
+| 目的 | 方法 |
+|---|---|
+| コールドスタート | `adb shell am start -W -n com.thuvstu.personalencyclopedia/.MainActivity` → `TotalTime`/`WaitTime` |
+| スクロールのジャンク | `dumpsys gfxinfo com.thuvstu.personalencyclopedia reset` → 操作 → 再度 `dumpsys gfxinfo` |
+| 個別処理時間 | `util/Timed.kt` の `timed(tag, label) { ... }` → `AppLogger` 経由でlogcat(`-s App`)に出力。`InMemoryVectorIndex.load()` と `hybridSearch` に仕込み済み |
+| DBファイルサイズ | `adb shell run-as com.thuvstu.personalencyclopedia du -h databases/` |
+
+手順・記録表は `docs/perf/BASELINE.md`。M-1のSyntheticDataSeederは軽量計測でもそのまま使う。
+なお release buildType へのdebug署名と `<profileable android:shell="true"/>` は残してある
+(R8有効のrelease APKを実機インストールしての実測・simpleperfプロファイリングに有用)。
 
 ### 14.3 ベースライン運用ルール
 
@@ -754,13 +757,12 @@ PersonalEncyclopedia/
 │       │   │   ├── repository/ (9本)
 │       │   │   ├── server/    LocalServer, TokenManager, ServerDependencies, dto/, routes/
 │       │   │   ├── ui/        navigation/ theme/ component/ screen/
-│       │   │   ├── util/      AppLogger
+│       │       │   ├── util/      AppLogger, Timed
 │       │   │   └── viewmodel/ (21本)
 │       │   └── res/ …
 │       ├── test/               # JVM ユニットテスト (rubric/クイズ/索引並行性)
 │       ├── androidTest/        # MigrationTest ほか
 │       └── debug/              # SyntheticDataSeeder + PerfSeedReceiver (releaseに含まれない)
-├── benchmark/                   # Macrobenchmarkモジュール (§14.2, cold start/遷移/検索/スクロール)
 ├── web/                        # React Webクライアント (DBなし・Ktor APIクライアント)
 │   ├── package.json / vite.config.ts / tsconfig.json
 │   └── src/  api/client.ts, lib/, components/ (EntryList, EntryDetail, GraphView,

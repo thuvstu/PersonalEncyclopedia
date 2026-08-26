@@ -38,8 +38,10 @@
 - **合成データ投入(debugビルド限定)**: `app/src/debug/` の `SyntheticDataSeeder` が、実データ規模
   (最大50,000 entry)の疑似データを entry・検索ドキュメント・FTS・768次元embedding込みで作る。
   adb broadcast 1発で投入・全削除ができる。release APKには含まれない。
-- **`:benchmark` モジュール**: Macrobenchmark で cold start・画面遷移・スクロール・検索応答を
-  release相当の APK で計測する。最適化の前後で必ずこの数字を取り、悪化したら理由を残す。
+- **軽量計測(2026-08-24改訂)**: Macrobenchmarkは複雑すぎるため撤去。代わりに
+  `adb shell am start -W`(コールドスタート)、`dumpsys gfxinfo`(スクロールのジャンク)、
+  `util/Timed.kt` の `timed()` ラッパー+logcat(個別処理時間)で計測する。
+  最適化の前後で必ずこの数字を取り、悪化したら理由を残す。手順は `docs/perf/BASELINE.md`。
 
 ## ネットワーク
 

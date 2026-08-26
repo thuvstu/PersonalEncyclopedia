@@ -30,10 +30,10 @@ inline fun <T> timed(tag: String, label: String, block: () -> T): T {
 
 ### 撤去・変更するもの
 
-- [ ] **`:benchmark`モジュールを削除**(`settings.gradle.kts`から参照を外し、`benchmark/`ディレクトリごと削除)
-- [ ] `app/build.gradle.kts`の`benchmark`ビルドタイプ関連設定があれば整理(必要ならR8/proguard-rules.proの`Round 0 M-2の前提`コメント付き変更は流用可能なので残してよい。R8修正自体はrelease buildの健全化として単独で価値がある)
-- [ ] `docs/perf/BASELINE.md`を上記の軽量計測手順に書き換える
-- [ ] `AGENTS.md`(現在0バイト)に実際の内容を再コミットする(§4のプロトコル参照。まだ直っていない)
+- [x] **`:benchmark`モジュールを削除** ✅ 実装済み(walkthrough9)。`settings.gradle.kts`・root `build.gradle.kts`・`libs.versions.toml`から参照除去、`benchmark/`ディレクトリ削除。release buildTypeのdebug署名とmanifestの`profileable`は軽量計測(R8有効APKの実機インストール/simpleperf)に有用なため残存
+- [x] `app/build.gradle.kts`の`benchmark`ビルドタイプ関連設定があれば整理 ✅ 独立したbenchmarkビルドタイプは無し。R8/proguard-rules.proの変更はrelease build健全化として単独価値があるため残存
+- [x] `docs/perf/BASELINE.md`を上記の軽量計測手順に書き換える ✅ 済み(2026-08-24)
+- [x] `AGENTS.md`(現在0バイト)に実際の内容を再コミットする ✅ 済み
 
 ### 維持するもの(変更不要)
 
