@@ -84,7 +84,9 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
             definitionDao = database.entryDefinitionDao(),
             topicDao = database.topicDao(),
             quizDao = database.quizDao(),
-            connectionDao = database.connectionDao()
+            connectionDao = database.connectionDao(),
+            whiteboardDao = database.whiteboardDao(),
+            wikiDao = database.wikiArticleDao()
         )
         database.entryTypeDao().insertAll(SeedData.entryTypes)
     }

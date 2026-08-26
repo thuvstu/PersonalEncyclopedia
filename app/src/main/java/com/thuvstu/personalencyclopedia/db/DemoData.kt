@@ -4,6 +4,7 @@ import com.thuvstu.personalencyclopedia.db.dao.*
 import com.thuvstu.personalencyclopedia.db.entity.*
 import kotlinx.coroutines.flow.first
 import java.util.UUID
+import java.util.Random
 
 object DemoData {
 
@@ -45,13 +46,22 @@ object DemoData {
         DemoQuiz("ハッシュ値の衝突を解決する代表的な手法はどれか？", "チェイン法", listOf("チェイン法", "二分探索法", "クイックソート", "ダイクストラ法"), "衝突時に連結リストで繋ぐチェイン法や、空き領域を探すオープンアドレス法が使われます。")
     )
 
+    // ── ホワイトボード用デモ: 歴史とCSの2ボード ──
+    data class DemoBoard(val title: String, val summary: String)
+    val demoBoards = listOf(
+        DemoBoard("歴史探求ボード", "江戸〜明治の転換点を地図と年表で整理。Heptabase風のセクションで時代を俯瞰"),
+        DemoBoard("CS学習ボード", "ハッシュテーブルと再帰を中心に、データ構造の相互関係を可視化")
+    )
+
     suspend fun seed(
         entryDao: EntryDao,
         thoughtDao: EntryThoughtDao,
         definitionDao: EntryDefinitionDao,
         topicDao: TopicDao? = null,
         quizDao: QuizDao? = null,
-        connectionDao: ConnectionDao? = null
+        connectionDao: ConnectionDao? = null,
+        whiteboardDao: WhiteboardDao? = null,
+        wikiDao: WikiArticleDao? = null
     ) {
         // Only seed if the database is empty
         val count = entryDao.observeCount().first()
@@ -82,6 +92,7 @@ object DemoData {
 
         thoughts.forEach { thought ->
             val id = UUID.randomUUID().toString()
+            entryIdMap[thought.title] = id
             entryDao.insert(
                 EntryEntity(
                     id = id, type = "thought", title = thought.title,
@@ -107,25 +118,51 @@ object DemoData {
             )
         }
 
-        // Seed initial connection (明治維新 <-> 関ヶ原の戦い)
-        val meijiId = entryIdMap["明治維新"]
-        val sekigaharaId = entryIdMap["関ヶ原の戦い"]
-        if (meijiId != null && sekigaharaId != null && connectionDao != null) {
-            val canonicalA = if (meijiId < sekigaharaId) meijiId else sekigaharaId
-            val canonicalB = if (meijiId < sekigaharaId) sekigaharaId else meijiId
-            connectionDao.insert(
-                ConnectionEntity(
-                    entryAId = meijiId,
-                    entryBId = sekigaharaId,
-                    relationType = "related",
-                    strength = 0.8f,
-                    note = "日本の歴史的転換点同士の接続",
-                    isAuto = false,
-                    isDirected = false,
-                    canonicalA = canonicalA,
-                    canonicalB = canonicalB
-                )
+        // ── 接続デモを充実: 4件のリンク ──
+        suspend fun addConn(aTerm: String, bTerm: String, type: String, strength: Float, note: String) {
+            val a = entryIdMap[aTerm] ?: return
+            val b = entryIdMap[bTerm] ?: return
+            if (connectionDao == null) return
+            val ca = if (a < b) a else b
+            val cb = if (a < b) b else a
+            try { connectionDao.insert(ConnectionEntity(entryAId = a, entryBId = b, relationType = type, strength = strength, note = note, isAuto = false, isDirected = false, canonicalA = ca, canonicalB = cb)) } catch (_: Exception) {}
+        }
+        // 既存1件 + 追加3件
+        addConn("明治維新", "関ヶ原の戦い", "related", 0.8f, "日本の歴史的転換点同士の接続")
+        addConn("ハッシュテーブル", "再帰", "prerequisite", 0.9f, "再帰の基底ケース理解がハッシュの衝突処理に通じる")
+        addConn("光合成", "需要と供給", "contrast", 0.4f, "自然の均衡と市場の均衡 — 異分野の類比")
+        addConn("学習システムを7回作り直してわかったこと", "百科事典のように知識を育てたい", "related", 0.85f, "点→線→面の思想的接続")
+
+        // ── ホワイトボードデモ: 2ボード ──
+        if (whiteboardDao != null) {
+            for ((boardIdx, boardDef) in demoBoards.withIndex()) {
+                val boardId = UUID.randomUUID().toString()
+                whiteboardDao.upsertBoard(WhiteboardEntity(id = boardId, title = boardDef.title, summary = boardDef.summary, createdAt = now, updatedAt = now))
+                val sectionId = UUID.randomUUID().toString()
+                whiteboardDao.upsertSection(WhiteboardSectionEntity(id = sectionId, boardId = boardId, title = if (boardIdx == 0) "江戸〜明治" else "データ構造", x = 40f, y = 40f, width = 700f, height = 420f, colorHex = if (boardIdx == 0) "#FEF3C7" else "#DBEAFE"))
+                val entryTerms = if (boardIdx == 0) listOf("明治維新", "関ヶ原の戦い", "学習システムを7回作り直してわかったこと") else listOf("ハッシュテーブル", "再帰", "光合成")
+                for ((idx, term) in entryTerms.withIndex()) {
+                    val eId = entryIdMap[term] ?: continue
+                    val node = WhiteboardNodeEntity(boardId = boardId, entryId = eId, x = 60f + idx * 220f, y = 80f, width = 200f, height = 120f, sectionId = sectionId)
+                    whiteboardDao.upsertNode(node)
+                }
+                val notes = if (boardIdx == 0) listOf("年表: 1600関ヶ原→1868明治維新\n転換点の共通点は「既存秩序の再編」", "問い: なぜ260年続いた幕藩体制は崩れたか？\n→ 外圧と内発的矛盾") else listOf("メモ: ハッシュの衝突は再帰の基底ケースと同じく「終了条件」が肝", "図: チェイン法 vs オープンアドレス\n長所短所を比較")
+                for ((idx, md) in notes.withIndex()) {
+                    val noteId = UUID.randomUUID().toString()
+                    whiteboardDao.upsertNote(WhiteboardNoteEntity(id = noteId, contentMd = md, createdAt = now, updatedAt = now))
+                    val node = WhiteboardNodeEntity(boardId = boardId, noteId = noteId, x = 60f + idx * 260f, y = 240f, width = 240f, height = 100f, sectionId = sectionId)
+                    whiteboardDao.upsertNode(node)
+                }
+            }
+        }
+
+        // ── Wikiデモ: 2記事 ──
+        if (wikiDao != null) {
+            val articles = listOf(
+                WikiArticleEntity(title = "明治維新と関ヶ原 — 転換点の比較", contentMd = "# 明治維新と関ヶ原\n\n二つの転換点を [[明治維新]] と [[関ヶ原の戦い]] で比較する。\n\n- **共通点**: 既存秩序の再編、勝者の正統化\n- **相違**: 関ヶ原は武断、明治は外圧と思想\n\n> 関連: [[学習システムを7回作り直してわかったこと]] の「点→線→面」も転換点の理解に通じる。\n", summary = "歴史の転換点2件を比較したデモ記事"),
+                WikiArticleEntity(title = "データ構造入門 — ハッシュと再帰", contentMd = "# データ構造入門\n\n## ハッシュテーブル\n[[ハッシュテーブル]] は平均O(1)の検索を実現する。\n\n## 再帰\n[[再帰]] の基底ケースはハッシュの衝突処理の終了条件と同型。\n\n- 図: チェイン法の連結リストは再帰的に辿る\n- 演習: [[光合成]] のような自然のネットワークも同様にグラフで表せる\n", summary = "CSの2概念を相互リンクしたデモ記事")
             )
+            for (art in articles) wikiDao.upsert(art)
         }
     }
 }
