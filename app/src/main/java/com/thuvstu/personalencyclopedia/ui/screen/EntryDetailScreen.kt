@@ -355,7 +355,7 @@ fun EntryDetailScreen(
         )
     }
 
-    // 接続追加ダイアログ
+    // 接続追加ダイアログ - 検索・プレビュー・強度改善
     if (showConnectionDialog) {
         AlertDialog(
             onDismissRequest = {
@@ -372,32 +372,49 @@ fun EntryDetailScreen(
                             viewModel.searchEntriesForConnection(it)
                         },
                         label = { Text("接続先を検索") },
+                        placeholder = { Text("タイトルで絞り込み") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) IconButton(onClick = { searchQuery = ""; viewModel.searchEntriesForConnection("") }) {
+                                Icon(Icons.Default.Clear, contentDescription = "クリア")
+                            }
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     val candidates = if (searchQuery.isBlank()) relatedEntries else searchResults
                     if (candidates.isNotEmpty()) {
                         Text(
-                            if (searchQuery.isBlank()) "関連から選ぶ:" else "検索結果:",
+                            if (searchQuery.isBlank()) "関連から選ぶ (${candidates.size}):" else "検索結果 (${candidates.size}):",
                             style = MaterialTheme.typography.labelSmall
                         )
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        Column(
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp).verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            candidates.take(6).forEach { item ->
-                                FilterChip(
-                                    selected = selectedTargetEntryId == item.id,
+                            candidates.take(12).forEach { item ->
+                                val selected = selectedTargetEntryId == item.id
+                                Surface(
+                                    selected = selected,
                                     onClick = { selectedTargetEntryId = item.id },
-                                    label = {
-                                        Text(
-                                            "${entryTypeIcon(item.type)} ${item.title.take(12)}",
-                                            style = MaterialTheme.typography.labelSmall
-                                        )
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Text(entryTypeIcon(item.type), style = MaterialTheme.typography.bodyMedium)
+                                        Spacer(Modifier.width(8.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(item.title, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                            if (!item.content.isNullOrBlank()) Text(item.content.take(40), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                        }
+                                        if (selected) Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                                     }
-                                )
+                                }
                             }
                         }
+                    } else {
+                        Text("候補なし。検索語を変えてください", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Text("関係タイプ:", style = MaterialTheme.typography.labelSmall)
                     FlowRow(
@@ -412,15 +429,18 @@ fun EntryDetailScreen(
                             )
                         }
                     }
-                    Text(
-                        "強度: %.0f%%".format(connectionStrength * 100),
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                    Slider(
-                        value = connectionStrength,
-                        onValueChange = { connectionStrength = it },
-                        valueRange = 0.1f..1f
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("強度:", style = MaterialTheme.typography.labelSmall)
+                        Spacer(Modifier.width(8.dp))
+                        Text(when { connectionStrength < 0.35f -> "弱"; connectionStrength < 0.7f -> "中"; else -> "強" }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(20.dp))
+                        Slider(
+                            value = connectionStrength,
+                            onValueChange = { connectionStrength = it },
+                            valueRange = 0.1f..1f,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text("%.0f%%".format(connectionStrength * 100), style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(36.dp))
+                    }
                     OutlinedTextField(
                         value = connectionNote,
                         onValueChange = { connectionNote = it },

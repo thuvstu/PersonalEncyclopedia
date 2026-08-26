@@ -230,6 +230,11 @@ fun DashboardScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("🔗 新規接続候補 ($pendingConnectionCount 件)") }
                     }
+                    // DB統計・Explorer導線 (ブラックボックス解消)
+                    OutlinedButton(
+                        onClick = onNavigateToSettings,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("🗄️ データベース管理") }
                 }
             }
             item {
