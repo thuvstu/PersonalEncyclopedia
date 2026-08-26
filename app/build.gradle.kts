@@ -119,6 +119,10 @@ dependencies {
     // Coil (PERF-7) — サムネイルのメモリ/速度両面。原寸デコードを置換
     implementation(libs.coil.compose)
 
+    // sqlite-vec (PERF-8本命) — 50kの9.8sロードをDB側近傍検索で数十ms化
+    implementation(libs.sqlite.bundled)
+    implementation(libs.room.vec.common)
+
     // Web scraping
     implementation(libs.okhttp)
     implementation(libs.jsoup)

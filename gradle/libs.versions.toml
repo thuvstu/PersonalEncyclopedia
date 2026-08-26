@@ -18,6 +18,8 @@ okhttp = "4.12.0"
 jsoup = "1.18.3"
 rhino = "1.7.15"
 coil = "2.7.0"
+sqlite = "2.5.2"
+roomVec = "0.1.0-alpha01"
 
 [libraries]
 # Compose
@@ -91,6 +93,10 @@ startup-runtime = { group = "androidx.startup", name = "startup-runtime", versio
 
 # Coil (PERF-7)
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+
+# sqlite-vec (PERF-8本命)
+sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "sqlite" }
+room-vec-common = { group = "io.github.hub-bla", name = "room-vec-common", version.ref = "roomVec" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
