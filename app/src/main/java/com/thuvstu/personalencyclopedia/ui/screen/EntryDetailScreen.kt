@@ -11,6 +11,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.*
@@ -196,7 +198,7 @@ fun EntryDetailScreen(
                 onClick = { viewModel.generateQuizzesFromThisEntry() },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Default.PlaylistAdd, contentDescription = null, Modifier.size(18.dp))
+                Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null, Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("このエントリーからクイズを自動生成")
             }
@@ -210,7 +212,7 @@ fun EntryDetailScreen(
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Default.MenuBook, contentDescription = null, Modifier.size(18.dp))
+                Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("📚 このエントリーを記事化する")
             }
