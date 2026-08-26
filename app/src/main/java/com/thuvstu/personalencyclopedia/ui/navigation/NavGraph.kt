@@ -163,8 +163,9 @@ fun AppNavGraph(navController: NavHostController) {
         ) {
             WikiArticleScreen(
                 onBack = { navController.popBackStack() },
-                onEdit = { id -> timed("Nav", "wiki:$id") { navController.navigate("wiki/$id") } },
-                onNavigateToEntry = { id -> timed("Nav", "entry:$id") { navController.navigate("entry/$id") } } // ★追加
+                onEdit = { id -> navController.navigate("wiki/$id") },
+                onNavigateToEntry = { id -> navController.navigate("entry/$id") },
+                onOpenArticle = { id -> navController.navigate("wiki/$id") }
             )
         }
         composable(Routes.WIKI_NEW) {

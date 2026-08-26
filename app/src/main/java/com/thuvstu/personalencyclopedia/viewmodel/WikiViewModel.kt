@@ -40,4 +40,6 @@ class WikiViewModel @Inject constructor(
             onDone(wikiRepo.draftFromEntry(entryId))
         }
     }
+
+    suspend fun findByTitle(title: String) = wikiRepo.findByTitle(title)
 }

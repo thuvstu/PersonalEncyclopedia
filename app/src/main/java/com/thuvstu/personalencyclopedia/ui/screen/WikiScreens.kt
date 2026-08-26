@@ -17,6 +17,7 @@ import com.thuvstu.personalencyclopedia.ui.component.RichContentView
 import com.thuvstu.personalencyclopedia.viewmodel.WikiViewModel
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlinx.coroutines.launch
 
 // ── 記事一覧 ──────────────────────────────────────────────
 @OptIn(ExperimentalMaterial3Api::class)
@@ -90,9 +91,12 @@ fun WikiArticleScreen(
     onBack: () -> Unit,
     onEdit: (String) -> Unit,
     onNavigateToEntry: (String) -> Unit = {},
+    onOpenArticle: (String) -> Unit = {},
     viewModel: WikiViewModel = hiltViewModel()
 ) {
     val article by viewModel.article.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -113,14 +117,43 @@ fun WikiArticleScreen(
             )
         }
     ) { padding ->
-        article?.let { a ->
-            RichContentView(
-                content = a.contentMd,
-                onWikiLinkClick = { title ->
-                    // wiki-link → タイトルで記事を検索して遷移（実装はViewModel連携）
-                },
-                modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)
-            )
+        when {
+            article == null && !viewModel.isNew -> {
+                // 読み込み中または見つからない
+                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                        Text("記事が見つかりません", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(8.dp))
+                        TextButton(onClick = onBack) { Text("戻る") }
+                    }
+                }
+            }
+            article != null -> {
+                val a = article!!
+                RichContentView(
+                    content = a.contentMd,
+                    onWikiLinkClick = { title ->
+                        scope.launch {
+                            try {
+                                val found = viewModel.findByTitle(title)
+                                if (found != null) {
+                                    onOpenArticle(found.id)
+                                } else {
+                                    android.widget.Toast.makeText(context, "記事「$title」は見つかりません", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            } catch (_: Exception) {
+                                android.widget.Toast.makeText(context, "リンクの解決に失敗しました", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)
+                )
+            }
+            else -> {
+                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
         }
     }
 }
