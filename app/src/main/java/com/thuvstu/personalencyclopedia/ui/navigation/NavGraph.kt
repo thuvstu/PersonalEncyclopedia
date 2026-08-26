@@ -10,6 +10,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.thuvstu.personalencyclopedia.ui.screen.*
+import com.thuvstu.personalencyclopedia.util.timed
 
 object Routes {
     const val DASHBOARD = "dashboard"
@@ -56,7 +57,7 @@ fun AppNavGraph(navController: NavHostController) {
     ) {
         composable(Routes.DASHBOARD) {
             DashboardScreen(
-                onNavigateToEntry = { id -> navController.navigate("entry/$id") },
+                onNavigateToEntry = { id -> timed("Nav", "entry:$id") { navController.navigate("entry/$id") } },
                 onNavigateToNewThought = { navController.navigate(Routes.THOUGHT_NEW) },
                 onNavigateToNewDefinition = { navController.navigate(Routes.DEFINITION_NEW) },
                 onNavigateToNewEntry = { type -> navController.navigate("entry/new/$type") },
@@ -87,7 +88,7 @@ fun AppNavGraph(navController: NavHostController) {
         composable(Routes.SEARCH) {
             SearchScreen(
                 onBack = { navController.popBackStack() },
-                onNavigateToEntry = { id -> navController.navigate("entry/$id") }
+                onNavigateToEntry = { id -> timed("Nav", "entry:$id") { navController.navigate("entry/$id") } }
             )
         }
         composable(Routes.SRS_REVIEW) {
@@ -129,7 +130,7 @@ fun AppNavGraph(navController: NavHostController) {
         composable(Routes.CONNECTIONS) {
             ConnectionsScreen(
                 onBack = { navController.popBackStack() },
-                onNavigateToEntry = { id -> navController.navigate("entry/$id") }
+                onNavigateToEntry = { id -> timed("Nav", "entry:$id") { navController.navigate("entry/$id") } }
             )
         }
         // ★v12.0: ホワイトボード（Heptabase型）
@@ -145,7 +146,7 @@ fun AppNavGraph(navController: NavHostController) {
         ) {
             WhiteboardBoardScreen(
                 onBack = { navController.popBackStack() },
-                onNavigateToEntry = { id -> navController.navigate("entry/$id") }
+                onNavigateToEntry = { id -> timed("Nav", "entry:$id") { navController.navigate("entry/$id") } }
             )
         }
         // ★v12.0: Wikipediaビルダー
@@ -162,8 +163,8 @@ fun AppNavGraph(navController: NavHostController) {
         ) {
             WikiArticleScreen(
                 onBack = { navController.popBackStack() },
-                onEdit = { id -> navController.navigate("wiki/$id") },
-                onNavigateToEntry = { id -> navController.navigate("entry/$id") } // ★追加
+                onEdit = { id -> timed("Nav", "wiki:$id") { navController.navigate("wiki/$id") } },
+                onNavigateToEntry = { id -> timed("Nav", "entry:$id") { navController.navigate("entry/$id") } } // ★追加
             )
         }
         composable(Routes.WIKI_NEW) {
@@ -257,14 +258,16 @@ fun AppNavGraph(navController: NavHostController) {
             EntryDetailScreen(
                 onBack = { navController.popBackStack() },
                 onEdit = { type, entryId ->
-                    when (type) {
-                        "thought" -> navController.navigate("thought/edit/$entryId")
-                        "definition" -> navController.navigate("definition/edit/$entryId")
-                        else -> navController.navigate("entry/edit/$type/$entryId")
+                    timed("Nav", "edit:$type/$entryId") {
+                        when (type) {
+                            "thought" -> navController.navigate("thought/edit/$entryId")
+                            "definition" -> navController.navigate("definition/edit/$entryId")
+                            else -> navController.navigate("entry/edit/$type/$entryId")
+                        }
                     }
                 },
-                onNavigateToEntry = { id -> navController.navigate("entry/$id") },
-                onNavigateToWiki = { id -> navController.navigate("wiki/$id") }
+                onNavigateToEntry = { id -> timed("Nav", "entry:$id") { navController.navigate("entry/$id") } },
+                onNavigateToWiki = { id -> timed("Nav", "wiki:$id") { navController.navigate("wiki/$id") } }
             )
         }
     }
