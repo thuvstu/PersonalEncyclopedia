@@ -1,5 +1,6 @@
 package com.thuvstu.personalencyclopedia.ui.component
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -41,29 +42,37 @@ fun ConnectionSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
+                val typeMap = remember(typeDefs) { typeDefs.associateBy { it.name } }
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     connections.forEach { conn ->
-                        val typeDef = typeDefs.find { it.name == conn.relationType }
+                        val typeDef = typeMap[conn.relationType]
                         InputChip(
                             selected = false,
                             onClick = { onNavigateToEntry(conn.otherEntryId) },
                             label = {
-                                Text(
-                                    "${entryTypeIcon(conn.otherEntryType)} ${conn.otherEntryTitle.take(15)}" +
-                                            "（${typeDef?.labelJa ?: conn.relationType}）",
-                                    style = MaterialTheme.typography.labelSmall
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(
+                                        "${entryTypeIcon(conn.otherEntryType)} ${conn.otherEntryTitle.take(15)}" +
+                                                "（${typeDef?.labelJa ?: conn.relationType}）",
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                    // 強度を小さく表示(0.0-1.0)
+                                    Text(
+                                        String.format("%.1f", conn.strength),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             },
                             trailingIcon = {
-                                IconButton(
-                                    onClick = { onRemoveConnection(conn.connectionId) },
-                                    modifier = Modifier.size(18.dp)
-                                ) {
-                                    Icon(Icons.Default.Close, contentDescription = "削除", modifier = Modifier.size(14.dp))
-                                }
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "削除",
+                                    modifier = Modifier.size(14.dp).clickable { onRemoveConnection(conn.connectionId) }
+                                )
                             }
                         )
                     }
