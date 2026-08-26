@@ -26,6 +26,7 @@ import com.thuvstu.personalencyclopedia.repository.ThoughtDraft
 import com.thuvstu.personalencyclopedia.ui.navigation.AppNavGraph
 import com.thuvstu.personalencyclopedia.ui.navigation.Routes
 import com.thuvstu.personalencyclopedia.ui.theme.EncyclopediaTheme
+import com.thuvstu.personalencyclopedia.util.timed
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -81,7 +82,7 @@ private fun MainContent(incomingNavigation: IncomingNavigation) {
     val pending by incomingNavigation.pendingEntryId.collectAsState()
     LaunchedEffect(pending) {
         pending?.let { id ->
-            navController.navigate("entry/$id")
+            timed("Nav", "entry:$id") { navController.navigate("entry/$id") }
             // ★修正2: val再代入エラー → clear() に変更
             incomingNavigation.clear()
         }
@@ -103,8 +104,10 @@ private fun MainContent(incomingNavigation: IncomingNavigation) {
                         selected = currentRoute == Routes.DASHBOARD,
                         onClick = {
                             if (currentRoute != Routes.DASHBOARD) {
-                                navController.navigate(Routes.DASHBOARD) {
-                                    popUpTo(Routes.DASHBOARD) { inclusive = true }
+                                timed("Nav", "tab:dashboard") {
+                                    navController.navigate(Routes.DASHBOARD) {
+                                        popUpTo(Routes.DASHBOARD) { inclusive = true }
+                                    }
                                 }
                             }
                         }
@@ -115,7 +118,9 @@ private fun MainContent(incomingNavigation: IncomingNavigation) {
                         selected = currentRoute == Routes.SEARCH,
                         onClick = {
                             if (currentRoute != Routes.SEARCH) {
-                                navController.navigate(Routes.SEARCH) { popUpTo(Routes.DASHBOARD) }
+                                timed("Nav", "tab:search") {
+                                    navController.navigate(Routes.SEARCH) { popUpTo(Routes.DASHBOARD) }
+                                }
                             }
                         }
                     )
@@ -125,7 +130,9 @@ private fun MainContent(incomingNavigation: IncomingNavigation) {
                         selected = currentRoute == Routes.SRS_REVIEW,
                         onClick = {
                             if (currentRoute != Routes.SRS_REVIEW) {
-                                navController.navigate(Routes.SRS_REVIEW) { popUpTo(Routes.DASHBOARD) }
+                                timed("Nav", "tab:srs_review") {
+                                    navController.navigate(Routes.SRS_REVIEW) { popUpTo(Routes.DASHBOARD) }
+                                }
                             }
                         }
                     )
@@ -135,7 +142,9 @@ private fun MainContent(incomingNavigation: IncomingNavigation) {
                         selected = currentRoute == Routes.QUIZ,
                         onClick = {
                             if (currentRoute != Routes.QUIZ) {
-                                navController.navigate(Routes.QUIZ) { popUpTo(Routes.DASHBOARD) }
+                                timed("Nav", "tab:quiz") {
+                                    navController.navigate(Routes.QUIZ) { popUpTo(Routes.DASHBOARD) }
+                                }
                             }
                         }
                     )
@@ -145,7 +154,9 @@ private fun MainContent(incomingNavigation: IncomingNavigation) {
                         selected = currentRoute == Routes.STATS,
                         onClick = {
                             if (currentRoute != Routes.STATS) {
-                                navController.navigate(Routes.STATS) { popUpTo(Routes.DASHBOARD) }
+                                timed("Nav", "tab:stats") {
+                                    navController.navigate(Routes.STATS) { popUpTo(Routes.DASHBOARD) }
+                                }
                             }
                         }
                     )
