@@ -2,6 +2,8 @@ package com.thuvstu.personalencyclopedia.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.thuvstu.personalencyclopedia.db.AppDatabase
 import com.thuvstu.personalencyclopedia.db.MIGRATION_1_2
 import com.thuvstu.personalencyclopedia.db.ReadOnlySqlExecutor
@@ -26,11 +28,25 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
+    // PERF-1: 高スペック端末に合わせたExecutor分離。WALで読み書き競合を緩和
+    private val queryExecutor = java.util.concurrent.Executors.newFixedThreadPool(4)
+    private val transactionExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext ctx: Context): AppDatabase =
         Room.databaseBuilder(ctx, AppDatabase::class.java, "encyclopedia.db")
             .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+            .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+            .setQueryExecutor(queryExecutor)
+            .setTransactionExecutor(transactionExecutor)
+            .addCallback(object : RoomDatabase.Callback() {
+                override fun onOpen(db: SupportSQLiteDatabase) {
+                    super.onOpen(db)
+                    // WALでは fsync 頻度を下げても安全性を保てる。書き込み4倍改善の報告あり
+                    db.execSQL("PRAGMA synchronous = NORMAL")
+                }
+            })
             .build()
 
     @Provides fun provideEntryTypeDao(db: AppDatabase): EntryTypeDao = db.entryTypeDao()
