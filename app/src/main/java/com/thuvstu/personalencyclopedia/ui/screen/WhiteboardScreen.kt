@@ -1,5 +1,6 @@
 package com.thuvstu.personalencyclopedia.ui.screen
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -8,10 +9,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -50,16 +56,38 @@ fun WhiteboardListScreen(
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
             if (boards.isEmpty()) {
-                Text("ボードがありません", modifier = Modifier.padding(16.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Dashboard, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.height(12.dp))
+                        Text("ボードがありません", style = MaterialTheme.typography.titleMedium)
+                        Text("思考を地図のように広げてみましょう", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
             boards.forEach { board ->
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                     onClick = { onOpenBoard(board.id) }
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(board.title, style = MaterialTheme.typography.titleMedium)
-                        board.summary?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("📌", modifier = Modifier.padding(8.dp))
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(board.title, style = MaterialTheme.typography.titleMedium)
+                            board.summary?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+                            }
+                        }
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(16.dp).then(Modifier), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -74,7 +102,9 @@ fun WhiteboardListScreen(
                 OutlinedTextField(
                     value = newTitle,
                     onValueChange = { newTitle = it },
-                    label = { Text("タイトル") }
+                    label = { Text("タイトル") },
+                    placeholder = { Text("例: 歴史探求ボード") },
+                    singleLine = true
                 )
             },
             confirmButton = {
@@ -103,17 +133,21 @@ fun WhiteboardBoardScreen(
 ) {
     val nodes by viewModel.nodes.collectAsState()
     val sections by viewModel.sections.collectAsState()
+    val currentBoard by viewModel.currentBoard.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     val density = LocalDensity.current
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("ボード詳細") },
+                title = { Text(currentBoard?.title ?: "ボード詳細") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
                     }
+                },
+                actions = {
+                    Text("${nodes.size}件", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 12.dp))
                 }
             )
         },
@@ -123,30 +157,47 @@ fun WhiteboardBoardScreen(
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))) {
-            // Sections — pxをdpに正しく変換
+        Box(modifier = Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surface)) {
+            // グリッド背景
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val step = 40.dp.toPx()
+                val w = size.width
+                val h = size.height
+                for (x in 0..(w / step).toInt()) {
+                    drawLine(Color(0x11000000), start = Offset(x * step, 0f), end = Offset(x * step, h), strokeWidth = 1f)
+                }
+                for (y in 0..(h / step).toInt()) {
+                    drawLine(Color(0x11000000), start = Offset(0f, y * step), end = Offset(w, y * step), strokeWidth = 1f)
+                }
+            }
+            // セクション（背景の枠）
             sections.forEach { section ->
                 Box(
                     modifier = Modifier
                         .offset { IntOffset(with(density) { section.x.toDp().roundToPx() }, with(density) { section.y.toDp().roundToPx() }) }
                         .size(with(density) { section.width.toDp() }, with(density) { section.height.toDp() })
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
                 ) {
-                    Text(section.title, modifier = Modifier.padding(8.dp))
+                    Text(
+                        section.title,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(10.dp).align(Alignment.TopStart)
+                    )
                 }
             }
-            // Nodes — ドラッグは蓄積し、終了時にDBへコミット。クリックでエントリーへ遷移
+            // ノード
             nodes.forEach { node ->
-                var dragOffset by remember(node.id) { mutableStateOf(androidx.compose.ui.geometry.Offset(node.x, node.y)) }
-                // node.x/yが外部から更新されたら追従
-                LaunchedEffect(node.x, node.y) { dragOffset = androidx.compose.ui.geometry.Offset(node.x, node.y) }
-                Box(
+                var dragOffset by remember(node.id) { mutableStateOf(Offset(node.x, node.y)) }
+                LaunchedEffect(node.x, node.y) { dragOffset = Offset(node.x, node.y) }
+                ElevatedCard(
                     modifier = Modifier
                         .offset { IntOffset(dragOffset.x.roundToInt(), dragOffset.y.roundToInt()) }
                         .size(with(density) { node.width.toDp() }, with(density) { node.height.toDp() })
                         .pointerInput(node.id) {
                             detectDragGestures(
-                                onDragStart = { dragOffset = androidx.compose.ui.geometry.Offset(node.x, node.y) },
+                                onDragStart = { dragOffset = Offset(node.x, node.y) },
                                 onDrag = { change, dragAmount ->
                                     change.consume()
                                     dragOffset += dragAmount
@@ -156,12 +207,37 @@ fun WhiteboardBoardScreen(
                                 }
                             )
                         }
-                        .clickable(enabled = node.entryId != null) { node.entryId?.let { onNavigateToEntry(it) } }
+                        .clickable(enabled = node.entryId != null) { node.entryId?.let { onNavigateToEntry(it) } },
+                    shape = RoundedCornerShape(10.dp),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
                 ) {
-                    Card(modifier = Modifier.fillMaxSize()) {
-                        Box(modifier = Modifier.fillMaxSize().padding(8.dp), contentAlignment = Alignment.Center) {
-                            Text(node.noteId?.let { "📝 メモ" } ?: node.entryId?.let { "📄 エントリー" } ?: "?")
+                    Box(Modifier.fillMaxSize().padding(10.dp)) {
+                        Column(Modifier.fillMaxSize()) {
+                            Text(
+                                node.noteId?.let { "📝 メモ" } ?: "📄 エントリー",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                node.entryId?.take(8) ?: node.noteId?.take(8) ?: "?",
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 3
+                            )
                         }
+                        IconButton(
+                            onClick = { viewModel.deleteNode(node.id) },
+                            modifier = Modifier.align(Alignment.TopEnd).size(24.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "削除", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+            if (nodes.isEmpty() && sections.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))) {
+                        Text("＋でメモを追加、エントリーをドラッグして配置", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -177,7 +253,9 @@ fun WhiteboardBoardScreen(
                 OutlinedTextField(
                     value = noteContent,
                     onValueChange = { noteContent = it },
-                    label = { Text("内容") }
+                    label = { Text("内容") },
+                    placeholder = { Text("例: この2つの概念は…") },
+                    minLines = 3
                 )
             },
             confirmButton = {
