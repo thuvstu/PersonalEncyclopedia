@@ -8,10 +8,10 @@ NextTasks.md §3 Round 0 の成果物。以降のRoundは「この数値がど�
 
 ## 1. 前提
 
-- 対象端末: **自端末(高スペック)**。エミュレータで代替する場合は `:benchmark` に定義済みの `pixel8Api34`(ATDイメージ)を使う
-- Macrobenchmarkは対象アプリの **release ビルドを自動インストール**して計測する(debugでは測らない)
-- 計計測条件を揃える: 充電器接続・画面ON固定・バックグラウンドアプリ最小化
-- シードは **debugビルド** に対して実行する(合成データ生成はdebug専用)
+- 対象端末: **自端末(高スペック)**。2026-08-26計測時の実端末は `25053PC47G` (Xiaomi, SoC SM8735/QTI, arm64-v8a, MemTotal 11.5GB + Swap 12GB)
+- 計測条件: USB給電あり(AC false, USB true), バッテリー30%前後, 画面ON固定推奨
+- シードは **debugビルド** に対して実行する(合成データ生成はdebug専用, `app/src/debug/` の PerfSeedReceiver)
+- 軽量計測方式(2026-08-24改訂)で実施。`:benchmark` モジュールは撤去済み
 
 ## 2. 合成データの投入 (M-1: SyntheticDataSeeder)
 
@@ -63,7 +63,10 @@ adb shell dumpsys gfxinfo com.thuvstu.personalencyclopedia
 
 ### 検索応答時間・InMemoryVectorIndex.load()等の個別処理
 
-`util/Timed.kt`の`timed()`ラッパー(NextTasks.md §0参照)を該当箇所に仕込み、`adb logcat -s App`で確認する。1機能1ビルドの原則に従い、計測したい箇所ごとに小さく追加してよい(計測用コードは`if (BuildConfig.DEBUG)`等で本番ビルドに影響しないようにする)。
+`util/Timed.kt`の`timed()`ラッパーを `PersonalEncyclopediaApp.initBrainLayer()` の `vectorIndex.load()` と
+`SearchRepository.search()` の `hybridSearch.search()` に仕込み済み。`adb logcat -s App` および
+debug専用 `PerfSeedReceiver.SEARCH` ブロードキャスト(`adb shell am broadcast ... -a ...perf.SEARCH --es query bench`)で
+3クエリ(歴史/細胞分裂/量子もつれ)の応答時間を計測する(FTS+RRF経路, semanticはGemini未設定のためスキップ)。
 
 ### DBサイズ
 
@@ -73,49 +76,95 @@ adb shell run-as com.thuvstu.personalencyclopedia du -h databases/
 
 結果の出力先: すべてコンソール出力+`adb logcat`。ファイル転送・追加のGradleタスクは不要。
 
-## 4. 記録表
+## 4. 記録表 — 2026-08-26 実測値(軽量計測方式)
+
+> 計測者: 実機 25053PC47G で手動実施。`SyntheticDataSeeder` は `seed(count)` で既存合成データを全削除→投入するため各規模は独立。
 
 ### 端末情報
 
 | 項目 | 値 |
 |---|---|
-| 端末名 | |
-| Android version | |
-| RAM / SoC | |
-| 計測日 | |
+| 端末名 | 25053PC47G (Xiaomi) |
+| Android version | 16 (SDK 36) |
+| SoC / ABI | SM8735 (QTI) / arm64-v8a |
+| RAM | MemTotal 11,502,936 kB (≈11.5GB) + Swap 12GB (cat /proc/meminfo) |
+| 計測日 | 2026-08-26 23:20〜23:42 JST |
+| ビルド | debug (`:app:installDebug`, commit 94a6692時点) |
+| 条件 | USB給電, バッテリー30%前後, 手動軽量計測(adb) |
 
-### Startup (cold start, ms、`am start -W`のTotalTime、3〜5回中央値)
+### Startup (cold start, ms、`am start -W` の TotalTime、5回実行の中央値)
 
-| データ規模 | TotalTime(中央値) | 初回起動(rebuildあり) |
-|---|---|---|
-| 1,000 | | |
-| 10,000 | | |
-| 50,000 | | |
+> `adb shell am force-stop` → `am start -W -n com.thuvstu.personalencyclopedia/.MainActivity` を5回繰り返し。
+> 初回起動(rebuildあり)はseed直後の1回目、2回目以降は同一値のため中央値は後者を採用。
+
+| データ規模 | TotalTime(中央値) | 初回起動(rebuildあり) | 備考 |
+|---|---|---|---|
+| 0 (empty) | — | — | load 2ms, DB 1M |
+| 1,000 | **798** (771/792/798/804/841) | 841 |  |
+| 10,000 | **767** (760/765/767/769/774) | 769 | 中央値が1kより小さいのは誤差範囲 |
+| 50,000 | **780** (771/779/780/865/897) ※ | 897 ※ | ※TotalTimeは出力されるが直後に`InMemoryVectorIndex.load()`でOOMクラッシュ |
 
 ### スクロール(ダッシュボード一覧、`dumpsys gfxinfo`)
 
-| データ規模 | Janky frames | 総フレーム数 | jank率 |
-|---|---|---|---|
-| 1,000 | | | |
-| 10,000 | | | |
-| 50,000 | | | |
+> 軽量計測の自動swipe( `adb shell input swipe 640 1800 640 500 250` ×3 )ではフレーム数が10〜16と少なすぎて
+> jank率が不安定(43〜50%)になるため参考値。手動フリングでの再計測が推奨。
+
+| データ規模 | Janky frames | 総フレーム数 | jank率 | 50th/90th | 備考 |
+|---|---|---|---|---|---|
+| 1,000 | 7 | 16 | 43.7% | 150ms/200ms | 自動swipe, サンプル少 |
+| 10,000 | — | — | — | — | 未計測(手動要) |
+| 50,000 | — | — | — | — | クラッシュのため計測不可 |
+| (参考)1k手動前 | 12 | 205 | 5.85% | 17ms/73ms | `gfxinfo` リセット前の自然操作 |
 
 ### 個別処理時間(`timed()`ラッパー、ms)
 
-| データ規模 | 検索応答(hybridSearch) | InMemoryVectorIndex.load() |
-|---|---|---|
-| 1,000 | | |
-| 10,000 | | |
-| 50,000 | | |
+> `App` タグ(`adb logcat -s App`) + `PerfSearch` ( `...perf.SEARCH --es query bench` で 歴史/細胞分裂/量子もつれ の3クエリ)
+
+| データ規模 | 検索応答 hybridSearch[歴史] | hybridSearch[細胞分裂] | hybridSearch[量子もつれ] | InMemoryVectorIndex.load() (中央値) |
+|---|---|---|---|---|
+| 0 | — | — | — | **2** |
+| 1,000 | **73** (86→73再測) | **36** | **37** | **443** (400/412/443/462/463) |
+| 10,000 | **79** | **77** | **74** | **911** (873/874/911/913/940) ※以前894も同様 |
+| 50,000 | OOMで計測不可 | OOM | OOM | **OOM** — `Failed to allocate ... target footprint 268435456` |
 
 ### 補足
 
-| 項目 | 1,000 | 10,000 | 50,000 |
-|---|---|---|---|
-| DBファイルサイズ | | | |
-| アプリRAM使用量(`adb shell dumpsys meminfo`) | | | |
+| 項目 | 0 | 1,000 | 10,000 | 50,000 |
+|---|---|---|---|---|
+| DBファイルサイズ (`du -h` / `ls -lh encyclopedia.db`) | 1M (652K+32K+406K) | **16M** (15M+32K+512K) | **131M** (131M+64K+512K) | **625M** (625M+256K+30M) ※656M total |
+| アプリRAM使用量(`dumpsys meminfo` TOTAL Pss) | 201M | **216M** | **249M** | OOM (heap limit 256M) |
+| Heap Size / Alloc | 68M / 35M | 81M / 37M | 178M / 66M | — |
+| seed所要時間 | — | 0.9s | 7.6s | 38.3s |
+| 計測時の挙動 | 正常 | 正常 | 正常 | **起動時クラッシュ**(下記§6参照) |
 
-## 5. 運用ルール
+## 5. 50,000件でのクラッシュ詳細(PERF-8検証結果)
+
+**現象:** 50k投入後、コールドスタートで `TotalTime` は 780ms前後で出力されるが、約10秒後に
+`InMemoryVectorIndex.load()` 中に `OutOfMemoryError` でクラッシュ。
+
+```
+Failed to allocate a 3088 byte allocation with 588624 free bytes and 574KB until OOM,
+target footprint 268435456, growth limit 268435456
+  at com.thuvstu.personalencyclopedia.brain.ai.GeminiClientKt.toFloatArray(GeminiClient.kt:131)
+  at com.thuvstu.personalencyclopedia.brain.search.InMemoryVectorIndex.load(InMemoryVectorIndex.kt:44)
+```
+
+**原因:** `embeddingDao.getAll()` で全件の `vectorBlob` (768dim×4B=3KB/件) を一括ロードし、
+さらに `ByteArray→FloatArray` 変換で一時的に二重に保持。50kでは 147MB×2 + オーバーヘッドで
+heap上限256MBを超過。`DESIGN.md §7.1.5` の想定「数万件までブルートフォースで実用」は **10kまでは成立、50kで破綻**。
+
+**対処方針(NextTasks.md Round 5):**
+- 短期: `AndroidManifest` に `largeHeap=true` で上限緩和(暫定、根本解決ではない)
+- 本命: `sqlite-vec` 拡張への移行(§15既存の拡張ポイント)でon-diskベクトル検索化。`InMemoryVectorIndex` を
+  遅延/ページングロードするか、クエリ時にDB側で近傍検索する方式へ置換
+- 代替: FT Sのみにフォールバックするモード(セマンティック無効時の hybridSearch はFTS+RRFのみで十分高速 70ms前後)
+
+**再現手順:** `adb shell am broadcast ... --ei count 50000` → `am force-stop; am start -W` → 10秒後にクラッシュ。
+復旧は `adb shell run-as ... rm databases/encyclopedia.db*` または `pm clear`。
+
+**影響:** 現状の `InMemoryVectorIndex` は10k超での実運用不可。Round 1〜4の他PERF項目と並行してRound 5を最優先で着手すべき。
+
+## 6. 運用ルール
 
 - 各Round終了後、同手順で50,000件の再計測を行い、この表の差分をwalkthroughに残す
 - 数値が悪化した場合は理由を切り分けず次に進まない(§4実行時プロトコル)

@@ -42,7 +42,7 @@ inline fun <T> timed(tag: String, label: String, block: () -> T): T {
 
 - [x] **M-1: 合成負荷データ生成スクリプト作成** ✅ 実装済み(walkthrough8)。そのまま使う
 - [x] ~~M-2: Macrobenchmarkモジュール追加~~ **撤回。上記の軽量計測に置き換え**
-- [ ] **M-3(改訂): 50,000件データでの実測値を軽量計測で記録する** `adb shell am start -W`でコールドスタート、`dumpsys gfxinfo`でスクロール、`timed()`ラッパーで検索応答時間を計測し、`docs/perf/BASELINE.md`(軽量版)に記入する
+- [x] **M-3(改訂): 50,000件データでの実測値を軽量計測で記録する** ✅ 実測済み(2026-08-26, walkthrough10, `docs/perf/BASELINE.md` §4-5)。端末25053PC47Gで1k/10k/50kの3段階で計測。**50kでInMemoryVectorIndex.load()がOOMクラッシュ**(heap 256M超過, PERF-8破綻を確認)。10kまでは正常(§4参照)。SEARCHベンチ用に`PerfSeedReceiver.SEARCH`ブロードキャストを追加
   🛑 ここで得た実測値をベースラインとし、以降のRoundは全て「この数値がどう変わったか」で評価する
 
 **高スペック前提での方針調整**: WAL接続プール数やCoilのキャッシュサイズは、低スペック機を想定した保守的な値ではなく、自端末のRAM/CPUに見合った値まで踏み込んでよい(Round 1/3で具体値を決める際にこの前提を使う)。
@@ -100,7 +100,7 @@ inline fun <T> timed(tag: String, label: String, block: () -> T): T {
 
 - [x] M-1: SyntheticDataSeeder ✅ 実装済み(walkthrough8)。§0「維持するもの」参照
 - [x] ~~M-2: Macrobenchmarkモジュール~~ 撤回済み(2026-08-24)。§0「軽量計測ツールキット」に置き換え
-- [ ] M-3(改訂): 50,000件データでの軽量計測実測値の記録。§0参照、次セッションで実施
+- [x] M-3(改訂): 50,000件データでの軽量計測実測値の記録 ✅ 実測済み(2026-08-26, `docs/perf/BASELINE.md` §4-5)。50kでOOMクラッシュを確認、10kまで正常
 
 ### Round 1 — DB層(低リスク・高確度)
 
@@ -129,8 +129,9 @@ inline fun <T> timed(tag: String, label: String, block: () -> T): T {
 
 ### Round 5 — 検索・Embedding層(実データ規模での検証)
 
-- [ ] **PERF-8** M-1の50,000件データで`timed()`ラッパー(§0)を`InMemoryVectorIndex.topK`呼び出し前後に仕込み、応答時間を実測。FTS4+Nグラムのインデックスサイズは`adb shell run-as ... du -h databases/`で確認する
-- [ ] 実測結果が§7.1.5の想定(数万件までブルートフォースで実用速度)を下回った場合のみ、sqlite-vec拡張への移行(§15既存の拡張ポイント)を検討する。上回っていれば何もしない(過剰最適化を避ける)
+- [x] **PERF-8** 実測で50k OOMを確認(2026-08-26, `docs/perf/BASELINE.md` §5)。想定を下回ったためsqlite-vec移行を最優先で検討する。10kまではFTS+RRFで70ms前後と実用速度だが、InMemory方式は限界
+- [ ] sqlite-vec拡張への移行(§15既存の拡張ポイント) — InMemoryVectorIndexをon-disk化し起動時全件ロードを廃止。または`largeHeap`暫定対応
+- [ ] 実測結果が§7.1.5の想定(数万件までブルートフォースで実用速度)を下回った場合のみ、sqlite-vec拡張への移行(§15既存の拡張ポイント)を検討する。上回っていれば何もしない(過剰最適化を避ける) → **50kで破綻を確認したため移行が必要**
 
 ---
 
