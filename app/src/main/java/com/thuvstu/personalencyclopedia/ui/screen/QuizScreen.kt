@@ -46,6 +46,8 @@ private fun gradingMethodLabel(method: String): String = when (method) {
 
 private val NUM_MARKS = listOf("①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧")
 
+private const val QUIZ_CARD_ELEVATION = 2
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuizScreen(
