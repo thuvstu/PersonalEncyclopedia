@@ -167,23 +167,88 @@ object InitialData {
         DemoData.DemoThought("経済は図で考える", "IS-LMも需給も図を描いて矢印で因果を追う。数式は図の翻訳。"),
     )
 
+    val quizzes = listOf(
+        DemoData.DemoQuiz("枕草子「春はあけぼの」の季節は？", "春", listOf("春","夏","秋","冬"), "春はあけぼの…で始まることから。"),
+        DemoData.DemoQuiz("源氏物語の作者は？", "紫式部", listOf("紫式部","清少納言","兼好法師","鴨長明"), "紫式部が宮廷で執筆。"),
+        DemoData.DemoQuiz("係り結びで「こそ」に呼応する活用形は？", "已然形", listOf("已然形","連体形","終止形","命令形"), "こそは已然形、他は連体形。"),
+        DemoData.DemoQuiz("二次関数の頂点のx座標は？", "-b/2a", listOf("-b/2a","-b/a","b/2a","-4a/b"), "平方完成で導出。"),
+        DemoData.DemoQuiz("sin30°の値は？", "1/2", listOf("1/2","√3/2","1/√2","1"), "単位円で確認。"),
+        DemoData.DemoQuiz("log_2 8 の値は？", "3", listOf("3","2","4","8"), "2^3=8。"),
+        DemoData.DemoQuiz("微分係数の定義は？", "平均変化率の極限", listOf("平均変化率の極限","面積","平均値","分散"), "h→0の極限。"),
+        DemoData.DemoQuiz("仮定法で If I were you の were は？", "仮定法過去", listOf("仮定法過去","直説法過去","仮定法過去完了","未来"), "現在の非現実は過去形。"),
+        DemoData.DemoQuiz("関係代名詞 that が省略できるのは？", "目的格", listOf("目的格","主格","所有格","関係副詞"), "目的格は省略可。"),
+        DemoData.DemoQuiz("5文型で SVOO の Oは？", "目的語が2つ", listOf("目的語が2つ","補語が1つ","修飾語","主語"), "S give O1 O2。"),
+        DemoData.DemoQuiz("荘園の不輸・不入とは？", "租税・国司立入の免除", listOf("租税・国司立入の免除","年貢免除のみ","軍役免除","検地免除"), "国衙の支配が及ばない。"),
+        DemoData.DemoQuiz("地租改正の税率は？", "地価の3%", listOf("地価の3%","収穫の3%","地価の5%","定額"), "1873年金納化。"),
+        DemoData.DemoQuiz("ウェストファリア条約の年は？", "1648年", listOf("1648年","1789年","1919年","1945年"), "主権国家体制の起点。"),
+        DemoData.DemoQuiz("日本国憲法の三原理に含まれないのは？", "議院内閣制", listOf("議院内閣制","国民主権","平和主義","基本的人権"), "三原理は国民主権・人権・平和主義。"),
+        DemoData.DemoQuiz("罪刑法定主義の意味は？", "法律なければ犯罪なし", listOf("法律なければ犯罪なし","疑わしきは罰せず","一事不再理","法の不遡及"), "nulla poena sine lege。"),
+        DemoData.DemoQuiz("所有権の権能は？", "使用収益処分", listOf("使用収益処分","占有のみ","賃貸のみ","売却のみ"), "民法206条。"),
+        DemoData.DemoQuiz("GDPの三面等価に含まれないのは？", "幸福度", listOf("幸福度","生産","分配","支出"), "生産=分配=支出。"),
+        DemoData.DemoQuiz("比較優位の提唱者は？", "リカード", listOf("リカード","スミス","ケインズ","マルクス"), "機会費用の概念。"),
+        DemoData.DemoQuiz("IS-LMで財政拡大は？", "IS右シフト", listOf("IS右シフト","LM右シフト","IS左シフト","LM左シフト"), "財市場需要増。"),
+        DemoData.DemoQuiz("外部性の是正手段は？", "ピグー税", listOf("ピグー税","関税","所得税","消費税"), "外部費用を内部化。"),
+        DemoData.DemoQuiz("徒然草の作者は？", "兼好法師", listOf("兼好法師","清少納言","紫式部","鴨長明"), "吉田兼好。"),
+        DemoData.DemoQuiz("方丈記の冒頭は？", "ゆく河の流れは絶えずして", listOf("ゆく河の流れは絶えずして","春はあけぼの","祇園精舎の鐘の声","月日は百代の過客にして"), "無常観の象徴。"),
+        DemoData.DemoQuiz("助動詞「べし」の已然形は？", "べけれ", listOf("べけれ","べし","べく","べから"), "文法の基本。"),
+        DemoData.DemoQuiz("積分の基本定理は？", "微分の逆演算で面積", listOf("微分の逆演算で面積","極限","順列","分散"), "Newton-Leibniz。"),
+        DemoData.DemoQuiz("ベクトルの内積は？", "|a||b|cosθ", listOf("|a||b|cosθ","|a|+|b|","|a|-|b|","|a|×|b|"), "角度で定義。"),
+        DemoData.DemoQuiz("倒置が起きるのは？", "Never文頭", listOf("Never文頭","肯定文","疑問文のみ","命令文"), "Never have I..."),
+        DemoData.DemoQuiz("幕藩体制の石高制とは？", "米の生産高で格付け", listOf("米の生産高で格付け","人口で格付け","面積で格付け","税額で格付け"), "石高が身分と軍役の基準。"),
+        DemoData.DemoQuiz("ケッペン気候でAは？", "熱帯", listOf("熱帯","乾燥帯","温帯","寒帯"), "最暖月18℃以上。"),
+        DemoData.DemoQuiz("株式会社の特徴は？", "株主有限責任", listOf("株主有限責任","無限責任","合名のみ","個人事業"), "所有と経営の分離。"),
+        DemoData.DemoQuiz("ナッシュ均衡とは？", "誰も単独で逸脱する誘因なし", listOf("誰も単独で逸脱する誘因なし","全員が最大利得","政府が介入","独占"), "ゲーム理論の核心。"),
+    )
+
+    val wikis = listOf(
+        WikiArticleEntity(title = "古典文法クイックリファレンス", contentMd = "# 古典文法クイックリファレンス\n\n- [[助動詞「べし」]] / [[係り結び]] / [[敬語(尊敬・謙譲・丁寧)]]\n- [[本歌取り]] と [[和歌の修辞]] は歌学の核\n- 演習: [[枕草子]] と [[源氏物語]] を読み比べる\n", summary = "古典文法の要点を1枚に"),
+        WikiArticleEntity(title = "数学公式ハブ — 高校範囲", contentMd = "# 数学公式ハブ\n\n- [[二次関数]] / [[三角比]] / [[指数・対数]] / [[微分]] / [[積分]]\n- [[ベクトル]] と [[図形と方程式]] で幾何を代数化\n- [[統計的推測(発展)]] は共通テスト頻出\n", summary = "数学の相互リンク集"),
+        WikiArticleEntity(title = "英語5文型と時制", contentMd = "# 英語5文型と時制\n\n- [[5文型]] → [[関係詞]] → [[分詞構文]]\n- [[仮定法]] と [[時制の一致]] はセットで\n- 無生物主語は和訳で人を補う\n", summary = "英語の骨格"),
+        WikiArticleEntity(title = "日本史ストーリーライン", contentMd = "# 日本史ストーリーライン\n\n[[律令制]] → [[摂関政治]] → [[院政]] → [[荘園制]] → [[幕藩体制]] → [[地租改正]] → [[戦後改革]] → [[高度経済成長]]\n", summary = "通史の軸"),
+        WikiArticleEntity(title = "法学マップ — 要件効果", contentMd = "# 法学マップ\n\n- 憲法: [[日本国憲法の三原理]] / [[立憲主義]] / [[司法審査制]]\n- 民事: [[所有権]] / [[契約自由の原則]] / [[不法行為]] / [[担保物権]]\n- 刑事: [[罪刑法定主義]]\n", summary = "条文→判例の道標"),
+        WikiArticleEntity(title = "経済学コア — 図でわかる", contentMd = "# 経済学コア\n\n[[GDP]] → [[IS-LM分析]] → [[財政政策]] / [[金融政策]] → [[為替レート]]\n需給は [[比較優位]] と [[外部性]] で拡張\n", summary = "マクロ/ミクロの接続"),
+    )
+
+    val connections = listOf(
+        Triple("枕草子", "徒然草", "related"), Triple("源氏物語", "伊勢物語", "related"), Triple("助動詞「べし」", "係り結び", "prerequisite"),
+        Triple("二次関数", "微分", "prerequisite"), Triple("三角比", "ベクトル", "related"), Triple("指数・対数", "微分", "prerequisite"),
+        Triple("仮定法", "時制の一致", "related"), Triple("関係詞", "分詞構文", "prerequisite"), Triple("5文型", "関係詞", "prerequisite"),
+        Triple("荘園制", "幕藩体制", "related"), Triple("律令制", "摂関政治", "related"), Triple("地租改正", "高度経済成長", "related"),
+        Triple("国民国家", "帝国主義", "related"), Triple("産業革命", "帝国主義", "prerequisite"), Triple("日本国憲法の三原理", "立憲主義", "related"),
+        Triple("所有権", "担保物権", "related"), Triple("契約自由の原則", "不法行為", "contrast"), Triple("GDP", "IS-LM分析", "prerequisite"),
+        Triple("比較優位", "為替レート", "related"), Triple("外部性", "公共財", "related"),
+    )
+
     suspend fun seedIfEmpty(
         entryDao: EntryDao, thoughtDao: EntryThoughtDao, definitionDao: EntryDefinitionDao,
-        topicDao: TopicDao? = null, quizDao: QuizDao? = null
+        topicDao: TopicDao? = null, quizDao: QuizDao? = null, connectionDao: ConnectionDao? = null, wikiDao: WikiArticleDao? = null
     ) {
         val count = entryDao.observeCount().first()
         if (count > 0) return
         val now = System.currentTimeMillis()
         extraTopics.forEach { topicDao?.insert(it) }
+        val idMap = mutableMapOf<String, String>()
         for (d in definitions) {
             val id = UUID.randomUUID().toString()
+            idMap[d.term] = id
             entryDao.insert(EntryEntity(id = id, type = "definition", title = d.term, createdAt = now, updatedAt = now, accessedAt = now))
             definitionDao.insert(EntryDefinitionEntity(entryId = id, term = d.term, reading = d.reading, definition = d.definition, field = d.field))
         }
         for (t in thoughts) {
             val id = UUID.randomUUID().toString()
+            idMap[t.title] = id
             entryDao.insert(EntryEntity(id = id, type = "thought", title = t.title, content = t.content, createdAt = now, updatedAt = now, accessedAt = now))
             thoughtDao.insert(EntryThoughtEntity(entryId = id))
+        }
+        for (q in quizzes) {
+            val choicesJson = "[" + q.choices.joinToString(",") { "\"$it\"" } + "]"
+            quizDao?.insertQuiz(QuizBankEntity(question = q.question, answer = q.answer, choicesJson = choicesJson, explanation = q.explanation, quizType = q.quizType, generationMethod = "initial"))
+        }
+        for (w in wikis) wikiDao?.upsert(w)
+        for ((a, b, rel) in connections) {
+            val aId = idMap[a] ?: continue; val bId = idMap[b] ?: continue
+            val ca = if (aId < bId) aId else bId; val cb = if (aId < bId) bId else aId
+            try { connectionDao?.insert(ConnectionEntity(entryAId = aId, entryBId = bId, relationType = rel, strength = 0.7f, isAuto = false, isDirected = false, canonicalA = ca, canonicalB = cb)) } catch (_: Exception) {}
         }
     }
 }
