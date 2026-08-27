@@ -1,7 +1,7 @@
 # PersonalEncyclopedia 設計全解説
 
 > 本ドキュメントは、`PersonalEncyclopedia` プロジェクトの全ソースコード・DBスキーマ・ビルド定義・ドキュメント群を横断的に調査し、**現在の実装を正として**設計を解説するものです。
-> 対象リビジョン: `master` (最新: `83b4c00`)
+> 対象リビジョン: `master` (最新: `68a8006` walkthrough14まで)
 
 ---
 
@@ -173,9 +173,10 @@
 
 ### 5.1 概観
 
-- **ファイル**: `encyclopedia.db` / **バージョン 8** / `exportSchema = true`
-- **40テーブル + 2ビュー**。開発フェーズ(Phase 0〜4 + v7/v8)に沿って追加された履歴が見える (`AppDatabase.kt:10-56`)。
-- **マイグレーション**: 7本 (`MIGRATION_1_2`〜`MIGRATION_7_8`)、**破壊的変更ゼロ**の「新規テーブル追加 + ビュー再作成 + カラム追加」のみ。`fallbackToDestructiveMigration()` は**未設定**(データ破壊フォールバックなし)。
+- **ファイル**: `encyclopedia.db` / **バージョン 10** / `exportSchema = true`
+- **40テーブル + 2ビュー**。開発フェーズ(Phase 0〜4 + v7/v8 + PERF-1/2)に沿って追加された履歴が見える (`AppDatabase.kt:10-56`)。
+- **マイグレーション**: 9本 (`MIGRATION_1_2`〜`MIGRATION_9_10`)、**破壊的変更ゼロ**の「新規テーブル追加 + ビュー再作成 + カラム追加」のみ。`fallbackToDestructiveMigration()` は**未設定**(データ破壊フォールバックなし)。
+- **ドライバ**: `BundledSQLiteDriver().withSqliteVec()` (sqlite-bundled 2.5.2 + room-vec-common 0.1.0-alpha01, walkthrough13/14)で `vec_distance_cosine` をロード。`EmbeddingDao.vecSearch()` がDB側近傍検索を担い、`HybridSearchEngine` はDB優先→InMemoryフォールバック。
 
 ### 5.2 テーブル全一覧
 
@@ -294,11 +295,11 @@ brain/
 #### NgramTokenizer — 日本語を分割する工夫
 形態素解析器を導入せず、**重複2文字バイグラム**方式で日本語を扱う (`NgramTokenizer.kt:4-7`)。`tokenize()` で大文字化・全角空白統一のうえ重複bigramを空白区切りで生成、`buildFtsQuery()` でクエリ側もbigram+OR接続の部分一致クエリを構築。
 
-#### InMemoryVectorIndex — 無ロック・スナップショット
-個人規模(数千件 × 768次元 ≈ 30MB)を想定し、**メモリ総当たり検索**(数十ms)を選択 (`InMemoryVectorIndex.kt:10-18`)。スレッド安全性は **★D1** として「不変 `Snapshot` + `AtomicReference` + CASループ」で実現(`InMemoryVectorIndex.kt:28-37, 71-100`)。`topK` は固定スナップショットを読むため、`addVector` と非干渉。
+#### InMemoryVectorIndex — 無ロック・スナップショット + sqlite-vec委譲
+個人規模(数千件 × 768次元 ≈ 30MB)を想定し、**メモリ総当たり検索**(数十ms)を選択 (`InMemoryVectorIndex.kt:10-18`)。スレッド安全性は **★D1** として「不変 `Snapshot` + `AtomicReference` + CASループ」で実現(`InMemoryVectorIndex.kt:28-37, 71-100`)。`topK` は固定スナップショットを読むため、`addVector` と非干渉。**50kでは `count()>10k` で全件ロードをskip**(walkthrough13)し空スナップショットを返し、`HybridSearchEngine` が `EmbeddingDao.vecSearch()` (`vec_distance_cosine`) へ委譲する。
 
-#### HybridSearchEngine — RRF融合検索
-`SearchMode` = `HYBRID / FULLTEXT / SEMANTIC / LIKE` の4モード (`HybridSearchEngine.kt:36-52`)。
+#### HybridSearchEngine — RRF融合検索 + sqlite-vec
+`SearchMode` = `HYBRID / FULLTEXT / SEMANTIC / LIKE` の4モード (`HybridSearchEngine.kt:36-52`)。**PERF-8以降は semantic/hybrid の意味検索を `vec_distance_cosine` のDB側近傍検索で実行**し、拡張未ロード時のみInMemoryへフォールバック。
 
 ```
 LIKE   → entryDao.search (名次スコア 1/(RRF_K+rank+1))
@@ -549,7 +550,7 @@ Android設定画面: トークン表示 → PC ConnectionBar: ホスト/ポー�
 
 ### 9.5 DI (Hilt)
 
-- `DatabaseModule`: Room DB + **20個のDAOを個別 @Provides**。
+- `DatabaseModule`: Room DB + **20個のDAOを個別 @Provides**。`BundledSQLiteDriver().withSqliteVec()` / WAL(`JournalMode.WRITE_AHEAD_LOGGING`+`PRAGMA synchronous=NORMAL`) / `queryExecutor(4)`+`transactionExecutor(2)` で高スペック端末の並行書き込みを活かす(PERF-1/8)。
 - `ServerModule`: TokenManager 提供。
 - `PersonalEncyclopediaApp` が Phase A(DB/シード) → Phase B(Brain層) → Phase C(WorkManager) の**3フェーズ段階的初期化**を `runStep` で実行。
 
