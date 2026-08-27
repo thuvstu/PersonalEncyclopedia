@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.thuvstu.personalencyclopedia.brain.ResurfacingEngine
 import com.thuvstu.personalencyclopedia.brain.task.EstimationBias
 import com.thuvstu.personalencyclopedia.brain.task.TaskEngine
+import com.thuvstu.personalencyclopedia.db.InitialData
+import com.thuvstu.personalencyclopedia.db.AppDatabase
 import com.thuvstu.personalencyclopedia.db.dao.TaskDao
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
 import com.thuvstu.personalencyclopedia.importer.WebScraper
@@ -27,7 +29,8 @@ class DashboardViewModel @Inject constructor(
     private val connectionRepo: ConnectionRepository,
     private val resurfacingEngine: ResurfacingEngine,    // ★§7.5
     private val taskEngine: TaskEngine,                   // ★§8.10/§11.11 タスク
-    private val taskDao: TaskDao
+    private val taskDao: TaskDao,
+    private val db: AppDatabase
 ) : ViewModel() {
 
     val recentEntries: StateFlow<List<EntryEntity>> =
@@ -151,4 +154,26 @@ class DashboardViewModel @Inject constructor(
     }
 
     fun resetScrapeState() { _scrapeState.value = ScrapeState.Idle }
+
+    // ── 初期データ明示投入 (Hubの透明性) ──
+    private val _seedState = MutableStateFlow<String?>(null)
+    val seedState: StateFlow<String?> = _seedState
+    private val _isSeeding = MutableStateFlow(false)
+    val isSeeding: StateFlow<Boolean> = _isSeeding
+
+    fun seedInitialData() {
+        if (_isSeeding.value) return
+        viewModelScope.launch {
+            _isSeeding.value = true
+            _seedState.value = "投入中…"
+            try {
+                InitialData.seedIfEmpty(db.entryDao(), db.entryThoughtDao(), db.entryDefinitionDao(), db.topicDao(), db.quizDao(), db.connectionDao(), db.wikiArticleDao())
+                _seedState.value = "初期データ投入完了"
+            } catch (e: Exception) {
+                _seedState.value = "投入失敗: ${e.message}"
+            }
+            _isSeeding.value = false
+        }
+    }
+    fun clearSeedState() { _seedState.value = null }
 }

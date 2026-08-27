@@ -65,6 +65,12 @@ fun DashboardScreen(
     val activeTaskCount by viewModel.activeTaskCount.collectAsState()
     val estimationBias by viewModel.estimationBias.collectAsState()
     var showQuickAddDialog by remember { mutableStateOf(false) }
+    val seedState by viewModel.seedState.collectAsState()
+    val isSeeding by viewModel.isSeeding.collectAsState()
+
+    LaunchedEffect(seedState) {
+        seedState?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show(); viewModel.clearSeedState() }
+    }
 
     LaunchedEffect(scrapeState) {
         when (val s = scrapeState) {
@@ -135,13 +141,28 @@ fun DashboardScreen(
             }
             item {
                 ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceAround
-                    ) {
-                        DashboardStatItem("📦 総計", "$totalCount 件")
-                        DashboardStatItem("📚 今日の復習", "$dueCount 件")
-                        DashboardStatItem("📝 クイズ", "$quizCount 問")
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                            DashboardStatItem("📦 総計", "$totalCount 件")
+                            DashboardStatItem("📚 今日の復習", "$dueCount 件")
+                            DashboardStatItem("📝 クイズ", "$quizCount 問")
+                        }
+                        HorizontalDivider()
+                        if (totalCount == 0) {
+                            Button(
+                                onClick = viewModel::seedInitialData,
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !isSeeding
+                            ) {
+                                if (isSeeding) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                else Text("📥 初期データ135件を投入 (古典/数学/英語/地歴/法/経済)")
+                            }
+                        } else {
+                            OutlinedButton(onClick = viewModel::seedInitialData, modifier = Modifier.fillMaxWidth(), enabled = !isSeeding) {
+                                Text("📥 初期データを追記")
+                            }
+                            Text("DBに${totalCount}件あり。追記は重複を避けて追加されます。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
