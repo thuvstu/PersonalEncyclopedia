@@ -18,11 +18,13 @@ import com.thuvstu.personalencyclopedia.db.MIGRATION_9_10
 import com.thuvstu.personalencyclopedia.db.dao.*
 import com.thuvstu.personalencyclopedia.integration.NoOpStudyPlusBridge
 import com.thuvstu.personalencyclopedia.integration.StudyPlusSdkBridge
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import io.github.hubbla.roomvec.withSqliteVec
 import javax.inject.Singleton
 
 @Module
@@ -36,6 +38,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext ctx: Context): AppDatabase =
         Room.databaseBuilder(ctx, AppDatabase::class.java, "encyclopedia.db")
+            .setDriver(BundledSQLiteDriver().withSqliteVec())
             .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
             .setQueryExecutor(queryExecutor)
