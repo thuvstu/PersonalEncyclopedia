@@ -56,7 +56,7 @@ fun WhiteboardListScreen(
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
             if (boards.isEmpty()) {
-                Card(
+                ElevatedCard(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 ) {
