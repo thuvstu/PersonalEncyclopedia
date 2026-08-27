@@ -9,6 +9,10 @@ import com.thuvstu.personalencyclopedia.db.dao.EntryDao
 import com.thuvstu.personalencyclopedia.db.dao.ConnectionDao
 import com.thuvstu.personalencyclopedia.db.dao.QuizDao
 import com.thuvstu.personalencyclopedia.db.dao.SrsReviewDao
+import com.thuvstu.personalencyclopedia.db.dao.TagDao
+import com.thuvstu.personalencyclopedia.db.dao.TopicDao
+import com.thuvstu.personalencyclopedia.db.dao.WikiArticleDao
+import com.thuvstu.personalencyclopedia.db.dao.WhiteboardDao
 import com.thuvstu.personalencyclopedia.db.dao.TypeCount
 import com.thuvstu.personalencyclopedia.backup.EntryExporter
 import com.thuvstu.personalencyclopedia.backup.ExportFormat
@@ -37,6 +41,10 @@ class DatabaseManagementViewModel @Inject constructor(
     private val connectionDao: ConnectionDao,
     private val quizDao: QuizDao,
     private val srsReviewDao: SrsReviewDao,
+    private val tagDao: TagDao,
+    private val topicDao: TopicDao,
+    private val wikiDao: WikiArticleDao,
+    private val whiteboardDao: WhiteboardDao,
     private val exporter: EntryExporter,
     private val backupExporter: com.thuvstu.personalencyclopedia.backup.BackupExporter
 ) : ViewModel() {
@@ -60,6 +68,8 @@ class DatabaseManagementViewModel @Inject constructor(
     val reviewCount: StateFlow<Int> =
         srsReviewDao.observeTotalReviewCount()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    // 透明性: 追加テーブル数は今後DAOにobserveCountを追加して拡張予定
 
     private val _storage = MutableStateFlow<StorageInfo?>(null)
     val storage: StateFlow<StorageInfo?> = _storage

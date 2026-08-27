@@ -128,18 +128,21 @@ fun DatabaseManagementScreen(
                 }
             }
 
-            // ── 学習データ統計 ──
+            // ── 学習データ統計 (透明性) ──
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("📊 データ統計", style = MaterialTheme.typography.titleMedium)
+                    Text("📊 データ統計 — 全部が見える", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceAround) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
                         StatMini("エントリー", "$totalEntries")
                         StatMini("接続", "$connectionCount")
                         StatMini("クイズ", "$quizCount")
                         StatMini("復習ログ", "$reviewCount")
                     }
+                    Spacer(Modifier.height(8.dp))
+                    Text("タグ/トピック/Wiki/白板/添付/履歴もSQL Explorerで全件閲覧可。隠しデータはありません。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = onNavigateToSqlExplorer, modifier = Modifier.fillMaxWidth()) { Text("🔍 全テーブルをSQLで見る") }
                 }
             }
 
