@@ -56,23 +56,7 @@ fun SearchScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = viewModel::onQueryChange,
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("キーワードを検索…") },
-                        singleLine = true,
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        trailingIcon = {
-                            if (query.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.onQueryChange("") }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "クリア")
-                                }
-                            }
-                        }
-                    )
-                },
+                title = { Text("検索", style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
@@ -82,6 +66,22 @@ fun SearchScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = viewModel::onQueryChange,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                placeholder = { Text("キーワードを検索…") },
+                singleLine = true,
+                shape = MaterialTheme.shapes.extraLarge,
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.onQueryChange("") }) {
+                            Icon(Icons.Default.Clear, contentDescription = "クリア")
+                        }
+                    }
+                }
+            )
             Row(
                 modifier = Modifier
                     .horizontalScroll(rememberScrollState())
@@ -112,6 +112,14 @@ fun SearchScreen(
             }
             if (isSearching) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+            if (results.isNotEmpty() && !isSearching) {
+                Text(
+                    "${results.size}件ヒット",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
             }
             LazyColumn(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
