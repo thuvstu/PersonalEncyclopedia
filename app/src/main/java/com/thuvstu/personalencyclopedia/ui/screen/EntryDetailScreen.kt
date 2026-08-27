@@ -61,6 +61,7 @@ fun EntryDetailScreen(
 
     // §11.13: 編集履歴プレビュー（読み取り専用）
     var previewHistory by remember { mutableStateOf<EntryHistoryEntity?>(null) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     var showConnectionDialog by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
@@ -113,7 +114,7 @@ fun EntryDetailScreen(
                     IconButton(onClick = { onEdit(e.type, e.id) }) {
                         Icon(Icons.Default.Edit, contentDescription = "編集")
                     }
-                    IconButton(onClick = { viewModel.softDelete(); onBack() }) {
+                    IconButton(onClick = { showDeleteConfirm = true }) {
                         Icon(Icons.Default.Delete, contentDescription = "削除")
                     }
                 }
@@ -502,6 +503,16 @@ fun EntryDetailScreen(
     }
 
     // タグ追加ダイアログ
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("削除しますか？") },
+            text = { Text("このエントリーを削除します。あとで復元できます。") },
+            confirmButton = { TextButton(onClick = { showDeleteConfirm = false; viewModel.softDelete(); onBack() }) { Text("削除") } },
+            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("キャンセル") } }
+        )
+    }
+
     if (showTagDialog) {
         AlertDialog(
             onDismissRequest = { showTagDialog = false; viewModel.onTagInputChange("") },
