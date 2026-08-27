@@ -32,7 +32,7 @@ fun WikiListScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { Text("📚 Wikipediaビルダー") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
