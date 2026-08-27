@@ -134,19 +134,14 @@ fun DashboardScreen(
                 }
             }
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                ) {
+                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                         horizontalArrangement = Arrangement.SpaceAround
                     ) {
-                        DashboardStatItem("総計", "$totalCount 件")
-                        DashboardStatItem("今日の復習", "$dueCount 件")
-                        DashboardStatItem("クイズ", "$quizCount 問")
+                        DashboardStatItem("📦 総計", "$totalCount 件")
+                        DashboardStatItem("📚 今日の復習", "$dueCount 件")
+                        DashboardStatItem("📝 クイズ", "$quizCount 問")
                     }
                 }
             }
