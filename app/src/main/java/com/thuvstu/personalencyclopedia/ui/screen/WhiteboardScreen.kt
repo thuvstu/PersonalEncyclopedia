@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -18,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -136,6 +138,8 @@ fun WhiteboardBoardScreen(
     val currentBoard by viewModel.currentBoard.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     val density = LocalDensity.current
+    var scale by remember { mutableFloatStateOf(1f) }
+    var canvasOffset by remember { mutableStateOf(Offset.Zero) }
 
     Scaffold(
         topBar = {
@@ -157,7 +161,22 @@ fun WhiteboardBoardScreen(
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surface)) {
+        Box(
+            modifier = Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surface)
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        scale = (scale * zoom).coerceIn(0.3f, 3f)
+                        canvasOffset += pan
+                    }
+                }
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize()
+                    .graphicsLayer(
+                        scaleX = scale, scaleY = scale,
+                        translationX = canvasOffset.x, translationY = canvasOffset.y
+                    )
+            ) {
             // グリッド背景
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val step = 40.dp.toPx()
@@ -240,6 +259,7 @@ fun WhiteboardBoardScreen(
                         Text("＋でメモを追加、エントリーをドラッグして配置", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall)
                     }
                 }
+            }
             }
         }
     }

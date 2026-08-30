@@ -190,7 +190,12 @@ fun SqlExplorerScreen(
                                         if (selected) MaterialTheme.colorScheme.primaryContainer
                                         else Color.Transparent
                                     )
-                                    .clickable { viewModel.selectTable(obj.name) }
+                                    .clickable {
+                                        viewModel.selectTable(obj.name)
+                                        val previewSql = "SELECT * FROM ${obj.name} LIMIT 100;"
+                                        queryText = previewSql
+                                        viewModel.runQuery(previewSql)
+                                    }
                                     .padding(horizontal = 8.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
