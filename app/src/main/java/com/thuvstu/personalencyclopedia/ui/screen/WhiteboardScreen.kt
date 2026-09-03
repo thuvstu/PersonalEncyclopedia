@@ -214,12 +214,15 @@ fun WhiteboardBoardScreen(
                     modifier = Modifier
                         .offset { IntOffset(dragOffset.x.roundToInt(), dragOffset.y.roundToInt()) }
                         .size(with(density) { node.width.toDp() }, with(density) { node.height.toDp() })
-                        .pointerInput(node.id) {
+                        // WB-1: キャンバスは graphicsLayer(scale) で描画のみ拡大されるため、
+                        // 指の移動量(画面px)をそのまま足すと scale 倍に飛ぶ。/scale で内容座標に戻す。
+                        // scale をキーに含めないとクロージャが古い倍率を掴むため (node.id, scale) で再登録する。
+                        .pointerInput(node.id, scale) {
                             detectDragGestures(
                                 onDragStart = { dragOffset = Offset(node.x, node.y) },
                                 onDrag = { change, dragAmount ->
                                     change.consume()
-                                    dragOffset += dragAmount
+                                    dragOffset += dragAmount / scale
                                 },
                                 onDragEnd = {
                                     viewModel.moveNode(node.id, dragOffset.x, dragOffset.y)
