@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.thuvstu.personalencyclopedia.db.ReadOnlySqlExecutor
 import com.thuvstu.personalencyclopedia.viewmodel.SqlExplorerViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,6 +43,9 @@ fun SqlExplorerScreen(
     var queryText by remember { mutableStateOf("SELECT * FROM entry LIMIT 10;") }
     var saveName by remember { mutableStateOf("") }
     var showSaveDialog by remember { mutableStateOf(false) }
+    // DB-1残課題: テーブルタップ後に結果(画面上部)へ自動スクロールするための状態
+    val listScroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -57,7 +61,7 @@ fun SqlExplorerScreen(
     ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding)
-                .verticalScroll(rememberScrollState()).padding(16.dp),
+                .verticalScroll(listScroll).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // ── 読み取り専用警告（§11.12）──
@@ -195,6 +199,8 @@ fun SqlExplorerScreen(
                                         val previewSql = "SELECT * FROM ${obj.name} LIMIT 100;"
                                         queryText = previewSql
                                         viewModel.runQuery(previewSql)
+                                        // 結果カードは画面上部にあるため先頭へ戻す
+                                        scope.launch { listScroll.animateScrollTo(0) }
                                     }
                                     .padding(horizontal = 8.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
