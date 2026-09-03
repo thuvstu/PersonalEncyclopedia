@@ -3,8 +3,13 @@ package com.thuvstu.personalencyclopedia.ui.screen
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculateCentroidSize
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -26,6 +31,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.thuvstu.personalencyclopedia.viewmodel.WhiteboardViewModel
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -161,17 +167,69 @@ fun WhiteboardBoardScreen(
             }
         }
     ) { padding ->
+        // Unit キーのまま最新ノード配置を参照するためのスナップショット
+        val latestNodes by rememberUpdatedState(nodes)
         Box(
             modifier = Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surface)
-                // ピンチ中心基準ズーム: 指の下の内容点が動かないよう平行移動を補正する。
-                // coerce で頭打ちの場合も考慮し、実際に適用された変化率 factor で計算する。
+                // ジェスチャ振り分け: 開始点がノード上なら子(ノードドラッグ)に譲り、
+                // 空白開始のときだけ親がパン/ズームを処理する(奪い合い解消)。
+                // 中身は detectTransformGestures 相当(パン+ズーム。回転は従来通り無視)。
                 .pointerInput(Unit) {
-                    detectTransformGestures { centroid, pan, zoom, _ ->
-                        val oldScale = scale
-                        val newScale = (oldScale * zoom).coerceIn(0.3f, 3f)
-                        val factor = newScale / oldScale
-                        canvasOffset = (canvasOffset - centroid) * factor + centroid + pan
-                        scale = newScale
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val touch = (down.position - canvasOffset) / scale
+                        val onNode = latestNodes.any { n ->
+                            touch.x >= n.x && touch.x <= n.x + n.width &&
+                                touch.y >= n.y && touch.y <= n.y + n.height
+                        }
+                        if (onNode) {
+                            // 子に譲る: 消費せず指が離れるまで待つのみ
+                            var waiting = true
+                            while (waiting) {
+                                val event = awaitPointerEvent()
+                                waiting = event.changes.any { it.pressed }
+                            }
+                        } else {
+                            var zoomAcc = 1f
+                            var panAcc = Offset.Zero
+                            var pastTouchSlop = false
+                            val touchSlop = viewConfiguration.touchSlop
+                            var active = true
+                            while (active) {
+                                val event = awaitPointerEvent()
+                                if (event.changes.none { it.isConsumed }) {
+                                    val zoomChange =
+                                        if (event.changes.size > 1) event.calculateZoom() else 1f
+                                    val panChange = event.calculatePan()
+                                    if (!pastTouchSlop) {
+                                        zoomAcc *= zoomChange
+                                        panAcc += panChange
+                                        val centroidSize =
+                                            event.calculateCentroidSize(useCurrent = false)
+                                        val zoomMotion = abs(1 - zoomAcc) * centroidSize
+                                        val panMotion = panAcc.getDistance()
+                                        if (zoomMotion > touchSlop || panMotion > touchSlop) {
+                                            pastTouchSlop = true
+                                        }
+                                    }
+                                    if (pastTouchSlop) {
+                                        // ピンチ中心基準ズーム: 指の下の内容点を固定する
+                                        val centroid = event.calculateCentroid(useCurrent = false)
+                                        val oldScale = scale
+                                        val newScale =
+                                            (oldScale * zoomChange).coerceIn(0.3f, 3f)
+                                        val factor = newScale / oldScale
+                                        canvasOffset =
+                                            (canvasOffset - centroid) * factor + centroid + panChange
+                                        scale = newScale
+                                        // slop超過後は全移動を親のものとして消費する
+                                        // (consume/isConsumed は公開API。移動有無の判定は不要)
+                                        event.changes.forEach { it.consume() }
+                                    }
+                                }
+                                active = event.changes.any { it.pressed }
+                            }
+                        }
                     }
                 }
         ) {
