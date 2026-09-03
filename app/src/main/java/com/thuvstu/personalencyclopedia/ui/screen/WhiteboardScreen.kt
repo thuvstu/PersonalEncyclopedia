@@ -3,6 +3,8 @@ package com.thuvstu.personalencyclopedia.ui.screen
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -17,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -143,7 +146,10 @@ fun WhiteboardBoardScreen(
     val resolvedTitles by viewModel.resolvedTitles.collectAsState()
     val sections by viewModel.sections.collectAsState()
     val currentBoard by viewModel.currentBoard.collectAsState()
+    val entryResults by viewModel.entryResults.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
+    var showEntryDialog by remember { mutableStateOf(false) }
+    var entryQueryText by remember { mutableStateOf("") }
     val density = LocalDensity.current
     var scale by remember { mutableFloatStateOf(1f) }
     var canvasOffset by remember { mutableStateOf(Offset.Zero) }
@@ -158,6 +164,13 @@ fun WhiteboardBoardScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = {
+                        entryQueryText = ""
+                        viewModel.setEntryQuery("")
+                        showEntryDialog = true
+                    }) {
+                        Icon(Icons.Default.Search, contentDescription = "エントリーを配置")
+                    }
                     Text("${nodes.size}件", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 12.dp))
                 }
             )
@@ -356,6 +369,63 @@ fun WhiteboardBoardScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showAddDialog = false }) { Text("キャンセル") }
+            }
+        )
+    }
+
+    if (showEntryDialog) {
+        AlertDialog(
+            onDismissRequest = { showEntryDialog = false },
+            title = { Text("エントリーを配置") },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+                    OutlinedTextField(
+                        value = entryQueryText,
+                        onValueChange = {
+                            entryQueryText = it
+                            viewModel.setEntryQuery(it)
+                        },
+                        label = { Text("検索（空欄=最近20件）") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        if (entryResults.isEmpty()) {
+                            Text(
+                                "見つかりません",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        entryResults.forEach { e ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable {
+                                        viewModel.addEntry(e.id)
+                                        showEntryDialog = false
+                                    }
+                                    .padding(vertical = 6.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(e.title, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                    Text(
+                                        e.type,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showEntryDialog = false }) { Text("閉じる") }
             }
         )
     }
