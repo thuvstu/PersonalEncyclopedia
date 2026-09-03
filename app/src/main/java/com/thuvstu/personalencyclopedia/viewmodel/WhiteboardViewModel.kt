@@ -39,6 +39,14 @@ class WhiteboardViewModel @Inject constructor(
         repo.observeSections(it).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     } ?: MutableStateFlow(emptyList())
 
+    /** ノードID → 表示タイトル(entry表題 or メモ先頭行)。表示専用の解決マップ。
+     *  geometry/drag用の nodes フローには触れず、タイトル解決だけを分離する */
+    val resolvedTitles: StateFlow<Map<String, String>> = boardId?.let { bId ->
+        repo.observeNodes(bId).mapLatest { repo.resolveNodes(bId) }
+            .map { list -> list.associate { it.node.id to it.displayTitle } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    } ?: MutableStateFlow(emptyMap())
+
     fun createBoard(title: String) {
         val t = title.trim()
         if (t.isBlank()) return
