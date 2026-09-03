@@ -163,10 +163,15 @@ fun WhiteboardBoardScreen(
     ) { padding ->
         Box(
             modifier = Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surface)
+                // ピンチ中心基準ズーム: 指の下の内容点が動かないよう平行移動を補正する。
+                // coerce で頭打ちの場合も考慮し、実際に適用された変化率 factor で計算する。
                 .pointerInput(Unit) {
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        scale = (scale * zoom).coerceIn(0.3f, 3f)
-                        canvasOffset += pan
+                    detectTransformGestures { centroid, pan, zoom, _ ->
+                        val oldScale = scale
+                        val newScale = (oldScale * zoom).coerceIn(0.3f, 3f)
+                        val factor = newScale / oldScale
+                        canvasOffset = (canvasOffset - centroid) * factor + centroid + pan
+                        scale = newScale
                     }
                 }
         ) {
