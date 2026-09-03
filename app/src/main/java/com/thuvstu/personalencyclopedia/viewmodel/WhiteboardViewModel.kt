@@ -3,7 +3,9 @@ package com.thuvstu.personalencyclopedia.viewmodel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.thuvstu.personalencyclopedia.db.dao.EntryDao
 import com.thuvstu.personalencyclopedia.db.dao.WhiteboardDao
+import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
 import com.thuvstu.personalencyclopedia.db.entity.WhiteboardEntity
 import com.thuvstu.personalencyclopedia.db.entity.WhiteboardNodeEntity
 import com.thuvstu.personalencyclopedia.db.entity.WhiteboardNoteEntity
@@ -19,6 +21,7 @@ import javax.inject.Inject
 class WhiteboardViewModel @Inject constructor(
     private val repo: WhiteboardRepository,
     private val whiteboardDao: WhiteboardDao,
+    private val entryDao: EntryDao,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -64,6 +67,30 @@ class WhiteboardViewModel @Inject constructor(
             val rx = 80f + (0..3).random() * 40f
             val ry = 80f + (0..3).random() * 40f
             repo.addFreeNote(bId, c, x = rx, y = ry)
+        }
+    }
+
+    // ── 既存エントリーの配置 (Heptabaseのカード配置相当) ──
+    private val entryQuery = MutableStateFlow("")
+
+    /** 空欄時は最近20件、入力時はLIKE検索(お気に入り優先)。既配置の除外はしない */
+    val entryResults: StateFlow<List<EntryEntity>> = entryQuery
+        .flatMapLatest { q ->
+            if (q.isBlank()) entryDao.observeRecent(20) else entryDao.search(q, 20)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun setEntryQuery(q: String) {
+        entryQuery.value = q
+    }
+
+    fun addEntry(entryId: String) {
+        val bId = boardId ?: return
+        viewModelScope.launch {
+            // ランダムにずらして重なりを避ける
+            val rx = 80f + (0..3).random() * 40f
+            val ry = 80f + (0..3).random() * 40f
+            repo.addEntryRef(bId, entryId, x = rx, y = ry)
         }
     }
 
