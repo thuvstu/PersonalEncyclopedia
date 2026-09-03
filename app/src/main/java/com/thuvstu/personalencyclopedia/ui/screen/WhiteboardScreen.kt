@@ -140,6 +140,7 @@ fun WhiteboardBoardScreen(
     viewModel: WhiteboardViewModel = hiltViewModel()
 ) {
     val nodes by viewModel.nodes.collectAsState()
+    val resolvedTitles by viewModel.resolvedTitles.collectAsState()
     val sections by viewModel.sections.collectAsState()
     val currentBoard by viewModel.currentBoard.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
@@ -305,7 +306,7 @@ fun WhiteboardBoardScreen(
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                node.entryId?.take(8) ?: node.noteId?.take(8) ?: "?",
+                                resolvedTitles[node.id] ?: "…",
                                 style = MaterialTheme.typography.bodySmall,
                                 maxLines = 3
                             )
