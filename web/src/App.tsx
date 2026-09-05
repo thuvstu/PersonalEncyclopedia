@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "./api/client";
+import { ConnectPanel } from "./components/ConnectPanel";
 import { ConnectionBar } from "./components/ConnectionBar";
 import { EntryDetail } from "./components/EntryDetail";
 import { EntryList } from "./components/EntryList";
@@ -8,7 +9,7 @@ import { OllamaPanel } from "./components/OllamaPanel";
 import { QuizPanel } from "./components/QuizPanel";
 import { SrsPanel } from "./components/SrsPanel";
 
-type Tab = "entries" | "srs" | "quiz" | "ollama";
+type Tab = "entries" | "srs" | "quiz" | "connect" | "ollama";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("entries");
@@ -55,6 +56,12 @@ export default function App() {
           クイズ
         </button>
         <button
+          className={tab === "connect" ? "tab active" : "tab"}
+          onClick={() => setTab("connect")}
+        >
+          つながり
+        </button>
+        <button
           className={tab === "ollama" ? "tab active" : "tab"}
           onClick={() => setTab("ollama")}
         >
@@ -77,6 +84,7 @@ export default function App() {
       )}
       {tab === "srs" && <SrsPanel />}
       {tab === "quiz" && <QuizPanel />}
+      {tab === "connect" && <ConnectPanel />}
       {tab === "ollama" && <OllamaPanel />}
     </div>
   );

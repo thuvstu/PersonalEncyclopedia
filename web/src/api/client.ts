@@ -118,6 +118,15 @@ export interface GraphNode {
   depth: number;
 }
 
+export interface Candidate {
+  id: string;
+  entryAId: string;
+  entryBId: string;
+  similarity: number;
+  suggestedType: string;
+  status: string;
+}
+
 export const api = {
   health: () => request<{ status: string }>("/health"),
   getEntries: (limit = 50, offset = 0) =>
@@ -140,6 +149,13 @@ export const api = {
     }),
   getHeatmap: (days = 90) =>
     request<{ day: string; count: number }[]>(`/api/progress/heatmap?days=${days}`),
+  deleteConnection: (id: string) =>
+    request(`/api/connections/${id}`, { method: "DELETE" }),
+  getCandidates: () => request<Candidate[]>(`/api/connection-candidates`),
+  approveCandidate: (id: string) =>
+    request(`/api/connection-candidates/${id}/approve`, { method: "POST" }),
+  rejectCandidate: (id: string) =>
+    request(`/api/connection-candidates/${id}/reject`, { method: "POST" }),
   getSrsDue: (limit = 30) => request<SrsDueEntry[]>(`/api/srs/due?limit=${limit}`),
   getSrsDueCount: () => request<{ dueCount: number }>(`/api/srs/count`),
   postSrsReview: (entryId: string, grade: number) =>

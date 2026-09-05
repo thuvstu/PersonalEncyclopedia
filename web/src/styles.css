@@ -376,6 +376,45 @@ th {
   color: var(--text-muted);
 }
 
+/* ── 接続パネル（#W1） ── */
+.panel h3 {
+  margin: 18px 0 8px;
+  font-size: 14px;
+}
+
+.panel .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  flex-wrap: wrap;
+}
+
+.panel .row input,
+.panel .row select {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: inherit;
+}
+
+.heatmap {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  margin: 8px 0 16px;
+  max-width: 640px;
+}
+
+.heatmap-cell {
+  flex: 1;
+  min-width: 3px;
+  background: var(--accent, #1a73e8);
+  border-radius: 2px;
+  opacity: 0.85;
+}
+
 .srs-card,
 .quiz-card {
   border: 1px solid var(--border);
