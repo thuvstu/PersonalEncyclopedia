@@ -39,6 +39,9 @@ fun ImportScreen(
     val urlListLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
         it?.let { viewModel.importUrlList(it) }
     }
+    val bookmarkLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
+        it?.let { viewModel.importBookmarkHtml(it) }
+    }
     var showObsidianDialog by remember { mutableStateOf(false) }
     var obsidianTitle by remember { mutableStateOf("") }
     var obsidianContent by remember { mutableStateOf("") }
@@ -84,6 +87,9 @@ fun ImportScreen(
             }
             ImportRow("🔗 URLリスト", "1行1URL。既存URLはスキップ") {
                 urlListLauncher.launch(arrayOf("text/plain", "text/csv", "*/*"))
+            }
+            ImportRow("🔖 bookmark.html", "ブラウザのエクスポート。フォルダ・登録日時を復元（本文取得なし高速登録）") {
+                bookmarkLauncher.launch(arrayOf("text/html", "*/*"))
             }
 
             HorizontalDivider()

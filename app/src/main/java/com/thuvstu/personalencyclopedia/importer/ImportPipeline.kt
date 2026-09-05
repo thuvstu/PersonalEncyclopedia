@@ -4,10 +4,12 @@ import android.content.Context
 import android.net.Uri
 import com.thuvstu.personalencyclopedia.db.dao.EntryDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryDefinitionDao
+import com.thuvstu.personalencyclopedia.db.dao.EntryExtensionDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryThoughtDao
 import com.thuvstu.personalencyclopedia.db.entity.EntryDefinitionEntity
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
 import com.thuvstu.personalencyclopedia.db.entity.EntryThoughtEntity
+import com.thuvstu.personalencyclopedia.db.entity.EntryWebpageEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -15,6 +17,8 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.json.*
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 
 @Singleton
 class ImportPipeline @Inject constructor(
@@ -22,6 +26,7 @@ class ImportPipeline @Inject constructor(
     private val entryDao: EntryDao,
     private val thoughtDao: EntryThoughtDao,
     private val webScraper: WebScraper,
+    private val extensionDao: EntryExtensionDao,
     private val definitionDao: EntryDefinitionDao,
     private val obsidianImporter: ObsidianImporter,
     private val contentHashDuplicateDetector: ContentHashDuplicateDetector,   // §12.7
@@ -284,6 +289,129 @@ class ImportPipeline @Inject constructor(
             errors.add("File error: ${e.message}")
         }
         return ImportResult(successCount = success, errorCount = errors.size, errors = errors, skipCount = skipped)
+    }
+
+    /** ★P6-1: Netscape bookmark.html一括取り込み（軽量Hoarder/Linkwarden代替の第一歩）。
+     * フォルダ構造・ADD_DATEを復元し、webpageエントリーとして高速登録する。
+     * 本文スクレイプは行わない（数百〜数千件でも固まらない）。依存ゼロ（jsoupのみ）。 */
+    data class BookmarkItem(
+        val url: String,
+        val title: String,
+        val folderPath: String,
+        val addDateMs: Long?
+    )
+
+    suspend fun importBookmarksHtml(uri: Uri): ImportResult {
+        val errors = mutableListOf<String>()
+        var success = 0
+        var skipped = 0
+        try {
+            val html = context.contentResolver.openInputStream(uri)?.use {
+                it.bufferedReader(Charsets.UTF_8).readText()
+            } ?: return ImportResult(0, 1, listOf("Cannot open file"))
+            val items = parseNetscapeBookmarks(html)
+            if (items.isEmpty()) {
+                return ImportResult(0, 1, listOf("ブックマークが見つかりません（Netscape形式のbookmark.htmlですか？）"))
+            }
+            for (item in items) {
+                try {
+                    // §12.7: URL重複はスキップ
+                    if (isDuplicate(ImportCandidate(title = item.title, type = "webpage", content = null, sourceUrl = item.url))) {
+                        skipped++
+                        continue
+                    }
+                    val id = UUID.randomUUID().toString()
+                    val now = System.currentTimeMillis()
+                    val domain = try { java.net.URI(item.url).host ?: item.url } catch (_: Exception) { item.url }
+                    val meta = buildJsonObject {
+                        put("bookmarkFolder", item.folderPath)
+                        put("importedFrom", "bookmark.html")
+                    }.toString()
+                    entryDao.insert(
+                        EntryEntity(
+                            id = id,
+                            type = "webpage",
+                            title = item.title,
+                            sourceUrl = item.url,
+                            metadataJson = meta,
+                            createdAt = item.addDateMs ?: now,
+                            updatedAt = now,
+                            accessedAt = now
+                        )
+                    )
+                    extensionDao.insertWebpage(
+                        EntryWebpageEntity(
+                            entryId = id,
+                            url = item.url,
+                            domain = domain,
+                            scraperUsed = "bookmark_import"
+                        )
+                    )
+                    success++
+                } catch (e: Exception) {
+                    errors.add("${item.url}: ${e.message}")
+                }
+            }
+        } catch (e: Exception) {
+            errors.add("File error: ${e.message}")
+        }
+        return ImportResult(successCount = success, errorCount = errors.size, errors = errors.take(20), skipCount = skipped)
+    }
+
+    /** Netscape形式（ブラウザの「ブックマークをHTMLにエクスポート」）のパーサー。純粋関数。 */
+    fun parseNetscapeBookmarks(html: String): List<BookmarkItem> {
+        val out = mutableListOf<BookmarkItem>()
+        try {
+            val doc = Jsoup.parse(html)
+            val roots = doc.select("dl").filter { dl -> dl.parents().none { it.tagName() == "dl" } }
+            // ルートDLが無い壊れた形式では body 全体を走査
+            if (roots.isEmpty()) collectBookmarks(doc.body(), "", out)
+            else roots.forEach { collectBookmarks(it, "", out) }
+        } catch (_: Exception) { /* 空リストを返す */ }
+        return out
+    }
+
+    private fun collectBookmarks(parent: Element, folderPath: String, out: MutableList<BookmarkItem>) {
+        var pendingFolder: String? = null
+        fun flushTo(dl: Element) {
+            val name = pendingFolder
+            collectBookmarks(
+                dl,
+                if (name.isNullOrEmpty()) folderPath
+                else if (folderPath.isEmpty()) name else "$folderPath/$name",
+                out
+            )
+            pendingFolder = null
+        }
+        for (child in parent.children()) {
+            when (child.tagName().lowercase()) {
+                "h3" -> pendingFolder = child.text().trim().takeIf { it.isNotEmpty() }
+                "dt", "dd" -> {
+                    val h3 = child.children().firstOrNull { it.tagName() == "h3" }
+                    if (h3 != null) {
+                        pendingFolder = h3.text().trim().takeIf { it.isNotEmpty() }
+                        child.children().firstOrNull { it.tagName() == "dl" }?.let { flushTo(it) }
+                    } else {
+                        child.children().firstOrNull { it.tagName() == "a" && it.hasAttr("href") }
+                            ?.let { addBookmarkAnchor(it, folderPath, out) }
+                        child.children().firstOrNull { it.tagName() == "dl" }
+                            ?.let { collectBookmarks(it, folderPath, out) }
+                    }
+                }
+                "a" -> if (child.hasAttr("href")) addBookmarkAnchor(child, folderPath, out)
+                "dl" -> flushTo(child)
+                // <p>ラッパー内の要素は同列として扱う（pendingは引き継がない）
+                "p" -> collectBookmarks(child, folderPath, out)
+            }
+        }
+    }
+
+    private fun addBookmarkAnchor(a: Element, folderPath: String, out: MutableList<BookmarkItem>) {
+        val href = a.attr("href").trim()
+        if (!(href.startsWith("http://") || href.startsWith("https://"))) return
+        val title = a.text().trim().ifEmpty { href }.take(200)
+        val addDateMs = a.attr("add_date").toLongOrNull()?.times(1000)
+        out.add(BookmarkItem(url = href, title = title, folderPath = folderPath, addDateMs = addDateMs))
     }
 
     suspend fun importNotionMarkdown(uri: Uri): ImportResult {

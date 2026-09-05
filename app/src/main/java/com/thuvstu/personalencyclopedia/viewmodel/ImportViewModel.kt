@@ -110,6 +110,22 @@ class ImportViewModel @Inject constructor(
         }
     }
 
+    /** ★P6-1: bookmark.html一括取り込み */
+    fun importBookmarkHtml(uri: Uri) {
+        viewModelScope.launch {
+            _state.value = ImportState.Importing
+            try {
+                val result = importPipeline.importBookmarksHtml(uri)
+                _state.value = ImportState.Done(
+                    "ブックマーク取り込み完了: ${result.successCount}件" +
+                        skipSuffix(result.skipCount)
+                )
+            } catch (e: Exception) {
+                _state.value = ImportState.Error(e.message ?: "Unknown error")
+            }
+        }
+    }
+
     fun importUrlList(uri: Uri) {
         viewModelScope.launch {
             _state.value = ImportState.Importing
