@@ -107,4 +107,37 @@ class WhiteboardViewModel @Inject constructor(
             boardId?.let { repo.touchBoard(it) }
         }
     }
+
+    // ── ★P1-1: セクションCRUD（Repo/DAOは実装済み・ここでVMに開通させる）──
+    fun createSection(title: String) {
+        val bId = boardId ?: return
+        val t = title.trim()
+        if (t.isBlank()) return
+        viewModelScope.launch {
+            // ノード配置と同じくランダムにずらして重なりを避ける
+            val rx = 60f + (0..3).random() * 40f
+            val ry = 60f + (0..3).random() * 40f
+            repo.addSection(bId, t, x = rx, y = ry)
+            repo.touchBoard(bId)
+        }
+    }
+
+    fun renameSection(id: String, title: String) {
+        val bId = boardId ?: return
+        val t = title.trim()
+        if (t.isBlank()) return
+        viewModelScope.launch {
+            val current = whiteboardDao.observeSections(bId).first()
+                .firstOrNull { it.id == id } ?: return@launch
+            whiteboardDao.upsertSection(current.copy(title = t))
+            repo.touchBoard(bId)
+        }
+    }
+
+    fun deleteSection(id: String) {
+        viewModelScope.launch {
+            repo.deleteSection(id)
+            boardId?.let { repo.touchBoard(it) }
+        }
+    }
 }

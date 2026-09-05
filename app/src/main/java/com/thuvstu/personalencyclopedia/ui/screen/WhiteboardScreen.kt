@@ -150,6 +150,11 @@ fun WhiteboardBoardScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var showEntryDialog by remember { mutableStateOf(false) }
     var entryQueryText by remember { mutableStateOf("") }
+    // ★P1-1: セクション作成・改名ダイアログ
+    var showSectionDialog by remember { mutableStateOf(false) }
+    var sectionTitleText by remember { mutableStateOf("") }
+    var renameSectionId by remember { mutableStateOf<String?>(null) }
+    var renameSectionText by remember { mutableStateOf("") }
     val density = LocalDensity.current
     var scale by remember { mutableFloatStateOf(1f) }
     var canvasOffset by remember { mutableStateOf(Offset.Zero) }
@@ -164,6 +169,12 @@ fun WhiteboardBoardScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = {
+                        sectionTitleText = ""
+                        showSectionDialog = true
+                    }) {
+                        Icon(Icons.Default.Dashboard, contentDescription = "セクション追加")
+                    }
                     IconButton(onClick = {
                         entryQueryText = ""
                         viewModel.setEntryQuery("")
@@ -266,7 +277,7 @@ fun WhiteboardBoardScreen(
                     drawLine(Color(0x11000000), start = Offset(0f, y * step), end = Offset(w, y * step), strokeWidth = 1f)
                 }
             }
-            // セクション（背景の枠）
+            // セクション（背景の枠＋タイトル改名＋削除。★P1-1でCRUD開通）
             sections.forEach { section ->
                 Box(
                     modifier = Modifier
@@ -280,7 +291,17 @@ fun WhiteboardBoardScreen(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(10.dp).align(Alignment.TopStart)
+                            .clickable {
+                                renameSectionId = section.id
+                                renameSectionText = section.title
+                            }
                     )
+                    IconButton(
+                        onClick = { viewModel.deleteSection(section.id) },
+                        modifier = Modifier.align(Alignment.TopEnd).size(28.dp)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "セクション削除", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
             // ノード
@@ -369,6 +390,63 @@ fun WhiteboardBoardScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showAddDialog = false }) { Text("キャンセル") }
+            }
+        )
+    }
+
+    // ★P1-1: セクション作成ダイアログ
+    if (showSectionDialog) {
+        AlertDialog(
+            onDismissRequest = { showSectionDialog = false },
+            title = { Text("セクションを追加") },
+            text = {
+                OutlinedTextField(
+                    value = sectionTitleText,
+                    onValueChange = { sectionTitleText = it },
+                    label = { Text("タイトル") },
+                    placeholder = { Text("例: 第1章の整理") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.createSection(sectionTitleText.trim())
+                        showSectionDialog = false
+                    },
+                    enabled = sectionTitleText.isNotBlank()
+                ) { Text("追加") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSectionDialog = false }) { Text("キャンセル") }
+            }
+        )
+    }
+
+    // ★P1-1: セクション改名ダイアログ
+    if (renameSectionId != null) {
+        AlertDialog(
+            onDismissRequest = { renameSectionId = null },
+            title = { Text("セクション名を変更") },
+            text = {
+                OutlinedTextField(
+                    value = renameSectionText,
+                    onValueChange = { renameSectionText = it },
+                    label = { Text("タイトル") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        renameSectionId?.let { viewModel.renameSection(it, renameSectionText.trim()) }
+                        renameSectionId = null
+                    },
+                    enabled = renameSectionText.isNotBlank()
+                ) { Text("変更") }
+            },
+            dismissButton = {
+                TextButton(onClick = { renameSectionId = null }) { Text("キャンセル") }
             }
         )
     }
