@@ -6,6 +6,7 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.thuvstu.personalencyclopedia.backup.BackupWorker
 import com.thuvstu.personalencyclopedia.backup.PortableExportWorker
+import com.thuvstu.personalencyclopedia.task.TaskNotifyWorker
 import com.thuvstu.personalencyclopedia.brain.ai.EmbeddingQueue
 import com.thuvstu.personalencyclopedia.brain.ai.GeminiClient
 import com.thuvstu.personalencyclopedia.brain.connection.ConnectionEngine
@@ -103,5 +104,6 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
     private suspend fun scheduleBackgroundWorkers() {
         BackupWorker.schedule(this)
         PortableExportWorker.schedule(this)
+        TaskNotifyWorker.scheduleSweep(this)  // ★通知系: ToDo期限チェック15分周期
     }
 }

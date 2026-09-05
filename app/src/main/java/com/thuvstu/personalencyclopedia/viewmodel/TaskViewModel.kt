@@ -14,13 +14,16 @@ import com.thuvstu.personalencyclopedia.db.entity.TaskEntity
 import com.thuvstu.personalencyclopedia.db.entity.TaskTimeLogEntity
 import com.thuvstu.personalencyclopedia.db.entity.TopicEntity
 import com.thuvstu.personalencyclopedia.integration.StudyPlusClient
+import com.thuvstu.personalencyclopedia.task.TaskNotifyWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
+import android.content.Context
 
 /** ★P5-1: ポモドーロタイマーの段階（25分集中 / 5分休憩の往復）。 */
 enum class PomodoroPhase { IDLE, FOCUS, BREAK }
@@ -32,7 +35,8 @@ class TaskViewModel @Inject constructor(
     private val taskEngine: TaskEngine,
     private val topicDao: TopicDao,
     private val entryDao: EntryDao,
-    private val studyPlusClient: StudyPlusClient
+    private val studyPlusClient: StudyPlusClient,
+    @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
     val tasks: StateFlow<List<TaskEntity>> = taskDao.observeAll()
@@ -103,12 +107,17 @@ class TaskViewModel @Inject constructor(
     fun startTask(taskId: String) {
         viewModelScope.launch {
             taskEngine.startTask(taskId)
+            // ★通知系: 見積もり時間後にタイムボックス終了通知を予約
+            taskDao.getById(taskId)?.let {
+                TaskNotifyWorker.scheduleTimebox(appContext, taskId, it.estimatedMinutes)
+            }
             _message.emit("▶️ タイムボックス開始（見積もり時間のカウントダウン中）")
         }
     }
 
     fun completeTask(taskId: String) {
         viewModelScope.launch {
+            TaskNotifyWorker.cancelTimebox(appContext, taskId)
             val closedLog = taskEngine.completeTask(taskId)
             if (closedLog != null) {
                 val task = taskDao.getById(taskId)
@@ -125,6 +134,7 @@ class TaskViewModel @Inject constructor(
     fun abandonTask(taskId: String) {
         viewModelScope.launch {
             taskEngine.abandonTask(taskId)
+            TaskNotifyWorker.cancelTimebox(appContext, taskId)
             _forcedChoiceTask.value = null
             _timeboxExpiredTask.value = null
             _message.emit("🗑️ タスクを破棄しました（status=abandoned）")

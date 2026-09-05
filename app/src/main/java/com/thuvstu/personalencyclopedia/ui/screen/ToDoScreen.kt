@@ -1,8 +1,14 @@
 package com.thuvstu.personalencyclopedia.ui.screen
 
+import android.Manifest
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.pm.PackageManager
+import android.os.Build
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -55,8 +61,19 @@ fun ToDoScreen(
 
     val context = LocalContext.current
 
+    // ★通知系: Android 13+ は初回に通知権限を要求（拒否されてもアプリ内機能は動く）
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+
     LaunchedEffect(Unit) {
         viewModel.refreshEstimationBias()
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         viewModel.message.collectLatest { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
     }
 
