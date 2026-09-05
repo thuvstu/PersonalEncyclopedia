@@ -11,9 +11,11 @@ import com.thuvstu.personalencyclopedia.server.routes.srsRoutes
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
+import io.ktor.http.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.response.respond
 import io.ktor.server.routing.*
 import kotlinx.serialization.json.Json
@@ -38,6 +40,19 @@ class LocalServer @Inject constructor(
         if (isRunning) return
 
         server = embeddedServer(Netty, port = port) {
+            // ★#S2: CORS導入。LAN内ブラウザ（Vite dev等）からの Authorization 付きfetchを通す。
+            // 個人利用のため host 全許可＋credentials 方式ではなく Bearer ヘッダ方式を維持する。
+            install(CORS) {
+                anyHost()
+                allowHeader(HttpHeaders.Authorization)
+                allowHeader(HttpHeaders.ContentType)
+                allowMethod(HttpMethod.Options)
+                allowMethod(HttpMethod.Get)
+                allowMethod(HttpMethod.Post)
+                allowMethod(HttpMethod.Patch)
+                allowMethod(HttpMethod.Delete)
+            }
+
             install(ContentNegotiation) {
                 json(Json {
                     prettyPrint = true
