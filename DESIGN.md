@@ -1,7 +1,10 @@
 # PersonalEncyclopedia 設計全解説
 
 > 本ドキュメントは、`PersonalEncyclopedia` プロジェクトの全ソースコード・DBスキーマ・ビルド定義・ドキュメント群を横断的に調査し、**現在の実装を正として**設計を解説するものです。
-> 対象リビジョン: `master` (最新: `68a8006` walkthrough14まで)
+> 対象リビジョン: `master` (最新: `7abdd27` walkthrough24まで、2026-09-04調査)
+>
+> **読み方**: §1〜§12は「現状の事実」。§13は実コード検証で発見した「未実装・暫定・矛盾」の一次リスト(全てファイル:行付き)、§15はそこから導いた「次の実装候補の比較表」。他の人が分析・着手できるよう、**全ての指摘に着手ファイルと依存関係を添えた**。
+> 設計の理想形は `docs/PersonalEncyclopedia-統合設計書-v15完全版.md`(確定版) を参照。本書は理想ではなく実装の実態を記す。
 
 ---
 
@@ -19,8 +22,9 @@
 10. [UI層 (Compose + MVVM)](#10-ui層-compose--mvvm)
 11. [テスト戦略](#11-テスト戦略)
 12. [設計パターン集大成](#12-設計パターン集大成)
-13. [注目点・課題・将来性](#13-注目点・課題・将来性)
-14. [パフォーマンス計測基盤 (Round 0)](#14-パフォーマンス計測基盤-round-0)
+13. [未実装・暫定・課題の一次リスト (実コード検証)](#13-未実装・暫定・課題の一次リスト-実コード検証)
+14. [パフォーマンス計測基盤 (Round 0〜現行)](#14-パフォーマンス計測基盤-round-0現行)
+15. [次の実装への接続 (分析・着手用)](#15-次の実装への接続-分析・着手用)
 
 ---
 
@@ -46,6 +50,10 @@
 | 本格化 | `388bb93` など | クイズバリエーション・Webクライアント・開発者ガイド8ファイル |
 | 新採点システム試作 | `05029ec` 〜 `cb92311` | rubric採点 (C1〜C7: データモデル→解析器→エンジン→統合→ガイド) |
 | クイズ最適化 | `21fc535` 〜 `91d175c` | 排他出題分類・演習設定・採点共通化 (R1〜R7) |
+| v15拡張 (Task/SQL/StudyPlusキュー) | walkthrough7 相当 | `task`/`task_time_log`/`entry_history`/`saved_query` (DB v9) + ToDo画面 + SQL Explorer + NoOp StudyPlus |
+| 性能改良 Round0〜1 | walkthrough8〜14 (`68a8006`〜`bf182ca`) | sqlite-vec委譲・WAL/NORMAL・v10索引(PERF-1/2/8)・計測基盤 |
+| 初期データ+Hub透明性 | walkthrough15〜16 | `InitialData` 135件体系化 + Dashboard投入ボタン + UI磨き(検索/詳細/白板/Wiki/クイズ) |
+| DB-1/WB-1 | walkthrough17〜24 (`6451b72`〜`7abdd27`) | SQL Explorerテーブルタップ+自動スクロール / 白板パン・ズーム・ドラッグ補正・中心ズーム・ジェスチャ分離・題名解決・既存 entry 配置 |
 
 コード内に `★最適化R1〜R7`、`★新採点システムC1〜C7`、`★D1`、`★GAP-5` などのマーカーと設計書の節番号 (`§8.4`, `§12.7`) が散在し、**要件トレーサビリティ**が実装コード内に刻まれています。
 
@@ -104,21 +112,29 @@
 │                                                                             │
 │  ┌───────────────────┐  ┌───────────────────────────────────────────────┐   │
 │  │  server/ (Ktor)   │  │  ui/ + viewmodel/ (Compose MVVM)               │   │
-│  │  LocalServer      │  │  NavGraph(28ルート) → Screen → ViewModel       │   │
-│  │  routes/ (8本)    │  │                                                │   │
+│  │  LocalServer      │  │  NavGraph(27ルート) → Screen(20ファイル23関数)  │   │
+│  │  routes/ (8登録・全22EP) │  │  → ViewModel(20個)                        │   │
 │  └─────────┬─────────┘  └─────────────────────┬─────────────────────────┘   │
-│            │    Bearer 認証 (TokenManager)     │                              │
+│            │    Bearer 認証 (TokenManager・平文DataStore) │                              │
 │            ▼                                  ▼                              │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
 │  │  repository/ (9本) — DAO を隠蔽しドメイン操作を提供                     │   │
+│  │  ※ task系は Repository なし・TaskViewModel が DAO+TaskEngine 直結      │   │
 │  └───────────────────────────┬──────────────────────────────────────────┘   │
 │                              │                                              │
 │  ┌────────────┬──────────────┼─────────────┬─────────────┬───────────────┐  │
 │  │  db/       │  brain/      │  importer/  │  backup/    │  plugins/     │  │
-│  │  Room v8   │  検索/接続/   │  スクレイプ/ │  AES-256-GCM│  Rhino (JS)   │  │
-│  │  40表+2View│  SRS/採点/AI  │  Obsidian/   │  SAF/WorkMgr│  PluginEngine │  │
-│  │  7本マイグ  │  rubric採点   │  重複検出    │             │               │  │
+│  │  Room v10  │  検索/接続/   │  スクレイプ/ │  AES-256-GCM│  Rhino (JS)   │  │
+│  │  44実体+2View│  SRS/採点/AI  │  Obsidian/   │  SAF/WorkMgr│  PluginEngine │  │
+│  │  9本マイグ  │  rubric/タスク │  重複検出    │             │  ClassShutterなし│  │
 │  └────────────┴──────────────┴─────────────┴─────────────┴───────────────┘  │
+│        ▲                                        │                            │
+│        │ enqueue(entryId)                       │ AI (Gemini / Ollama)       │
+│        └──── brain/ai/EmbeddingQueue ───────────┴─► Gemini API / Ollama /    │
+│              (FTS更新→ベクトル化→InMemoryVectorIndex)    Google Search     │
+│                                                                     │      │
+│                     integration/StudyPlusClient(NoOp) ──────────────┘      │
+│                     task_time_log.studyPlusSynced にキュー溜め専用          │
 │        ▲                                        │                            │
 │        │ enqueue(entryId)                       │ AI (Gemini / Ollama)       │
 │        └──── brain/ai/EmbeddingQueue ───────────┴─► Gemini API / Ollama /    │
@@ -147,8 +163,10 @@
 | WorkManager | 2.10.0 | + Hilt統合 (`HiltWorkerFactory`) |
 | security-crypto | 1.1.0-alpha06 | EncryptedSharedPreferences, KeyStore |
 | OkHttp / jsoup | 4.12.0 / 1.18.3 | Webスクレイピング |
-| Rhino | 1.7.15 | プラグインJSエンジン |
-| pdfbox-android | 2.0.27.0 | PDFテキスト抽出 |
+| Rhino | 1.7.15 | プラグインJSエンジン (**ClassShutter・タイムアウトなし**。§9.3参照) |
+| Coil | 2.7.0 | 画像読込 (PERF-7で導入) |
+| sqlite-bundled / room-vec-common | 2.5.2 / 0.1.0-alpha01 | `BundledSQLiteDriver().withSqliteVec()` + `vec_distance_cosine` (PERF-8) |
+| pdfbox-android | 2.0.27.0 | PDFテキスト抽出 (docxはzip+Jsoup自前。xls/ppt/txt非対応) |
 | その他 | navigation-compose 2.8.6, lifecycle 2.8.7, coroutines 1.10.1, androidx.startup | |
 
 ### 4.2 Web (React)
@@ -156,16 +174,19 @@
 | 項目 | バージョン/値 | 備考 |
 |---|---|---|
 | React / react-dom | 19.2 | `StrictMode` 有効 |
-| Vite | 8.0 | dev ポート 5173 |
+| Vite | 8.0 | dev ポート 5173 (**Ktorへのproxy設定なし**) |
 | TypeScript | 5.6 | `strict`, `react-jsx` |
 | @xyflow/react | 12.3 | 知識グラフ描画 |
+| パッケージ名/版 | `encyclopedia-web` 0.2.0 | Ktor `/health` は `version:"0.3.0"` を返す(版数体系は分離) |
 | パッケージマネージャ | bun 1.3.14 | `packageManager` 指定 |
 | 状態管理 | なし (素のuseState + localStorage) | zustand は推移的依存のみで未使用 |
 
 ### 4.3 ビルド構成の特徴
 - `settings.gradle.kts` は `RepositoriesMode.FAIL_ON_PROJECT_REPOS` でリポジトリ宣言を中央集権。
 - `packaging.resources.excludes` で Netty の `META-INF` 重複を解決 (`app/build.gradle.kts:26-41`)。
-- RoomスキーマJSONは `app/schemas/` にエクスポートされ、`MigrationTest` が検証に使用。
+- RoomスキーマJSONは `app/schemas/` にエクスポートされるが、**現状 `1,2,6,7,8,9,10.json` のみで `3,4,5.json` が欠落**(§13 #2)。`MigrationTest` は v1/v2/v6/v7/v8起点のみ検証可能で、v10未カバー。
+- release は R8有効 + debug署名 + `<profileable android:shell="true"/>` で実測用。`largeHeap` は walkthrough18で撤去済み(通常ヒープ回帰)。
+- **StudyPlus SDK (4.0.2/JitPack/desugar) は未導入**。`integration/StudyPlusClient` + `NoOpStudyPlusBridge` のキュー溜め専用運用(§9.5参照)。
 
 ---
 
@@ -174,9 +195,12 @@
 ### 5.1 概観
 
 - **ファイル**: `encyclopedia.db` / **バージョン 10** / `exportSchema = true`
-- **40テーブル + 2ビュー**。開発フェーズ(Phase 0〜4 + v7/v8 + PERF-1/2)に沿って追加された履歴が見える (`AppDatabase.kt:10-56`)。
-- **マイグレーション**: 9本 (`MIGRATION_1_2`〜`MIGRATION_9_10`)、**破壊的変更ゼロ**の「新規テーブル追加 + ビュー再作成 + カラム追加」のみ。`fallbackToDestructiveMigration()` は**未設定**(データ破壊フォールバックなし)。
+- **44エンティティ(実表43 + FTS4仮想表1) + 2ビュー** (`AppDatabase.kt:9-68`、`10.json` で tableName 44・viewName 2を確認)。旧記述の「40表」は walkthrough14時点の古い値。
+- **マイグレーション**: 9本 (`MIGRATION_1_2`〜`MIGRATION_9_10`)、**破壊的変更ゼロ**の「新規テーブル追加 + ビュー再作成 + カラム追加 + 索引追加」のみ。`DROP TABLE/DELETE/列削除` は全9本にゼロ。`fallbackToDestructiveMigration()` は**未設定**(データ破壊フォールバックなし)。
 - **ドライバ**: `BundledSQLiteDriver().withSqliteVec()` (sqlite-bundled 2.5.2 + room-vec-common 0.1.0-alpha01, walkthrough13/14)で `vec_distance_cosine` をロード。`EmbeddingDao.vecSearch()` がDB側近傍検索を担い、`HybridSearchEngine` はDB優先→InMemoryフォールバック。
+- **DAOは24本** (`AppDatabase.kt` の abstract fun 24件、`DatabaseModule.kt:55-82` の @Provides 24件が1:1対応)。旧記述の「20個」は誤り。
+- **スキーマ欠落**: `app/schemas/` は `1,2,6,7,8,9,10.json` のみ。**`3,4,5.json` が無い**ため中間状態をJSONで裏付けできず、`MigrationTest` は v1→v9チェーン+単段4種のみで **v10(`index_progress_events_entityId`)未検証**(§13 #2)。
+- **版数の二軸**: DBバージョン(10)とアプリ版数(`AppDatabase.kt` コメント内の v12.0/v15.0表記)は別軸。コメント混在に注意。
 
 ### 5.2 テーブル全一覧
 
@@ -226,8 +250,21 @@
 #### v7 / v8
 | テーブル | 役割 |
 |---|---|
-| `era_master` | **和暦マスタ** (天文1532〜令和2019+、56件シード)。和暦→西暦変換に使用 |
+| `era_master` | **和暦マスタ** (天文1532〜令和2019+、56件シード)。和暦→西暦変換に使用。投入元は `Migration6to7.kt:23-84` |
 | `entry_custom_field` | カスタムフィールド (v8, §5.8.3) |
+
+#### v9 (walkthrough7・v15拡張)
+| テーブル | 役割 |
+|---|---|
+| `task` | タスク本体。`status: pending/in_progress/done/failed/abandoned`、`postponeCount`、`linkedEntryId/TopicId`、`studyPlusSynced` は time_log 側 |
+| `task_time_log` | 作業時間ログ。`endedAt null` =進行中。`studyPlusSynced=0` が未同期キュー |
+| `entry_history` | entry本文のスナップショット履歴。`changeSummary` はAI生成予定だが現状空欄が多い(§13 #12) |
+| `saved_query` | SQL Explorerの保存クエリ |
+
+#### v10 (PERF-2)
+| 差分 | 役割 |
+|---|---|
+| `index_progress_events_entityId` | `progress_events(entityId)` への索引追加のみ (`Migration9to10.kt:14`)。**MigrationTest未カバー**(§13 #2) |
 
 #### ビュー
 | ビュー | 定義 | 用途 |
@@ -237,10 +274,13 @@
 
 ### 5.3 リレーション設計の4パターン
 
-1. **厳密FK + CASCADE (1:1拡張)**: タイプ別拡張テーブルは `entryId` をPK兼FKにし `onDelete=CASCADE`。entry を消せば拡張も消える。
+1. **厳密FK + CASCADE (1:1拡張)**: タイプ別拡張テーブルは `entryId` をPK兼FKにし `onDelete=CASCADE`。entry を消せば拡張も消える。対象: 13種拡張 + `search_document` + `embedding` + `entry_attachment` + `entry_tag`/`entry_topic`(両方向)。
 2. **多対多中間テーブル**: `entry_tag`, `entry_topic` は複合PK + 両方向CASCADE。
-3. **論理FK (宣言なし)**: `srs_review.entryId`, `quiz_bank.sourceEntryId`, `connection.entryAId/entryBId`, `whiteboard_node.*` はエンティティ上でFK宣言せずインデックスのみ。**削除制約より柔軟性を優先**する意図。
+3. **論理FK (宣言なし)**: 以下はエンティティ上でFK宣言せずインデックスのみ。**削除制約より柔軟性を優先**する意図だが、孤児行の掃除はアプリ層(Repository/Worker)の規約頼み:
+   `srs_review.entryId` / `quiz_bank.sourceEntryId・topicId・pluginId` / `quiz_attempts.quizId` / `connection.entryAId/entryBId・canonicalA/B` / `connection_candidate.entryAId/entryBId・connectionId` / `whiteboard_node.boardId/entryId/noteId/sectionId` / `whiteboard_section.boardId` / `topic.parentId`(自己参照) / `entry_custom_field.entryId` / `task.linkedEntryId/linkedTopicId` / `task_time_log.taskId` / `entry_history.entryId` / `entry_event.placeEntryId` / `ai_explanations(sourceType,sourceId)`・`progress_events(entityType,entityId)`(ポリモーフィック参照)。
 4. **自己参照**: `topic.parentId` (2階層)、`connection` の無向は `canonicalA < canonicalB` の正準形。
+
+> 注意: `whiteboard_node` の「entryかnoteの排他参照」はDB制約(CHECK)なしで両NULL・両非NULLを許す。`connection_candidate` の unique は `(entryAId,entryBId)` のみで type違い・逆向きを区別できない。いずれも将来のCHECK制約・unique粒度見直しの候補(§13 #7)。
 
 ### 5.4 特徴的なテーブル設計
 
@@ -254,7 +294,15 @@
 リスト/辞書は `xxxJson` TEXT列にシリアライズ (`choicesJson/authorsJson/messagesJson/manifestJson/metadataJson` など)。**頻繁なスキーマ変更を回避**する実務的パターン。
 
 #### (d) マイグレーション内シード
-`era_master` の56件は `Migration6to7.kt` 内の `insertEra()` (`INSERT OR REPLACE`) で投入。アプリ版数(v12)とDBバージョン(8)は別軸で進んでいる点に注意。
+`era_master` の56件は `Migration6to7.kt` 内の `insertEra()` (`INSERT OR REPLACE`) で投入。アプリ版数(v12/v15表記)とDBバージョン(10)は別軸で進んでいる点に注意。
+
+### 5.6 シードの二重構造 (DemoData vs InitialData)
+- `DemoData.seed()`: 起動 Phase A で実行。topic 4・定義 6・思考 2・クイズ 10・接続 4・白板 2・Wiki 2の最小セット。空DBガード(`observeCount>0` で return)。
+- `InitialData.seedIfEmpty()`: **Dashboardの投入ボタンからの手動実行のみ**(自動投入なし)。古典/数学/英語/地歴/法/経済の定義125件(コメントの「135件」は実測と10件乖離) + 思考 6 + クイズ 30 + Wiki 6 + 接続 20。こちらも空DBガード。
+- 両方が空DBガードのため**先勝ちが他方を永久ブロック**する。現状は「Demoが自動・Initialが手動」で競合しないが、順序の明文化がない(§13 #7)。
+
+### 5.7 読取専用SQL実行器 (SQL Explorerの土台)
+`db/ReadOnlySqlExecutor.kt`: `SELECT`/`WITH` 先頭強制 + 書込キーワード16種のブロックリスト + `PRAGMA query_only=ON→OFF` + 500行cap。ブロックリスト依存のため厳密性は `query_only` が実質防御線。Room単一コネクション前提の綱渡りであり、マルチコネクション化で崩れる旨をコメント自認。幸いKtor/Web非公開のローカル専用のため現状リスクは低い。
 
 ### 5.5 複雑なDAOクエリ集
 
@@ -272,7 +320,7 @@
 
 ## 6. 脳層 (Brain Layer)
 
-`brain/` は7つのドメインで構成される「知能系エンジン群」(約3,400行)。DIは `@Singleton` + `@Inject constructor`、無状態エンジンは `object`。
+`brain/` は8つのドメインで構成される「知能系エンジン群」。DIは `@Singleton` + `@Inject constructor`、無状態エンジンは `object`。唯一のHilt Module は `quiz/rubric/provider/GradingProviderModule`(4IF→`GeminiGradingProviders`単一束縛)。
 
 ```
 brain/
@@ -287,6 +335,7 @@ brain/
 ├── ai/         GeminiClient, OllamaClient, FactCheckEngine, EmbeddingQueue, AiModels
 ├── connection/ ConnectionEngine
 ├── coaching/   CoachingEngine
+├── task/       TaskEngine (本書旧版の「7ドメイン」には欠落していた。第8ドメイン)
 └── (top)       ResurfacingEngine, TagSuggestionEngine
 ```
 
@@ -350,6 +399,7 @@ QuizGraderService.grade() (★最適化R6: App⇔サーバー共通)
 │
 ├─ 3. SemanticGrader (不正解 + qa/essay + API利用可)
 │     └─ コサイン ≥0.85 で正解に昇格, method="semantic"
+│         ※ KDocの「0.70以上で部分点」は**未実装**(実装は0.85の二値のみ。§13 #8)
 │
 └─ スコア計算
      ├─ 正解:   max(0, 1 - 0.3×hintsRevealed)        (ヒント1個で-30%)
@@ -395,6 +445,7 @@ RubricJudge (LLM judge or heuristic)
 
 #### プロバイダー層 — モデル差し替え点
 `IEmbeddingProvider / IEntailmentProvider / ICrossEncoderProvider / IJudgerProvider` の4インターフェース(**契約: 不可用はnull**)。`GradingProviderModule`(Hilt) が全て `GeminiGradingProviders` にバインド。**このモジュールを差し替えるだけで端内モデル(Qwen3-NLI等)へ移行可能**(`GradingProviderModule.kt:11-15`)。LLMの乱出力は**括弧深度解析器 `extractJsonObject`** で最初のJSONオブジェクトを取り出す堅牢化。
+ただし現状 `entailment→null` / `crossEncoder score→null` の2IFは**未実装明示**(`GeminiGradingProviders.kt:42,44`、`RubricConfidence` 側も `entailmentUsed=false, crossEncoderUsed=false` 固定)。rubricは keyword/concept(embedding)/numeric/polarity/relation/explanation の決定論+LLM judgeで動いており、entailment系は将来の拡張点。
 
 ### 6.5 AIドメイン (ai/)
 
@@ -412,10 +463,25 @@ RubricJudge (LLM judge or heuristic)
 
 | エンジン | 役割・アルゴリズム |
 |---|---|
-| `ConnectionEngine` | 9種の関係タイプ定義シード。自動候補: コサイン ≥0.88 で `related` 提案。手動接続は正準形で重複回避、`approveCandidate` で正式化 |
-| `ResurfacingEngine` | **再浮上**: 30〜180日未訪問×半減期(webpage 60日/definition 365日…)×指数減衰+リニア減衰の合成スコア。**整理提案**: 180日以上未訪問のwebpage/liked/ai_conv。削除・muteはしない |
-| `CoachingEngine` | `explainMistake`(誤答解説) / `analyzeWeakPoints`(トピック別に誤答20件から弱点分析, 150字以内)。AI不可時は固定文案 |
+| `ConnectionEngine` | 9種の関係タイプ定義シード。自動候補: コサイン ≥0.88・top10・`related`固定で提案。既定は無効(`autoConnectEnabled=false`)。手動接続は正準形で重複回避、`approveCandidate` で正式化 |
+| `ResurfacingEngine` | **再浮上**: 30〜180日未訪問×半減期(webpage 60日/liked 45/ai_conv 30/thought 120/definition・person・org・place 365/book・event 180/video・document・media 90…)×指数減衰+リニア減衰の合成スコア(`decay*0.6+recency*0.4`)。**整理提案**: 180日以上未訪問のwebpage/liked/ai_conv。削除・muteはしない |
+| `CoachingEngine` | `explainMistake`(誤答解説・200字以内) / `analyzeWeakPoints`(トピック別に誤答20件から弱点分析, 150字以内)。全件 `ai_explanations` キャッシュ。AI不可時は固定文案4種 |
 | `TagSuggestionEngine` | Levenshtein 正規化類似度 ≥0.75 の既存タグを提案(表記揺れ統合) |
+| `TaskEngine` | §6.8参照。見積乖離率・先延ばし上限3回・タイムボックス当日23:59:59固定 |
+
+### 6.8 タスクドメイン (task/) — 旧版で欠落していた第8ドメイン
+v15 (§8.10) で追加。`brain/task/TaskEngine.kt` のみ。**Repository層なし** — `TaskViewModel` が `TaskDao` + `TaskTimeLogDao` + `TaskEngine` に直結する。
+
+| メソッド | 動作 |
+|---|---|
+| `startTask` | openLog作成 + `in_progress` + `progress_events(started)` |
+| `completeTask` | log close + `done` + StudyPlusキュー(`studyPlusSynced=0`)。実投稿はNoOp(§9.5) |
+| `abandonTask` / `failTask` | `abandoned` / `failed` + progress記録 |
+| `postponeTask` | `postponeCount+1`。`MAX_SILENT_POSTPONES=3` 超過で `RequireForcedChoice`(回避不可モーダル) |
+| `forceFinishToday` | 期限を当日23:59:59.000に固定 |
+| `estimationBiasReport` | `actual/estimated` 平均(空→null)。見積精度の可視化 |
+
+`TaskViewModel` が `StudyPlusClient.syncTaskTimeLog`(未設定時は静かにskip)を呼ぶ。テストは `TaskEngineTest`(Fake DAO・8 @Test)。
 
 ### 6.7 brain層の設計思想のまとめ
 
@@ -427,12 +493,13 @@ RubricJudge (LLM judge or heuristic)
 
 ### 7.1 LocalServer — 薄いエントリポイント
 - `@Singleton`。Netty 埋め込みサーバー、既定ポート 8080 (設定で変更可)。
-- プラグイン構成: `ContentNegotiation`(JSON, `ignoreUnknownKeys=true`, `encodeDefaults=true`) + `Authentication`(Bearer "token-auth")。
-- **`/health` のみ認証なし**、他は `/api` 配下に8本のルート拡張関数を登録 (`LocalServer.kt:62-85`)。
+- プラグイン構成: `ContentNegotiation`(JSON, `ignoreUnknownKeys=true`, `encodeDefaults=true`) + `Authentication`(Bearer "token-auth")。**`CORSプラグイン未導入**(依存・install共になし)。ブラウザ→8080の `Authorization` 付き要求はプリフライトで失敗し得る(§13 #1)。
+- **`/health` のみ認証なし**、他は `/api` 配下に8登録・全22エンドポイント (`LocalServer.kt:62-85`)。
 - 設計書 §10.1「ルーティング分割アーキテクチャ」: エンドポイント実装は `server/routes/`、DTO は `server/dto/` に集約。新ルート追加は「登録行を1行足すだけ」。
 
 ### 7.2 認証 — TokenManager
-- UUID トークンを **DataStore(`server_prefs`)** に永続化。`getOrCreateToken` / `regenerateToken`。
+- UUID トークンを **平文 DataStore(`server_prefs`)** に永続化。`getOrCreateToken` / `regenerateToken`。**EncryptedSharedPreferencesではない** — Gemini/StudyPlus鍵が暗号化側なのと対照的にサーバートークンだけ無暗号(§13 #5)。
+- PC側も localStorage平文 + 転送は `http://` 平文。LAN盗聴で漏洩し得る。代替としてLAN警告UIを実装(設計書 A-10)。
 - Ktor `bearer("token-auth")` が一致を検証 → `UserIdPrincipal("owner")`。
 - 設定画面でトークン表示・コピー・再発行。**TLSなし平文HTTP** の代替としてLAN警告UIを実装(設計書 A-10)。
 
@@ -448,7 +515,7 @@ RubricJudge (LLM judge or heuristic)
 | GET | `/api/search?q&limit&type` | FTS全文検索 | Bearer |
 | GET | `/api/srs/due?limit` / `/api/srs/count` | 復習対象一覧/件数 | Bearer |
 | POST | `/api/srs/review` | SM-2復習記録 | Bearer |
-| GET | `/api/quiz?limit&type` / `/api/quiz/{id}` / `/api/quiz/count` | 出題・取得・件数 | Bearer |
+| GET | `/api/quiz?limit&type` / `/api/quiz/{id}` / `/api/quiz/count` | 出題・取得・件数。**注意: `/count` は `/{id}` の後定義のため `id="count"` に吸収され404(到達不能。`QuizRoutes.kt:28,77`)** | Bearer |
 | POST | `/api/quiz/{id}/attempt` | **採点+履歴記録(QuizGraderService共通)** | Bearer |
 | GET | `/api/connections?entryId` | 接続一覧 | Bearer |
 | POST | `/api/connections` | 接続作成(**正準形で無向重複回避**) | Bearer |
@@ -462,7 +529,7 @@ RubricJudge (LLM judge or heuristic)
 DTO は `ApiDtos.kt` に14種。`QuizAttemptRequest.answeredWithinMs` が速度ボーナスに対応(`ApiDtos.kt:67-71`)。
 
 ### 7.4 ServerDependencies — 「依存の束」パターン
-9つのDAO + `QuizGraderService` を束ねて各ルートへ渡す (`ServerDependencies.kt:18-29`)。**★最適化R6** により採点ロジックがアプリと完全共通。
+DAO 8個 + `QuizGraderService` を束ねて各ルートへ渡す (`ServerDependencies.kt:18-29`)。**★最適化R6** により採点ロジックがアプリと完全共通。旧記述の「9つのDAO」は誤り(8DAO+1サービスが正)。
 
 ---
 
@@ -470,20 +537,22 @@ DTO は `ApiDtos.kt` に14種。`QuizAttemptRequest.answeredWithinMs` が速度�
 
 ### 8.1 技術構成
 - React 19 + Vite 8 + TypeScript (strict) + **@xyflow/react**。状態管理ライブラリ不使用(素の `useState` + localStorage)。
-- `api/client.ts` が **モジュールレベル settings シングルトン** (`loadSettings/saveSettings/getSettings`, キー `encyclopedia_settings`)。`request<T>()` が fetch ラッパーで Bearer ヘッダ + JSON を自動付与。TS インターフェースはサーバーDTOと1:1対応。
+- `api/client.ts` が **モジュールレベル settings シングルトン** (`loadSettings/saveSettings/getSettings`, キー `encyclopedia_settings`)。設定は**平文JSON** `{host,port,token}`(既定 `192.168.1.100:8080`)、`BASE_URL` は `http://` 固定。`request<T>()` が fetch ラッパーで Bearer ヘッダ + JSON を自動付与。TS インターフェースはサーバーDTOと1:1対応。
 - 型マスタ `lib/entryTypes.ts` は13型のラベル・色を Web側に重複定義(APIに型一覧エンドポイントが無いため)。
+- `vite.config.ts` にKtorへのproxy設定なし。
 
 ### 8.2 画面構成 (App.tsx の4タブ)
+| タブ | コンポーネント | 機能 | 備考 |
+|---|---|---|---|
+| エントリ | `EntryList` + `EntryDetail` + `GraphView` | 3ペイン分割。検索+型チップ絞り込み、Markdown描画、グラフ表示 | 型チップはクライアント側フィルタ |
+| 単語帳 | `SrsPanel` | 復習カード → 答え表示 → grade 0-5 → 次カード | |
+| クイズ | `QuizPanel` | 形式チップ(qa/mcq/fill_blank)。MCQ選択/記述入力。**経過時間計測**、`__UNLEARNED__` 対応、正解+解説 | |
+| Ollama | `OllamaPanel` | LAN内Ollamaへ**直接** `/v1/chat/completions`。設定はlocalStorage。Android起動不要で補助AI使用可能(§7.7) | Ktorを経由しない |
 
-| タブ | コンポーネント | 機能 |
-|---|---|---|
-| エントリ | `EntryList` + `EntryDetail` + `GraphView` | 3ペイン分割。検索+型チップ絞り込み、Markdown描画、グラフ表示 |
-| 単語帳 | `SrsPanel` | 復習カード → 答え表示 → grade 0-5 → 次カード |
-| クイズ | `QuizPanel` | 形式チップ(qa/mcq/fill_blank)。MCQ選択/記述入力。**経過時間計測**、`__UNLEARNED__` 対応、正解+解説 |
-| Ollama | `OllamaPanel` | LAN内Ollamaへ**直接** `/v1/chat/completions`。設定はlocalStorage。Android起動不要で補助AI使用可能(§7.7) |
+**サーバ実装済みだがWeb導線なし** (次実装の余地。§15 #W1): `getConnections`/`createConnection`(接続CRUD)・候補approve/reject・`getHeatmap`(進捗)・`getSrsDueCount`・`DELETE entries`・`PATCH favorite`・`GET quiz/{id}`・`GET quiz/count`・`GET plugins`。`client.ts` に関数はあるが呼出0件のものを含む。
 
 ### 8.3 GraphView — React Flow による知識グラフ
-1. `/api/graph` でエッジ取得 → **N+1 で各ノードを `/api/entries/{id}` で並列フェッチ**(失敗時はID表示でフォールバック)。
+1. `/api/graph` でエッジ取得 → **N+1 で各ノードを `/api/entries/{id}` で並列フェッチ**(失敗時はID表示でフォールバック)。50k件規模では悪化するため、将来はサーバ側でノード同梱のAPI拡張が候補(§15 #W2)。
 2. **深さ別円環レイアウト**: エッジの depth から中心を決定し、同一深度ノードを `angle=2π·idx/count-π/2, radius=depth·240` で円周配置(`useMemo`)。
 3. ノードは型色を背景に、中心は太枠。エッジは `strength` で線幅、`relationType` ラベル。
 
@@ -516,16 +585,17 @@ Android設定画面: トークン表示 → PC ConnectionBar: ホスト/ポー�
 - **`WebScraper` — 2段階フォールバック**: Stage1 で Jsoup が `<article>/<main>/[role=main]` を優先しノイズ除去(script/nav/footer等)して本文抽出 → **本文100文字未満なら Stage2 で Gemini に「要約せず全文」を返させる**(最大15000文字)。`scraperUsed` に使用経路を記録。readingTimeS は400字/秒想定。最後に `embeddingQueue.enqueue`。
 - **`DuplicateDetector`**: `UrlDuplicateDetector`(sourceUrl一致) + `ContentHashDuplicateDetector`(タイトル絞り込み→正規化本文一致) を **OR合成** (`ImportPipeline.kt:38-40`)。
 - **`AutoLinker` — Trie木の最長一致**: 閲覧時UI装飾のみで **connectionには書き込まない**という明示的な設計方針 (`AutoLinker.kt:9-13`)。`AutoLinkerProvider` が `@Volatile`+`Mutex` の二重チェックロッキングで最大5万件を1回だけ構築。
-- **`ObsidianImporter` — 2パス方式**: ①エントリ作成(forward reference解決) ②wiki-linkごとに `references` 接続作成。
+- **`ObsidianImporter` — 2パス方式**: ①エントリ作成(forward reference解決) ②wiki-linkごとに `references` 接続作成。**既知の欠陥**: `ObsidianImporter.kt:46` が `entryDao.getById(note.title)` にタイトルをIDとして渡すため通常データでは常にnull → 重複検査が機能せず直接呼出時は複製される(§13 #9)。単体パイプライン経由時は `DuplicateDetector` が別途救済。
+- **`DocumentExtractor`**: **pdf + docx のみ**(xls/ppt/txt非対応)。
 
 ### 9.2 バックアップ (backup/)
 
 | コンポーネント | 仕組み |
 |---|---|
-| `BackupEncryptor` | **AES-256-GCM**。鍵は AndroidKeyStore(`encyclopedia_backup_key`)内に保持されファイルに含まれない(デバイスバインド)。出力形式 `[12byte IV][ciphertext+tag]` |
+| `BackupEncryptor` | **AES-256-GCM**。鍵は AndroidKeyStore(`encyclopedia_backup_key`)内に保持されファイルに含まれない(デバイスバインド)。出力形式 `[12byte IV][ciphertext+tag]`。**注意: ファイル全体を `readBytes()` 一括読込**(大規模DBでOOMの留意。§13 #6) |
 | `BackupExporter` | **SAF経由のクラウド非依存バックアップ**(Drive API不要)。復元時はSQLiteヘッダ(`"SQLite format 3\0"` 16byte)を検証してからDB差し替え |
-| `BackupWorker` | WorkManager 日次・**充電中+Wi-Fi限定**。WAL checkpoint→DBコピー→暗号化→30世代プルーニング→SAFリモート or `"LOCAL_ONLY"` |
-| `PortableExportWorker` | 週次・充電中。Markdown/CSV/JSON の3形式を **純粋関数で書き出し**(テスト容易性) |
+| `BackupWorker` | WorkManager 日次・**充電中+Wi-Fi限定+バッテリ低下でない**。WAL checkpoint→DBコピー→暗号化→30世代プルーニング→SAFリモート or `"LOCAL_ONLY"`。失敗時 `runAttemptCount<3` でretry。秒精度ファイル名のため同秒2回実行で衝突の余地 |
+| `PortableExportWorker` | 週次・充電中。Markdown/CSV/JSON の3形式を **純粋関数で書き出し**(テスト容易性)。**注意: 無暗号・世代管理なし・SAF転送なし・上限100k件** — `filesDir` 残置のため端末紛失で消失し得る(§13 #10) |
 | `EntryExporter` | 手動エクスポート(MARKDOWN/CSV/JSON)。SAFへ直接書き込み。JSONはインポートと往復互換 |
 
 ### 9.3 プラグインエンジン (plugins/)
@@ -534,9 +604,16 @@ Android設定画面: トークン表示 → PC ConnectionBar: ホスト/ポー�
 - `installPlugin`: 構文チェック + `manifest/grade/renderSchema` の存在検証後、`filesDir/plugins/$id.js` に保存。
 - `gradeWithPlugin`(外部採点) / `getRenderSchema`(**UIスキーマ駆動レンダリング**) を提供。
 - **ビルトイン**: MCQ(4択)プラグインがJS文字列で同梱、起動時に自動インストール。
-- セキュリティ: 標準スコープのみのサンドボックス(Android APIブリッジなし、純関数のみ)。
+- セキュリティ: **「標準スコープのみ・Androidブリッジなし」という構成上の制約だけ**。`ClassShutter`・実行タイムアウト・メモリ上限なし。加えて `PluginEngine.kt:130-136` で回答文字列をJSソースへ直接補間するため、回答中の `"`・改行・JSON割込みで**任意JS実行/誤採点の余地**(§13 #4)。現状「サンドボックス」は名ばかりで、信頼できないプラグインの導入は見送ること。
+
+### 9.5 外部連携・デバッグ基盤 (integration/ + SQL Explorer)
+
+- **`integration/StudyPlusClient` (1ファイルのみ)**: `isConfigured/isEnabled/startAuth/syncTaskTimeLog/syncAllPending/observePendingSyncCount`。同期キューは `task_time_log.studyPlusSynced`。**SDK実呼び出しは `NoOpStudyPlusBridge` に隔離され常にfalse** = 実投稿不能・キュー溜め専用。v15 §7.8のSDK 4.0.2/JitPack/desugar導入は未実施(§13 #12)。`syncAllPending` の `topicName="科目:$linkedTopicId"` はID素通しの仮置き。
+- **SQL Explorerは `integration/` ではなく Android内ローカル専用デバッグツール**: `ReadOnlySqlExecutor` + `SqlExplorerViewModel` + `SqlExplorerScreen` + `SavedQueryDao`。Ktorルート・Web UIなし。防御は§5.7参照。保存クエリは `saved_query` に永続化。
 
 ### 9.4 リポジトリ層 (repository/) — 9本
+
+> 注意: task系(ToDo)は Repository なし。`TaskViewModel` が DAO + `TaskEngine` に直結する(§6.8)。
 
 | リポジトリ | 特徴 |
 |---|---|
@@ -550,7 +627,7 @@ Android設定画面: トークン表示 → PC ConnectionBar: ホスト/ポー�
 
 ### 9.5 DI (Hilt)
 
-- `DatabaseModule`: Room DB + **20個のDAOを個別 @Provides**。`BundledSQLiteDriver().withSqliteVec()` / WAL(`JournalMode.WRITE_AHEAD_LOGGING`+`PRAGMA synchronous=NORMAL`) / `queryExecutor(4)`+`transactionExecutor(2)` で高スペック端末の並行書き込みを活かす(PERF-1/8)。
+- `DatabaseModule`: Room DB + **24個のDAOを個別 @Provides**。`BundledSQLiteDriver().withSqliteVec()` / WAL(`JournalMode.WRITE_AHEAD_LOGGING`+`PRAGMA synchronous=NORMAL`) / `queryExecutor(4)`+`transactionExecutor(2)` で高スペック端末の並行書き込みを活かす(PERF-1/8)。
 - `ServerModule`: TokenManager 提供。
 - `PersonalEncyclopediaApp` が Phase A(DB/シード) → Phase B(Brain層) → Phase C(WorkManager) の**3フェーズ段階的初期化**を `runStep` で実行。
 
@@ -561,18 +638,18 @@ Android設定画面: トークン表示 → PC ConnectionBar: ホスト/ポー�
 ### 10.1 起動フロー
 ```
 AndroidManifest: Application=PersonalEncyclopediaApp, MainActivity=singleTop
-PersonalEncyclopediaApp.onCreate ─┬─ Phase A: APIキー暗号化移行 / seedTypeDefs / ビルトインプラグイン / DemoData / SeedData
+PersonalEncyclopediaApp.onCreate ─┬─ Phase A: APIキー暗号化移行 / seedTypeDefs / ビルトインプラグイン / DemoData(自動・空時のみ) / SeedData
                                   ├─ Phase B: vectorIndex.load / recoverJobs / startWorker / rebuildAllSearchDocuments
                                   └─ Phase C: BackupWorker / PortableExportWorker スケジュール
 MainActivity.onCreate → handleIncomingIntent (ACTION_SEND: URL→scrape, テキスト→thought)
   → setContent { EncyclopediaTheme { MainContent } }
 ```
-
+- **Demo vs Initialの区別**: `DemoData.seed` は起動時自動(最小セット)。`InitialData.seedIfEmpty` (135件体系カリキュラム) は**自動投入なし** — Dashboardの投入ボタンからの手動実行のみ(§5.6)。
 - **共有インテント対応**: 他アプリからURL/テキストを受け取り、スクレイプ or メモ作成 → `IncomingNavigation.setPendingEntry(id)` → Compose側 `LaunchedEffect` が監視して `entry/$id` へ遷移 (`MainActivity.kt:81-88`)。**Activity→Compose Navigationの橋渡しキュー** (§11.4)。
 
-### 10.2 ナビゲーション — 28ルートの単一NavHost
-- `Routes` オブジェクトに28ルート定義、フラットな単一 NavHost (`NavGraph.kt:43-254`)。`startDestination = DASHBOARD`。
-- ボトムバー5画面: ホーム/検索/復習/クイズ/統計。トップレベル遷移は `popUpTo(DASHBOARD)` でスタックを畳む。
+### 10.2 ナビゲーション — 27ルートの単一NavHost
+- `Routes` オブジェクトに27ルート定義、フラットな単一 NavHost (`NavGraph.kt:15-44, 58-273`)。`startDestination = DASHBOARD`。旧記述の「28ルート」は誤り。
+- ボトムバー5画面: ホーム/検索/復習/クイズ/統計(`MainActivity.kt:91-93` の `topLevelRoutes`)。白板/Wiki/ToDo/SQL Explorer等はボトム外・TopAppBar戻り。トップレベル遷移は `popUpTo(DASHBOARD)` でスタックを畳む。
 - エディタ保存後は `popBackStack(); navigate("entry/$id")` の共通パターン。
 - 型別編集は `EntryDetail` が type で `thought/edit`/`definition/edit`/`entry/edit/$type` にディスパッチ。
 
@@ -589,18 +666,23 @@ MainActivity.onCreate → handleIncomingIntent (ACTION_SEND: URL→scrape, テ�
 | Stats | ストリーク/学習日数/12週間ヒートマップ/`CoachingEngine` 弱点分析 |
 | Import | CSV/MD/JSON/URL一括+Obsidian貼り付け+AIクイズ一括生成、進捗表示 |
 | Settings | SAF自動バックアップ/Geminiキー/自動接続/Ktorサーバー+トークン(LAN警告)/SRS切替/クイズ演習設定6種/AI設定/メンテナンス |
-| Whiteboard | ボード一覧+キャンバス(ドラッグ移動/セクション矩形) |
-| Wiki / DatabaseManagement / Connections / Candidates / ThoughtEdit / DefinitionEdit / QuizList / QuizEdit | 各機能 |
+| Whiteboard | ボード一覧+キャンバス(パン/ズーム0.3-3x・中心基準・ドラッグ補正・ジェスチャ分離・題名解決・既存entry配置ダイアログ)。残: 接続線・セクション作成/リサイズ・インライン編集 |
+| ToDo | CRUD+タイムボックス countdown+強制選択モーダル(先延ばし3回超)+見積乖離カード。Repositoryなし・DAO直結 |
+| SqlExplorer | 読取専用クエリ実行+結果表+スキーマブラウザ+DB統計+integrity+保存クエリ。テーブルタップ→`SELECT * LIMIT 100`自動実行+結果へ自動スクロール(DB-1済) |
+| DatabaseManagement | 型別件数+SQL Explorer導線。**「Hub」に相当するScreenは無い** — walkthrough16の「Hub透明性」はDashboard投入ボタン+DB統計表示の運用を指す |
+| Wiki / Connections / Candidates / ThoughtEdit / DefinitionEdit / QuizList / QuizEdit | 各機能。空状態のみの画面なし(全てCRUD完備以上) |
 
-### 10.4 リッチテキスト描画 — 2系統
+### 10.4 リッチテキスト描画 — 2系統 + 設計予約
 - **RichContentView (WebView方式・メイン採用)**: `[[title|alias]]`→`wiki://` リンク、`{漢字|よみ}`→`<ruby>`、CDNの `marked@11.1.1` + `KaTeX@0.16.9` で Markdown+数式描画。JS失敗時 `innerText` フォールバック (`RichContentView.kt:97-99`)。
 - **MarkdownText (Composeネイティブ)**: `AnnotatedString` 方式。`**bold**`/`*italic*`/`` `code` ``/`[[wiki-link]]`/見出し/リスト/引用/コードブロック + `AutoLinker` のTrie最長一致リンク。**現在は未使用**(WebView版が主流)。
+- **設計予約(定義のみ・参照ゼロ)**: `UiSchemaRenderer`(プラグイン `renderSchema` 将来用) / `EntryTypeSections`(個別Section直使いのため孤児疑い) / `AppEventBus`(emit/subscribe共にゼロ)。いずれも削除せず温存中(§13 #3)。
 
 ### 10.5 動的UI — 設計予約コンポーネント
 - **`UiSchemaRenderer`**: JSONスキーマ駆動の動的フォームレンダラー (`column/text/input/multipleChoice`)。プラグインの `renderSchema` 出力を描画する将来利用を想定。
 - **`EntryTypeSections`**: 全13型の型固有プロパティカードをディスパッチ (`ThoughtSection`〜`AiConvSection`)。共通部品 `SectionCard/InfoRow/ExpandableText`。
 
-### 10.6 ViewModel 設計パターン (21個)
+### 10.6 ViewModel 設計パターン (20個)
+- 全VMが `@HiltViewModel` + コンストラクタインジェクション。旧記述の「21個」は誤り(実測20)。一覧: Connection/Dashboard/DatabaseManagement/DefinitionEdit/EntryDetail/EntryEdit/EntryPreview/Import/QuizEdit/QuizList/Quiz/Search/Server(Settings専用)/SqlExplorer/Srs/Stats/Task/ThoughtEdit/Whiteboard(`entryQuery/entryResults/resolvedTitles` 付)/Wiki。
 - 全VMが `@HiltViewModel` + コンストラクタインジェクション。
 - **Reactive state**: `StateFlow` + `stateIn(WhileSubscribed(5000), 初期値)` でDBのFlowを変換。
 - **画面固有状態**: `sealed class` で状態機械を表現 (`QuizUiState` は SelectMode/Loading/Empty/Question/Answered/Enumerate…/SessionComplete を when 分岐)。
@@ -616,6 +698,7 @@ MainActivity.onCreate → handleIncomingIntent (ACTION_SEND: URL→scrape, テ�
 ## 11. テスト戦略
 
 ### 11.1 JVM ユニットテスト (`app/src/test`)
+**99 @Test / 16ファイル** (旧記述の「9本」は walkthrough14以前の古い値)。`Fakes.kt` はヘルパーでテスト本体ではない。
 | テスト | 対象 |
 |---|---|
 | `RubricParserTest` / `RubricGraderTest` / `RubricJudgeTest` / `RubricFeatureExtractorTest` / `RubricConfidenceTest` | rubric採点パイプライン各部 |
@@ -623,11 +706,12 @@ MainActivity.onCreate → handleIncomingIntent (ACTION_SEND: URL→scrape, テ�
 | `QuizGraderServiceTest` / `MultiStageGraderTest` / `RuleBasedQuizGeneratorTest` | クイズ生成・採点 |
 | `TextNormConsistencyTest` | `TextNorm` を **既存 `MultiStageGrader` と対拍**し仕様乖離を防止 |
 | `InMemoryVectorIndexConcurrencyTest` | ★D1 の無ロック索引の並行安全性 |
+| `TaskEngineTest` (8 @Test) | v15追加分。start/complete/postpone上限3/forceFinish/abandon/bias を Fake DAO で検証 |
 
 ### 11.2 インストゥルメントテスト (`app/src/androidTest`)
 | テスト | 対象 |
 |---|---|
-| `MigrationTest` | **v1→v8 フルチェーンのマイグレーション検証** (`runMigrationsAndValidate`) |
+| `MigrationTest` (5テスト) | **v1→v9チェーン + v8→v9/v2→v8/v6→v8/v7→v8の単段**。旧記述の「v1→v8フルチェーン」は誤り。**v10(`index_progress_events_entityId`)は未カバー**で、`10.json` は存在するのに未使用。`3,4,5.json` 欠落のため中間検証も不可(§13 #2) |
 | `ExampleInstrumentedTest` | スモーク |
 
 ### 11.3 テスト容易性の工夫
@@ -669,24 +753,71 @@ MainActivity.onCreate → handleIncomingIntent (ACTION_SEND: URL→scrape, テ�
 
 ---
 
-## 13. 注目点・課題・将来性
+## 13. 未実装・暫定・課題の一次リスト (実コード検証)
 
-### 13.1 特に優れている点
-1. **採点パイプラインの完成度**: 決定論→rubric→意味の3段階 + rubric内部5段階 + プロバイダー抽象。テスト9本で保護され、`docs/新採点システム.txt` という設計根拠まで揃う。
+> 2026-09-04に全193ファイルを横断調査。`TODO/FIXME` マーカーは db/brain/server/importer/backup/plugins 配下で**ゼロ件** — 残っているのは「動いているが暫定」「設計書と実装の乖離」「到達不能」の3種。深刻度は ◎=着手推奨(小・効果大) / ○=中 / △=将来・温存可。
+> 各項の `→ §15` は次の実装候補IDへのリンク。
+
+### 13.1 優れている点 (維持すべきもの)
+1. **採点パイプラインの完成度**: 決定論→rubric→意味の3段階 + rubric内部5段階 + プロバイダー抽象。テスト99本で保護され、`docs/新採点システム.txt` という設計根拠まで揃う。
 2. **トレーサビリティ**: コード内に設計書の節番号(`§8.4` 等)と改訂マーカー(`★最適化R6`)が刻まれ、要件→実装の追跡が可能。
 3. **フェールセーフ哲学**: API未設定・LLM乱出力・重複実行・再起動時の回復まで網羅。動作しない状態が「壊れる」のではなく「劣化」する。
+4. **walkthrough15〜24の完成分**: ToDo/タスクエンジン・SQL Explorer(DB-1)・白板の拡縮/配置・初期データ135件体系・運用透明性。いずれも実機ビルド確認済み。
 
-### 13.2 課題・気になる点 (実コード検証に基づく)
-| # | 対象 | 内容 |
-|---|---|---|
-| 1 | **CORS未設定** | `ktor-server-cors` 未導入。ブラウザからの POST/PATCH/DELETE はプリフライトの関係で制限される可能性(Webクライアント実運用の潜在ギャップ) |
-| 2 | **スキーマJSONの欠落** | `app/schemas/` に **v3/v4/v5 が存在しない**。MigrationTest は v1/v2/v6/v7 起点のみ検証可能 |
-| 3 | **設計予約コンポーネント** | `AppEventBus`(誰もemit/subscribeしていない)/`UiSchemaRenderer`/`MarkdownText` は定義のみで未使用 |
-| 4 | **孤児ファイル** | `web/src/main/assets/rich_content.html` は参照ゼロ(CLEAN-2問題の残骸) |
-| 5 | **暗号化の不一致** | 設計書はトークンに EncryptedSharedPreferences と記載するが、実装は平文 DataStore (`server_prefs`) |
-| 6 | **ポーリング型API** | サーバーは Room Flow を `.first()` で読むため Web画面の自動更新なし(手動 `reloadKey` 機構) |
-| 7 | **メモリ設計上の留意** | `BackupEncryptor` はファイル全体を一括メモリ読込(大規模DBでメモリ注意) |
-| 8 | **AppEventBusの将来価値** | 現状の「保存→再構築」フローはイベント駆動化で軽量化できる余地(設計書 §9.3) |
+### 13.2 課題の一次リスト
+
+#### A. 到達不能・誤動作 (バグ級)
+| # | 深刻度 | 対象 | 内容 | 着手点 |
+|---|---|---|---|---|
+| A1 | ◎ | `QuizRoutes.kt:28,77` | **`GET /api/quiz/count` が `/{id}` に吸収され404**。定義順の問題で1行入替で直る | → §15 #S1 |
+| A2 | ○ | `ObsidianImporter.kt:46` | **`getById(note.title)` にタイトルを渡す誤用**で重複検査が常にnull。直接呼出時は複製される | → §15 #I1 |
+| A3 | ○ | `LlmQuizGenerator.kt:74-75` | 選択肢・ヒントJSONを**手文字列結合**で生成。`"`・改行混じりで壊れる余地 | → §15 #Q1 |
+
+#### B. セキュリティ・データ保全
+| # | 深刻度 | 対象 | 内容 | 着手点 |
+|---|---|---|---|---|
+| B1 | ○ | `LocalServer.kt:40-60` + `app/build.gradle.kts:93-97` | **CORS未設定**。`ktor-server-cors` 未導入。ブラウザ→8080の `Authorization` 付き要求はプリフライトで失敗し得る | → §15 #S2 |
+| B2 | ○ | `TokenManager.kt:12-24` + `web/src/api/client.ts:17-31` | **トークン平文保管(両端)**。Android平文DataStore + PC localStorage平文 + `http` 平文転送。Gemini/StudyPlus鍵だけ暗号化という不一致 | → §15 #S3 |
+| B3 | ○ | `PluginEngine.kt:130-136,165-169` | **JSソースへの文字列直接補間**で注入余地 + ClassShutter/タイムアウトなし。「サンドボックス」は構成上の制約のみ | → §15 #P1 |
+| B4 | △ | `BackupEncryptor.kt:54` | ファイル全体を一括メモリ読込。大規模DBでOOMの留意 | → §15 #K1 |
+| B5 | △ | `PortableExportWorker.kt:55-70` | **平文・世代管理なし・SAF転送なし**で `filesDir` 残置。端末紛失で消失し得る | → §15 #K2 |
+| B6 | △ | `ReadOnlySqlExecutor.kt:32-54` | 書込遮断がブロックリスト依存。実質防御は `PRAGMA query_only`。単一コネクション前提の綱渡り(コメント自認)。ローカル専用のため現状低リスク | 温存・監視 |
+
+#### C. 設計予約・孤児 (消さずに温存中)
+| # | 深刻度 | 対象 | 内容 | 着手点 |
+|---|---|---|---|---|
+| C1 | △ | `AppEventBus.kt:26` | **emit/subscribe共にゼロ**。将来のイベント駆動化の予約点 | 温存 |
+| C2 | △ | `UiSchemaRenderer.kt:13` | 定義のみ・参照ゼロ。プラグイン `renderSchema` 将来用 | 温存 |
+| C3 | △ | `RichText.kt:31 MarkdownText` | 定義のみ・参照ゼロ。WebView版に敗北 | 温存 |
+| C4 | △ | `EntryTypeSections.kt` | `ui/screen` からのimportゼロの孤児疑い。個別Section直使いのため | 実態確認 → §15 #U3 |
+| C5 | ◎ | `web/src` 未配線群 | 接続CRUD・候補承認・ヒートマップ・SRS件数・プラグイン一覧・お気に入り・削除は**サーバ実装済みだがWeb導線なし** | → §15 #W1 |
+
+#### D. 乖離・陳腐化 (ドキュメントと実装の差)
+| # | 深刻度 | 対象 | 内容 | 着手点 |
+|---|---|---|---|---|
+| D1 | ◎ | `app/schemas/` | **`3,4,5.json` 欠落 + `MIGRATION_9_10` 未検証**(10.jsonあるのに未使用)。MigrationTestはv1→v9まで | → §15 #D1 |
+| D2 | ◎ | 本書旧版の数値 | 40表→**44実体**、7本→**9本マイグ**、20DAO→**24DAO**、28ルート→**27ルート**、21VM→**20VM**、9本→**99 @Test**。本改訂で一括訂正済み | 済 |
+| D3 | ○ | `SemanticGrader.kt:11,20,27` | KDoc「0.70以上で部分点」に対し実装は0.85二値のみ | 仕様確定 → §15 #Q2 |
+| D4 | ○ | `GeminiGradingProviders.kt:42,44` | `entailment/crossEncoder→null` の未実装明示。本書§6.4に明記済み | 将来の端内モデル時に着手 |
+| D5 | ○ | `InitialData.kt:12` | コメント「135件」に対し実測125件の10件乖離 | 件数確定 → §15 #U1 |
+| D6 | △ | `ImportPipeline.kt:302` 他 | 「コンストラクタ追加が必要」等の陳腐コメント、`SqlExplorerScreen.kt:46` の解消済み残課題コメント | ついで修正 → §15 #U1 |
+| D7 | △ | 古いdocs | GAP系・v5検証版の「BackupWorker TODO」記述はSAF実装で解消済み。docs側の更新漏れ | docs修正 → §15 #U1 |
+
+#### E. 性能・計測の滞留
+| # | 深刻度 | 対象 | 内容 | 着手点 |
+|---|---|---|---|---|
+| E1 | ○ | `docs/perf/BASELINE.md` | **largeHeap撤去後の50k再計測未了**(walkthrough18予告のみ)。悪化していたら次へ進まない運用 | → §15 #F1 |
+| E2 | ○ | PERF-8残 | **`vec_distance_cosine` の実機非空確認(Gemini設定時)が未了**(walkthrough13→14へ先送り継続) | → §15 #F1 |
+| E3 | ○ | FTS膨張 | 50kでDB 624Mの主因がFTS。VACUUM/FTS5等の対策未着手 | → §15 #F2 |
+| E4 | △ | PERF-4/5 | Lazy keyは部分済、巨大Screen分割・Strong Skipping未着手・未確認 | → §15 #F3 |
+
+#### F. v15理想と実装の差 (将来の拡張点)
+| # | 深刻度 | 対象 | 内容 | 着手点 |
+|---|---|---|---|---|
+| F1 | △ | StudyPlus実投稿 | SDK 4.0.2/JitPack/desugar未導入。`NoOp` + キュー溜め専用。`topicName` ID素通し仮置き | 将来 → §15 #V1 |
+| F2 | △ | 履歴復元・changeSummary | §11.13復元はscope外、`changeSummary` AI生成は空欄が多い | 将来 → §15 #V2 |
+| F3 | △ | PCリッチエディタ等 | Tiptap/Zod/shared-typesはweb未実装。GraphView N+1同梱API拡張も未着手 | 将来 → §15 #W2 |
+| F4 | △ | 計画一次ソース分散 | `パフォーマンス大改良計画.md` 紛失、`NextTasks.md` は12行メモのみ。全体像はBASELINE+walkthrough分散 | 本書§14・§15で代替 |
 
 ### 13.3 将来性
 - `GradingProviderModule` を差し替えるだけで **端内モデル(Qwen3-Embedding-4B / NLI / Reranker / ローカルLLM)へ移行可能**(設計書の意図がコードに明記済み)。
@@ -696,10 +827,9 @@ MainActivity.onCreate → handleIncomingIntent (ACTION_SEND: URL→scrape, テ�
 
 ---
 
-## 14. パフォーマンス計測基盤 (Round 0)
+## 14. パフォーマンス計測基盤 (Round 0〜現行)
 
-2026-08-22 開始の「パフォーマンス大改良計画」(`docs/NextTasks.md`)のRound 0として、
-**計測してから最適化する**ための土台を実装した。詳細な実装記録は `docs/walkthrough8.md`。
+2026-08-22 開始の性能改良のRound 0として、**計測してから最適化する**ための土台を実装した。詳細な実装記録は `docs/walkthrough8.md`。なお `docs/PersonalEncyclopedia-パフォーマンス大改良計画.md` は紛失、`docs/NextTasks.md` は12行メモのみのため、**全体像の一次ソースは `docs/perf/BASELINE.md` + walkthrough8〜24** に分散している。本節はその再構成である。
 
 ### 14.1 SyntheticDataSeeder — 合成負荷データ生成 (debug専用)
 
@@ -734,6 +864,49 @@ Macrobenchmarkは個人開発1人で回すには複雑すぎる(Gradle Managed D
 - 以降のRound(PERF-1〜8)は全て「50,000件でのこの数値がどう変わったか」で評価する
 - 数値が悪化したまま次へ進まない
 
+### 14.4 Round消化状況 (walkthrough24時点の再構成)
+
+| Round | 内容 | 状態 |
+|---|---|---|
+| Round0 | M-1 Seeder / M-2 軽量計測へ転換(`:benchmark`撤去) / M-3 BASELINE実測 | 済 |
+| Round1 | PERF-1 (WAL/NORMAL/Executor) / PERF-2 (v10索引) | 済 |
+| Round2 | PERF-4 Lazy key(部分済)/ PERF-5巨大Screen分割(未)/ Strong Skipping(未確認)/ Nav短縮(先行済 120/90→80/60) | 部分 |
+| Round3 | PERF-7 Coil 2.7.0 | 済 |
+| Round5/8 | PERF-8 (sqlite導入+vecSearch+InMemory skip+driver再有効化)まで済。**残: vec実機非空確認・largeHeap撤去後50k再計測・FTS膨張対策** | 残あり(§13 E1〜E3) |
+| 新系列 | DB-1 (プレビュー+自動スクロール済) / WB-1〜相当(パン/ズーム/補正/中心/分離/題名/配置済)。残: 接続線・セクション作成/リサイズ・インライン編集 | 残あり |
+
+- PERF-3/PERF-6の定義は見当たらない(番号が1,2,4,5,7,8に飛ぶ)。計画文書の再発行が望ましい。
+
+---
+
+## 15. 次の実装への接続 (分析・着手用)
+
+> **AGENTS.mdの五原則に従い、1セッション1機能**で進めるための比較表。並びは推奨順(小・効果大→将来)。各候補は独立しているため、どれから着手してもよい。迷ったら #S1→#D1→#W1 の順。
+
+| ID | 候補 (§13対応) | 効果 | 工数目安 | 着手ファイル | 依存・注意 | 完了条件 |
+|---|---|---|---|---|---|---|
+| #S1 | `quiz/count` 到達不能の修正 (§13 A1) | Web/APIの件数取得が動く | 小(1行+実機確認) | `server/routes/QuizRoutes.kt:28,77` | 順序入替のみ。他ルート無影響 | `/api/quiz/count` が200を返す |
+| #D1 | schemas再生成 + 9→10テスト (§13 D1) | マイグレーション保証の回復 | 小〜中 | `app/schemas/`、`androidTest/.../MigrationTest.kt` | `exportSchema` 再ビルドで3/4/5.json生成→`migrate9To10`/`migrate1To10`追加 | `./gradlew connectedAndroidTest` 緑 |
+| #W1 | Web未配線の導線追加 (§13 C5) | PC閲覧の実用化 | 中(1タブずつ) | `web/src/api/client.ts`、`web/src/components/*` | 1機能ずつ(CORS#B1と連動)。最初は接続一覧かヒートマップ | 追加タブが実機APIで動く |
+| #S2 | CORS導入 (§13 B1) | ブラウザ実運用の安定 | 小〜中 | `app/build.gradle.kts`、`server/LocalServer.kt` | `ktor-server-cors` 追加+host許可設定。LAN警告UIと整合 | Vite(5173)→Ktor(8080)のPOSTが通る |
+| #S3 | トークン暗号化 (§13 B2) | 両端の平文保管を解消 | 中 | `server/TokenManager.kt`、`SettingsRepository` | EncryptedSharedPreferences移行+既存平文のワンタイム移行。PC側は運用注意喚起 | 再発行後も接続が維持される |
+| #I1 | Obsidian重複検査の修正 (§13 A2) | 再インポート複製の防止 | 小 | `importer/ObsidianImporter.kt:46` | title→ID解決クエリの追加。`DuplicateDetector` と重複しない範囲で | 同一Vault二重投入で件数不変 |
+| #Q1 | LLM生成JSONの堅牢化 (§13 A3) | 壊れ問の撲滅 | 小 | `brain/quiz/LlmQuizGenerator.kt:74-75` | kotlinx.serializationで構築。既存問の再生成不要 | `"`混じり回答でも保存が壊れない |
+| #Q2 | Semantic部分点の仕様確定 (§13 D3) | KDocと実装の乖離解消 | 小 | `brain/quiz/SemanticGrader.kt`、KDoc | 0.70部分点を実装するかKDoc修正かを選択。テスト追加 | 仕様書・実装・テストの三者一致 |
+| #P1 | Plugin注入対策 (§13 B3) | 任意JS実行の芽を摘む | 中 | `plugins/PluginEngine.kt:130-136` | JSON引数化+エスケープ強化。ClassShutter/タイムアウトは別途検討 | 特殊文字回答で誤採点しない |
+| #K1/#K2 | バックアップ堅牢化 (§13 B4/B5) | 大規模DB・紛失対策 | 中 | `backup/BackupEncryptor.kt`、`PortableExportWorker.kt` | ストリーミング読込・世代管理/SAF転送。充電制約と競合しない範囲で | 50k DBでOOMせず世代が残る |
+| #F1 | 50k再計測 (§13 E1/E2) | 性能判断の復帰 | 小(実機作業) | `docs/perf/BASELINE.md`、adb手順(§14.2) | largeHeap撤去後・vec非空確認。悪化時は立止まり | BASELINE §4-5追補 |
+| #F2/#F3 | FTS対策・画面分割 (§13 E3/E4) | 膨張・ジャンク対策 | 大 | FTS/VACUUM方針、`ui/screen/*` | 設計判断が必要。単独セッション化 | 方針doc→実装→再計測 |
+| #U1 | 件数・コメント修正 (§13 D5/D6) | 混乱の除去 | 小 | `db/InitialData.kt:12` 他 | 実測125件の確定。ついで修正 | コメントと実測の一致 |
+| #U3 | EntryTypeSections実態確認 (§13 C4) | 孤児か否かの確定 | 小 | `ui/component/EntryTypeSections.kt` | 使用なら§10.4修正、未使用なら温存継続 | 方針の明文化 |
+| #V1/#V2/#W2 | StudyPlus実投稿・履歴復元・PC拡張 (§13 F1〜F3) | 将来拡張 | 大 | v15 §7.8/§11.13、web | SDK導入・通知設計を伴う。単独計画化 | 別セッションで計画書から |
+
+**分析者向けメモ**:
+- バグ級(A1〜A3)は互いに無関係で並行着手可。いずれも既存テストを壊さない。
+- セキュリティ(B1〜B3)は「動くものを1つ増やす」原則と競合しない範囲(設定追加・移行処理)で分割すること。
+- 性能(E系)は**計測(#F1)を先に**。数値なしに最適化へ進まない(§14.3)。
+- 将来(V/W2)は本書ではなく v15設計書の該当節を正本として計画書を起こすこと。
+
 ---
 
 ## 付録A. ディレクトリ構造マップ
@@ -747,28 +920,29 @@ PersonalEncyclopedia/
 │       │   ├── AndroidManifest.xml
 │       │   ├── java/com/thuvstu/personalencyclopedia/
 │       │   │   ├── MainActivity.kt / PersonalEncyclopediaApp.kt
-│       │   │   ├── AppEventBus.kt / IncomingNavigation.kt
+│       │   │   ├── AppEventBus.kt(予約・未配線) / IncomingNavigation.kt
 │       │   │   ├── backup/    BackupEncryptor, BackupExporter, BackupWorker, PortableExportWorker
-│       │   │   ├── brain/     search/ srs/ quiz/(+rubric/) ai/ connection/ coaching/
+│       │   │   ├── brain/     search/ srs/ quiz/(+rubric/) ai/ connection/ coaching/ task/
 │       │   │   │              ResurfacingEngine, TagSuggestionEngine
-│       │   │   ├── db/        AppDatabase, entity/ dao/ Migration*to*.kt, SeedData, DemoData
+│       │   │   ├── db/        AppDatabase(v10), entity/ dao(24)/ Migration*to*.kt(9本), SeedData, DemoData, InitialData, ReadOnlySqlExecutor
 │       │   │   ├── di/        DatabaseModule, ServerModule
 │       │   │   ├── importer/  ImportPipeline, WebScraper, ObsidianImporter, DuplicateDetector, AutoLinker…
+│       │   │   ├── integration/ StudyPlusClient(NoOp)
 │       │   │   ├── plugins/   PluginEngine
-│       │   │   ├── repository/ (9本)
-│       │   │   ├── server/    LocalServer, TokenManager, ServerDependencies, dto/, routes/
-│       │   │   ├── ui/        navigation/ theme/ component/ screen/
+│       │   │   ├── repository/ (9本。task系はなし・DAO直結)
+│       │   │   ├── server/    LocalServer, TokenManager(平文), ServerDependencies(8DAO+1Svc), dto/, routes/
+│       │   │   ├── ui/        navigation(27ルート)/ theme/ component/(一部予約) screen/(20ファイル)
 │       │       │   ├── util/      AppLogger, Timed
-│       │   │   └── viewmodel/ (21本)
+│       │   │   └── viewmodel/ (20本。Task/SqlExplorer/Whiteboard含む)
 │       │   └── res/ …
-│       ├── test/               # JVM ユニットテスト (rubric/クイズ/索引並行性)
-│       ├── androidTest/        # MigrationTest ほか
+│       ├── test/               # JVM 99 @Test/16ファイル (rubric/クイズ/索引並行性/タスク)
+│       ├── androidTest/        # MigrationTest(v1→v9+単段。v10未カバー) ほか
 │       └── debug/              # SyntheticDataSeeder + PerfSeedReceiver (releaseに含まれない)
-├── web/                        # React Webクライアント (DBなし・Ktor APIクライアント)
+├── web/                        # React Webクライアント (DBなし・Ktor APIクライアント、0.2.0)
 │   ├── package.json / vite.config.ts / tsconfig.json
-│   └── src/  api/client.ts, lib/, components/ (EntryList, EntryDetail, GraphView,
+│   └── src/  api/client.ts(13関数・一部未配線), lib/, components/ (EntryList, EntryDetail, GraphView,
 │            QuizPanel, SrsPanel, OllamaPanel, ConnectionBar)
-├── docs/                       # 設計書・ガイド・walkthrough 8ファイル + guide/ 8ファイル
+├── docs/                       # 設計書・ガイド・walkthrough 24本 + guide/ 8ファイル + perf/BASELINE.md
 ├── gradle/                     # libs.versions.toml, wrapper
 └── gradlew / settings.gradle.kts / build.gradle.kts
 ```
@@ -777,13 +951,16 @@ PersonalEncyclopedia/
 
 | ドキュメント | 内容 |
 |---|---|
-| `docs/PersonalEncyclopedia-統合設計書-v14完全版.md` | 最新の統合設計書 (v13/v14で追補) |
+| `docs/PersonalEncyclopedia-統合設計書-v15完全版.md` | **確定版の正本**(v15.0差分・Task/SQL Explorer/StudyPlus・全2440行)。理想形はこちら、実態は本書 |
+| `docs/PersonalEncyclopedia-統合設計書-v13完全版.md` / `v14完全版.md` | 旧版。v15に吸収済み |
 | `docs/PersonalEncyclopedia.md` | ベース設計書 |
 | `docs/新採点システム.txt` | rubric採点システムの設計根拠 |
-| `docs/guide/` (8ファイル) | 開発者ガイド(00-overview, 01-entry-model, 02-search, 03-connection, 04-quiz-and-srs, 05-brain-layer, 06-troubleshooting, glossary) |
-| `docs/walkthrough*.md` (6本) | 実装ウォークスルー |
+| `docs/guide/` (8ファイル) | 開発者ガイド(00-overview, 01-entry-model, 02-search, 03-connection, 04-quiz-and-srs, 05-brain-layer, 06-troubleshooting, glossary)。Task/SQL Explorer/sqlite-vec委譲・largeHeap撤去は未反映 |
+| `docs/walkthrough*.md` (24本) | 実装ウォークスルー(walkthrough〜walkthrough24)。本書§14.4に要点再構成 |
+| `docs/perf/BASELINE.md` | 性能計測の一次ソース(Round0実測+運用ルール)。largeHeap撤去後の再計測が滞留 |
+| `docs/NextTasks.md` | 現在12行メモのみ。計画一次ソースではないことに注意 |
 | `docs/報告書.md` / `docs/継承PersonalEncyclopedia.md` | 受け継ぎ・報告 |
 
 ---
 
-*本ドキュメントは `DESIGN.md` として、コミット `83b4c00` 時点の全ソースコード・ビルド定義・ドキュメントを実コード検証により執筆されました。*
+*本ドキュメントは `DESIGN.md` として、コミット `7abdd27` (walkthrough24) 時点の全ソースコード・ビルド定義・ドキュメントを実コード検証により改訂しました。旧版の数値(40表/7本マイグ/20DAO/28ルート/21VM/9テスト等)は本改訂で訂正済み。未解決の一次リストは§13、着手順は§15を参照。*
