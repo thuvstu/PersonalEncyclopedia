@@ -43,7 +43,10 @@ class ObsidianImporter @Inject constructor(
 
         // 1st pass: create entries
         for (note in notes) {
-            val existing = entryDao.getById(note.title) // Check or create
+            // ★#I1: getById(title) の誤用を修正。同バッチ内→DBの順に重複検査する
+            val batchedId = titleToIdMap[note.title]
+            val existing = if (batchedId != null) entryDao.getById(batchedId)
+            else entryDao.findByTitle(note.title)
             val id = existing?.id ?: UUID.randomUUID().toString()
 
             if (existing == null) {

@@ -11,6 +11,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.mozilla.javascript.Context as RhinoContext
 import org.mozilla.javascript.Scriptable
+import org.mozilla.javascript.ScriptableObject
 import org.mozilla.javascript.Undefined
 import java.io.File
 import javax.inject.Inject
@@ -127,10 +128,19 @@ class PluginEngine @Inject constructor(
             val scope: Scriptable = rhino.initStandardObjects()
             rhino.evaluateString(scope, scriptFile.readText(), pluginId, 1, null)
 
-            val escapedAnswer = userAnswer.replace("\\", "\\\\").replace("\"", "\\\"")
+            // ★#P1: JSソースへの文字列補間をやめ、スコープ変数で渡す（注入対策）。
+            // 回答文中の `"・改行・$` による任意JS実行を防ぐ。answerDataは事前にJSON検証する。
+            val safeAnswerData = try {
+                json.parseToJsonElement(answerDataJson).toString()
+            } catch (_: Exception) {
+                Log.e(TAG, "Plugin grade: invalid answerDataJson")
+                return null
+            }
+            ScriptableObject.putProperty(scope, "__userAnswer", userAnswer)
+            ScriptableObject.putProperty(scope, "__answerDataJson", safeAnswerData)
             val gradeCall = """
                 (function() {
-                    var result = plugin.grade("$escapedAnswer", $answerDataJson);
+                    var result = plugin.grade(__userAnswer, JSON.parse(__answerDataJson));
                     return JSON.stringify(result);
                 })()
             """.trimIndent()
@@ -162,9 +172,17 @@ class PluginEngine @Inject constructor(
             val scope: Scriptable = rhino.initStandardObjects()
             rhino.evaluateString(scope, scriptFile.readText(), pluginId, 1, null)
 
+            // ★#P1: gradeWithPluginと同様、スコープ変数で渡す（注入対策）。
+            val safeQuestionData = try {
+                json.parseToJsonElement(questionDataJson).toString()
+            } catch (_: Exception) {
+                Log.e(TAG, "Plugin renderSchema: invalid questionDataJson")
+                return null
+            }
+            ScriptableObject.putProperty(scope, "__questionDataJson", safeQuestionData)
             val schemaCall = """
                 (function() {
-                    return JSON.stringify(plugin.renderSchema($questionDataJson));
+                    return JSON.stringify(plugin.renderSchema(JSON.parse(__questionDataJson)));
                 })()
             """.trimIndent()
 

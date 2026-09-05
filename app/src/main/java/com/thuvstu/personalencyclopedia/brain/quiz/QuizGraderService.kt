@@ -64,13 +64,16 @@ class QuizGraderService @Inject constructor(
             quiz.quizType in listOf("qa", "essay")
         ) {
             semanticGrader.grade(userAnswer, quiz.answer)?.let { sem ->
-                if (sem.isCorrect) gradeResult = sem
+                // ★#Q2: 正解昇格に加え、部分点（0.70以上）も保持して減点緩和に使う
+                if (sem.isCorrect || sem.method == "semantic-partial") gradeResult = sem
             }
         }
 
         val baseScore = when {
             gradeResult.isCorrect -> maxOf(0f, 1.0f - hintPenalty * hintsRevealed)
             userAnswer == "__UNLEARNED__" -> 0f
+            gradeResult.method == "semantic-partial" ->
+                maxOf(0f, gradeResult.score - hintPenalty * hintsRevealed)
             else -> -1.0f
         }
         // §8.7.3 (Kahoot由来): 正解かつ速いほど高得点。10秒未満で最大+50%のボーナス。

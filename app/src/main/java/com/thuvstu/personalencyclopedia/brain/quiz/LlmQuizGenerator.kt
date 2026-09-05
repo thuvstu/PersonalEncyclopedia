@@ -7,6 +7,7 @@ import com.thuvstu.personalencyclopedia.db.dao.QuizDao
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
 import com.thuvstu.personalencyclopedia.db.entity.QuizBankEntity
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -71,8 +72,10 @@ class LlmQuizGenerator @Inject constructor(
             container.quizzes.forEach { q ->
                 // ★追加: 重複チェック
                 if (quizDao.countByQuestion(q.question) > 0) return@forEach
-                val choicesJson = "[" + q.choices.joinToString(",") { "\"$it\"" } + "]"
-                val hintsJson = "[" + q.hints.joinToString(",") { "\"$it\"" } + "]"
+                // ★#Q1: 手文字列結合をやめ、シリアライザで安全に構築する
+                // （選択肢内の `"`・改行・JSON割込みで壊れる問題の修正）
+                val choicesJson = json.encodeToString(q.choices)
+                val hintsJson = json.encodeToString(q.hints)
                 quizDao.insertQuiz(
                     QuizBankEntity(
                         sourceEntryId = entry.id,

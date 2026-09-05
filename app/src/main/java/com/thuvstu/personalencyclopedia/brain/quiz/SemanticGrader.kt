@@ -8,7 +8,8 @@ import javax.inject.Singleton
 /**
  * 意味的採点（§8.4 第6段階）。
  * 既存のEmbedding基盤を再利用（新規インフラ不要）。
- * 閾値0.85以上で正解、0.70以上で部分点。
+ * 閾値0.85以上で正解、0.70以上で部分点（★#Q2: KDoc通りに実装。
+ * 部分点は method="semantic-partial" で返し、QuizGraderServiceが減点緩和する）。
  */
 @Singleton
 class SemanticGrader @Inject constructor(
@@ -25,6 +26,7 @@ class SemanticGrader @Inject constructor(
         val sim = cosineSimilarity(userVec, correctVec)
         return when {
             sim >= threshold -> MultiStageGrader.GradeResult(true, sim, "semantic")
+            sim >= 0.70f -> MultiStageGrader.GradeResult(false, sim, "semantic-partial")
             else -> MultiStageGrader.GradeResult(false, 0f, "semantic")
         }
     }
