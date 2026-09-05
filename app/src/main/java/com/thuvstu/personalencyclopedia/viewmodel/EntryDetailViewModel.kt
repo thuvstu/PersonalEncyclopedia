@@ -108,6 +108,20 @@ class EntryDetailViewModel @Inject constructor(
     private val _autoLinker = MutableStateFlow<AutoLinker?>(null)
     val autoLinker: StateFlow<AutoLinker?> = _autoLinker
 
+    // ★P2-A: 表示用に自動リンクを埋め込んだ本文・定義文（DBは不変・描画側は既存パイプライン）
+    val autoLinkedContent: StateFlow<String?> = combine(entry, autoLinker) { e, linker ->
+        val content = e?.content
+        if (content.isNullOrBlank() || linker == null) content
+        else linker.applyAsWikiLinks(content, e.id)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val autoLinkedDefinition: StateFlow<String?> =
+        combine(definition, autoLinker, entry) { d, linker, e ->
+            val text = d?.definition
+            if (text.isNullOrBlank() || linker == null) text
+            else linker.applyAsWikiLinks(text, e?.id ?: d.entryId)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     init {
         viewModelScope.launch {
             repo.touch(entryId)  // §7.5: accessedAt 更新（リサーフェシングの基盤）

@@ -98,6 +98,33 @@ class AutoLinker(entries: List<EntryEntity>) {
         return matches
     }
 
+    /**
+     * ★P2-A: 検出マッチを `[[title]]` 記法でテキストに埋め込んだ表示用文字列を返す。
+     * RichContentView の既存パイプラインが `[[wiki-link]]` として描画・プレビューするため、
+     * 描画側の改修なしで自動リンクが発動する。DBへの書き込みは行わない（§5.5.3承認制と整合）。
+     * - 自分自身のタイトルは除外する（自己プレビュー防止）
+     * - 既存の `[[...]]` 領域内のマッチは二重化しない
+     * - 後方から挿入するためインデックスずれが起きない
+     * 純粋関数（JVMテスト可能）。
+     */
+    fun applyAsWikiLinks(text: String, selfEntryId: String? = null): String {
+        if (text.isBlank()) return text
+        val matches = findMatches(text)
+            .filter { selfEntryId == null || it.entryId != selfEntryId }
+        if (matches.isEmpty()) return text
+        val wikiRanges = Regex("""\[\[[^\]]*]]""").findAll(text)
+            .map { it.range }.toList()
+        val sb = StringBuilder(text)
+        for (m in matches.sortedByDescending { it.start }) {
+            // 既存 [[...]] 領域 ([first, last+1)) の内側はスキップ
+            val inside = wikiRanges.any { r -> m.start >= r.first && m.end <= r.last + 1 }
+            if (inside) continue
+            sb.insert(m.end, "]]")
+            sb.insert(m.start, "[[")
+        }
+        return sb.toString()
+    }
+
     companion object {
         /**
          * エントリーリストからAutoLinkerを構築。

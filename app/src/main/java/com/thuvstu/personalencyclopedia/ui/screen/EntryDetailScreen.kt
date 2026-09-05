@@ -58,6 +58,9 @@ fun EntryDetailScreen(
     val attachments by viewModel.attachments.collectAsState()
     val tagSuggestions by viewModel.tagSuggestions.collectAsState()
     val history by viewModel.history.collectAsState()
+    // ★P2-A: 自動リンク埋め込み済みの表示用文字列（linker構築前はnull→原文フォールバック）
+    val autoLinkedContent by viewModel.autoLinkedContent.collectAsState()
+    val autoLinkedDefinition by viewModel.autoLinkedDefinition.collectAsState()
 
     // §11.13: 編集履歴プレビュー（読み取り専用）
     var previewHistory by remember { mutableStateOf<EntryHistoryEntity?>(null) }
@@ -157,7 +160,7 @@ fun EntryDetailScreen(
                         Text("📝 メモ", style = MaterialTheme.typography.labelLarge)
                         Spacer(modifier = Modifier.height(8.dp))
                         RichContentView(
-                            content = e.content,
+                            content = autoLinkedContent ?: e.content,
                             onWikiLinkClick = { target ->
                                 // §12.5: 直接遷移せず定義プレビューを表示
                                 val title = target.removePrefix("wiki/")
@@ -173,12 +176,15 @@ fun EntryDetailScreen(
                 }
             }
 
-            // 型固有セクション（全13型）
+            // 型固有セクション（全13型）。定義文は自動リンク埋め込み済みcopyを渡す
+            val definitionForDisplay = definition?.let { d ->
+                autoLinkedDefinition?.let { d.copy(definition = it) } ?: d
+            }
             EntryTypeSection(
                 type = e.type,
                 extension = extension,
                 thought = thought,
-                definition = definition,
+                definition = definitionForDisplay,
                 onInternalLink = { title ->
                     // §12.5: 定義文内の[[wiki-link]]もプレビュー表示
                     viewModel.resolveWikiLink(title) { id ->
