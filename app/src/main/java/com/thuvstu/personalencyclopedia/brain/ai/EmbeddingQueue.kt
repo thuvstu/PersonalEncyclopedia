@@ -102,6 +102,10 @@ class EmbeddingQueue @Inject constructor(
         val combinedText = EmbeddingTextBuilder.build(entry, extension)
         if (combinedText.isBlank()) return
 
+        // ★FTS差分: 内容不変ならFTSの delete+insert をスキップする（enqueue経路の冪等化）
+        val existingDoc = searchDocumentDao.getByEntryId(entryId)
+        if (existingDoc != null && existingDoc.combinedText == combinedText) return
+
         val existingRowid = searchDocumentDao.getRowid(entryId)
         if (existingRowid != null) {
             searchDocumentDao.deleteFts(existingRowid)
@@ -209,15 +213,36 @@ class EmbeddingQueue @Inject constructor(
         }
     }
 
+    /**
+     * ★FTS差分: entry.updatedAt <= search_document.updatedAt の文書は読み飛ばす。
+     * 起動時の全件FTS再構築（逆スケール問題）を、変更分のみの更新に変える。
+     * 削除済み・文書なし・本文空は updateSearchDocument に委ねる（掃除のためスキップしない）。
+     */
     suspend fun rebuildAllSearchDocuments() {
         var offset = 0
         val batchSize = 100
+        var updated = 0
+        var skipped = 0
         while (true) {
             val entries = entryDao.getAllPaged(batchSize, offset)
             if (entries.isEmpty()) break
-            entries.forEach { updateSearchDocument(it.id) }
+            for (e in entries) {
+                if (isSearchDocumentFresh(e)) {
+                    skipped++
+                    continue
+                }
+                updateSearchDocument(e.id)
+                updated++
+            }
             offset += batchSize
         }
-        Log.i(TAG, "Rebuilt search documents for all entries")
+        Log.i(TAG, "Rebuilt search documents: updated=$updated skipped=$skipped")
+    }
+
+    private suspend fun isSearchDocumentFresh(entry: EntryEntity): Boolean {
+        if (entry.deletedAt != null) return false
+        val doc = searchDocumentDao.getByEntryId(entry.id) ?: return false
+        if (doc.combinedText.isBlank()) return false
+        return entry.updatedAt <= doc.updatedAt
     }
 }

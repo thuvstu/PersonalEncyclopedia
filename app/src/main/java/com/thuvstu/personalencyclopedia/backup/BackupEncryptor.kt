@@ -7,6 +7,8 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.security.KeyStore
 import javax.crypto.Cipher
+import javax.crypto.CipherInputStream
+import javax.crypto.CipherOutputStream
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
@@ -44,36 +46,44 @@ object BackupEncryptor {
 
     /**
      * Encrypt file. Output format: [12-byte IV][ciphertext+tag]
+     * ★#K1: ストリーミング化（8KBチャンク）。旧実装の readBytes() 全載せをやめ、
+     * GB級DBでもOOMしない。出力形式は同一のため既存 .enc と互換あり。
      */
     fun encrypt(inputFile: File, outputFile: File) {
         val key = getOrCreateKey()
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key)
 
-        val iv = cipher.iv
-        val plaintext = FileInputStream(inputFile).use { it.readBytes() }
-        val ciphertext = cipher.doFinal(plaintext)
-
         FileOutputStream(outputFile).use { fos ->
-            fos.write(iv)
-            fos.write(ciphertext)
+            fos.write(cipher.iv)
+            CipherOutputStream(fos, cipher).use { cos ->
+                FileInputStream(inputFile).use { fis ->
+                    fis.copyTo(cos, 8192)
+                }
+            }
         }
     }
 
     /**
-     * Decrypt file.
+     * Decrypt file (streaming, same format).
      */
     fun decrypt(inputFile: File, outputFile: File) {
         val key = getOrCreateKey()
-        val data = FileInputStream(inputFile).use { it.readBytes() }
-
-        val iv = data.copyOfRange(0, 12)
-        val ciphertext = data.copyOfRange(12, data.size)
-
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_LENGTH, iv))
-
-        val plaintext = cipher.doFinal(ciphertext)
-        FileOutputStream(outputFile).use { it.write(plaintext) }
+        FileInputStream(inputFile).use { fis ->
+            val iv = ByteArray(12)
+            var read = 0
+            while (read < 12) {
+                val n = fis.read(iv, read, 12 - read)
+                if (n < 0) throw IllegalArgumentException("Truncated backup file")
+                read += n
+            }
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_LENGTH, iv))
+            CipherInputStream(fis, cipher).use { cis ->
+                FileOutputStream(outputFile).use { fos ->
+                    cis.copyTo(fos, 8192)
+                }
+            }
+        }
     }
 }
