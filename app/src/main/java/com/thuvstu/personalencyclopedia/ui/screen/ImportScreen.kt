@@ -39,6 +39,16 @@ fun ImportScreen(
     val urlListLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
         it?.let { viewModel.importUrlList(it) }
     }
+    val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) {
+        it?.let { treeUri ->
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    treeUri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Exception) { /* 権限保持に失敗しても単発で試す */ }
+            viewModel.importSafFolder(treeUri)
+        }
+    }
     val bookmarkLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
         it?.let { viewModel.importBookmarkHtml(it) }
     }
@@ -90,6 +100,9 @@ fun ImportScreen(
             }
             ImportRow("🔖 bookmark.html", "ブラウザのエクスポート。フォルダ・登録日時を復元（本文取得なし高速登録）") {
                 bookmarkLauncher.launch(arrayOf("text/html", "*/*"))
+            }
+            ImportRow("📁 フォルダ一括（SAF）", "フォルダ内のmd/txt/csv/json/htmlを拡張子で振り分け（Drive API不使用）") {
+                folderLauncher.launch(null)
             }
 
             HorizontalDivider()

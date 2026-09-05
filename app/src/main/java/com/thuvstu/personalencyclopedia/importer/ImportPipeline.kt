@@ -414,6 +414,69 @@ class ImportPipeline @Inject constructor(
         out.add(BookmarkItem(url = href, title = title, folderPath = folderPath, addDateMs = addDateMs))
     }
 
+    /** ★Drive橋渡しのSAF版: フォルダ内の md/txt/csv/json/html を拡張子で振り分けて一括取込。
+     * Drive APIは使わない（骨格）。重複は各経路の既存判定に任せる。最大200ファイル。 */
+    suspend fun importSafFolder(treeUri: Uri): ImportResult {
+        var success = 0
+        var skipped = 0
+        val errors = mutableListOf<String>()
+        try {
+            val childrenUri = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(
+                treeUri, android.provider.DocumentsContract.getTreeDocumentId(treeUri)
+            )
+            val items = mutableListOf<Pair<android.net.Uri, String>>()
+            context.contentResolver.query(
+                childrenUri,
+                arrayOf(
+                    android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                    android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE
+                ),
+                null, null, null
+            )?.use { c ->
+                val idIdx = c.getColumnIndexOrThrow(android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val nameIdx = c.getColumnIndexOrThrow(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                val mimeIdx = c.getColumnIndexOrThrow(android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE)
+                while (c.moveToNext() && items.size < 200) {
+                    val docId = c.getString(idIdx) ?: continue
+                    val name = c.getString(nameIdx) ?: continue
+                    val mime = c.getString(mimeIdx) ?: ""
+                    if (mime == android.provider.DocumentsContract.Document.MIME_TYPE_DIR) continue
+                    val lower = name.lowercase()
+                    if (lower.endsWith(".md") || lower.endsWith(".markdown") || lower.endsWith(".txt") ||
+                        lower.endsWith(".csv") || lower.endsWith(".json") ||
+                        lower.endsWith(".html") || lower.endsWith(".htm")
+                    ) {
+                        items.add(
+                            android.provider.DocumentsContract.buildDocumentUriUsingTree(treeUri, docId) to lower
+                        )
+                    }
+                }
+            }
+            if (items.isEmpty()) {
+                return ImportResult(0, 1, listOf("対応ファイル（md/txt/csv/json/html）が見つかりません"))
+            }
+            for ((docUri, lower) in items) {
+                try {
+                    val r = when {
+                        lower.endsWith(".csv") -> importDefinitionsCsv(docUri)
+                        lower.endsWith(".json") -> importEntriesJson(docUri)
+                        lower.endsWith(".html") || lower.endsWith(".htm") -> importBookmarksHtml(docUri)
+                        else -> importMarkdown(docUri)
+                    }
+                    success += r.successCount
+                    skipped += r.skipCount
+                    if (r.errorCount > 0) errors.add("$lower: ${r.errors.firstOrNull()}")
+                } catch (e: Exception) {
+                    errors.add("$lower: ${e.message}")
+                }
+            }
+        } catch (e: Exception) {
+            errors.add("File error: ${e.message}")
+        }
+        return ImportResult(successCount = success, errorCount = errors.size, errors = errors.take(20), skipCount = skipped)
+    }
+
     suspend fun importNotionMarkdown(uri: Uri): ImportResult {
         val errors = mutableListOf<String>()
         var success = 0

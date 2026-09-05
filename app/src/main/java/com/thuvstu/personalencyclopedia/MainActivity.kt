@@ -106,7 +106,9 @@ private fun MainContent(incomingNavigation: IncomingNavigation) {
                             if (currentRoute != Routes.DASHBOARD) {
                                 timed("Nav", "tab:dashboard") {
                                     navController.navigate(Routes.DASHBOARD) {
-                                        popUpTo(Routes.DASHBOARD) { inclusive = true }
+                                        popUpTo(Routes.DASHBOARD) { inclusive = true; saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
                                 }
                             }
@@ -119,7 +121,11 @@ private fun MainContent(incomingNavigation: IncomingNavigation) {
                         onClick = {
                             if (currentRoute != Routes.SEARCH) {
                                 timed("Nav", "tab:search") {
-                                    navController.navigate(Routes.SEARCH) { popUpTo(Routes.DASHBOARD) }
+                                    navController.navigate(Routes.SEARCH) {
+                                        popUpTo(Routes.DASHBOARD) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 }
                             }
                         }
@@ -131,7 +137,11 @@ private fun MainContent(incomingNavigation: IncomingNavigation) {
                         onClick = {
                             if (currentRoute != Routes.SRS_REVIEW) {
                                 timed("Nav", "tab:srs_review") {
-                                    navController.navigate(Routes.SRS_REVIEW) { popUpTo(Routes.DASHBOARD) }
+                                    navController.navigate(Routes.SRS_REVIEW) {
+                                        popUpTo(Routes.DASHBOARD) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 }
                             }
                         }
@@ -143,7 +153,11 @@ private fun MainContent(incomingNavigation: IncomingNavigation) {
                         onClick = {
                             if (currentRoute != Routes.QUIZ) {
                                 timed("Nav", "tab:quiz") {
-                                    navController.navigate(Routes.QUIZ) { popUpTo(Routes.DASHBOARD) }
+                                    navController.navigate(Routes.QUIZ) {
+                                        popUpTo(Routes.DASHBOARD) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 }
                             }
                         }
@@ -155,7 +169,11 @@ private fun MainContent(incomingNavigation: IncomingNavigation) {
                         onClick = {
                             if (currentRoute != Routes.STATS) {
                                 timed("Nav", "tab:stats") {
-                                    navController.navigate(Routes.STATS) { popUpTo(Routes.DASHBOARD) }
+                                    navController.navigate(Routes.STATS) {
+                                        popUpTo(Routes.DASHBOARD) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 }
                             }
                         }

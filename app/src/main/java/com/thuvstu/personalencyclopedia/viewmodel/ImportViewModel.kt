@@ -126,6 +126,22 @@ class ImportViewModel @Inject constructor(
         }
     }
 
+    /** ★Drive橋渡しのSAF版: フォルダ一括取込 */
+    fun importSafFolder(uri: Uri) {
+        viewModelScope.launch {
+            _state.value = ImportState.Importing
+            try {
+                val result = importPipeline.importSafFolder(uri)
+                _state.value = ImportState.Done(
+                    "フォルダ取り込み完了: ${result.successCount}件" +
+                        skipSuffix(result.skipCount)
+                )
+            } catch (e: Exception) {
+                _state.value = ImportState.Error(e.message ?: "Unknown error")
+            }
+        }
+    }
+
     fun importUrlList(uri: Uri) {
         viewModelScope.launch {
             _state.value = ImportState.Importing
