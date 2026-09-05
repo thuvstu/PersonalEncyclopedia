@@ -95,8 +95,9 @@ fun WikiArticleScreen(
     viewModel: WikiViewModel = hiltViewModel()
 ) {
     val article by viewModel.article.collectAsState()
+    // ★P2-B: 自動リンク埋め込み済み本文（linker未構築時はnull→原文フォールバック）
+    val linkedMd by viewModel.autoLinkedContentMd.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
-    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -131,20 +132,17 @@ fun WikiArticleScreen(
             article != null -> {
                 val a = article!!
                 RichContentView(
-                    content = a.contentMd,
+                    content = linkedMd ?: a.contentMd,
                     onWikiLinkClick = { title ->
-                        scope.launch {
-                            try {
-                                val found = viewModel.findByTitle(title)
-                                if (found != null) {
-                                    onOpenArticle(found.id)
-                                } else {
-                                    android.widget.Toast.makeText(context, "記事「$title」は見つかりません", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            } catch (_: Exception) {
-                                android.widget.Toast.makeText(context, "リンクの解決に失敗しました", android.widget.Toast.LENGTH_SHORT).show()
+                        // ★P2-B: wiki記事→なければentryへ遷移（自動リンク対応）
+                        viewModel.resolveLink(
+                            title,
+                            onWiki = { onOpenArticle(it) },
+                            onEntry = { onNavigateToEntry(it) },
+                            onMissing = {
+                                android.widget.Toast.makeText(context, "「$title」は見つかりません", android.widget.Toast.LENGTH_SHORT).show()
                             }
-                        }
+                        )
                     },
                     modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)
                 )
