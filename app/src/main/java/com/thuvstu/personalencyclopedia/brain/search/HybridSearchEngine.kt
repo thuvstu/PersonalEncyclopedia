@@ -28,7 +28,8 @@ class HybridSearchEngine @Inject constructor(
     private val vectorIndex: InMemoryVectorIndex,
     private val embeddingDao: EmbeddingDao,
     private val geminiClient: GeminiClient,
-    private val entryDao: EntryDao
+    private val entryDao: EntryDao,
+    private val reranker: SemanticReranker
 ) {
     companion object {
         private const val RRF_K = 60
@@ -59,9 +60,10 @@ class HybridSearchEngine @Inject constructor(
         if (ftsQuery.isBlank()) return emptyList()
 
         return try {
-            searchDocumentDao.ftsSearch(ftsQuery, limit * 2)
+            val results = searchDocumentDao.ftsSearch(ftsQuery, limit * 2)
                 .mapIndexed { i, id -> SearchResult(id, 1.0 / (RRF_K + i + 1)) }
-                .take(limit)
+            // ★rerank: 上位をLLMで並べ替え（未設定時は元の順序のまま）
+            reranker.rerank(query, results, limit)
         } catch (e: Exception) {
             // FTS query syntax error fallback
             emptyList()
@@ -73,8 +75,9 @@ class HybridSearchEngine @Inject constructor(
         // PERF-8: sqlite-vec によるDB側検索を優先。InMemoryはフォールバック
         val queryVector = geminiClient.embed(query) ?: return emptyList()
         return try {
-            val rows = embeddingDao.vecSearch(queryVector.toBlob(), limit)
-            rows.map { SearchResult(it.entryId, 1.0 - it.distance) }
+            val rows = embeddingDao.vecSearch(queryVector.toBlob(), limit * 2)
+            // ★rerank: 上位をLLMで並べ替え（未設定時は元の順序のまま）
+            reranker.rerank(query, rows.map { SearchResult(it.entryId, 1.0 - it.distance) }, limit)
         } catch (e: Exception) {
             // vec extension未ロードやエラー時は InMemory にフォールバック
             if (!vectorIndex.isLoaded()) return emptyList()
@@ -138,6 +141,7 @@ class HybridSearchEngine @Inject constructor(
                 entry != null && !entry.isMuted && entry.deletedAt == null
             }
             .sortedByDescending { it.score }
-            .take(limit)
+            .take(limit * 2)
+            .let { reranker.rerank(query, it, limit) }
     }
 }
