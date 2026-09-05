@@ -15,10 +15,15 @@ import com.thuvstu.personalencyclopedia.db.entity.TaskTimeLogEntity
 import com.thuvstu.personalencyclopedia.db.entity.TopicEntity
 import com.thuvstu.personalencyclopedia.integration.StudyPlusClient
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
+
+/** ★P5-1: ポモドーロタイマーの段階（25分集中 / 5分休憩の往復）。 */
+enum class PomodoroPhase { IDLE, FOCUS, BREAK }
 
 @HiltViewModel
 class TaskViewModel @Inject constructor(
@@ -159,5 +164,72 @@ class TaskViewModel @Inject constructor(
 
     fun dismissTimeboxExpired() {
         _timeboxExpiredTask.value = null
+    }
+
+    // ── ★P5-1: ポモドーロタイマー（25分集中/5分休憩。実行中タスクと独立、VM常駐で回転に強い）──
+    companion object {
+        const val POMODORO_FOCUS_S = 25 * 60
+        const val POMODORO_BREAK_S = 5 * 60
+    }
+
+    private val _pomodoroPhase = MutableStateFlow(PomodoroPhase.IDLE)
+    val pomodoroPhase: StateFlow<PomodoroPhase> = _pomodoroPhase
+
+    private val _pomodoroRemainingS = MutableStateFlow(0)
+    val pomodoroRemainingS: StateFlow<Int> = _pomodoroRemainingS
+
+    private val _pomodoroCycles = MutableStateFlow(0)
+    val pomodoroCycles: StateFlow<Int> = _pomodoroCycles
+
+    private val _pomodoroRunning = MutableStateFlow(false)
+    val pomodoroRunning: StateFlow<Boolean> = _pomodoroRunning
+
+    private var pomodoroJob: Job? = null
+
+    /** 開始/再開。IDLEからは集中25分で開始する。 */
+    fun startPomodoro() {
+        if (pomodoroJob?.isActive == true) return
+        if (_pomodoroPhase.value == PomodoroPhase.IDLE) {
+            _pomodoroPhase.value = PomodoroPhase.FOCUS
+            _pomodoroRemainingS.value = POMODORO_FOCUS_S
+        }
+        _pomodoroRunning.value = true
+        viewModelScope.launch { _message.emit("🍅 集中開始（25分）") }
+        pomodoroJob = viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                val left = _pomodoroRemainingS.value - 1
+                if (left <= 0) {
+                    if (_pomodoroPhase.value == PomodoroPhase.FOCUS) {
+                        _pomodoroCycles.value += 1
+                        _pomodoroPhase.value = PomodoroPhase.BREAK
+                        _pomodoroRemainingS.value = POMODORO_BREAK_S
+                        _message.emit("☕ 休憩（5分）。${_pomodoroCycles.value}サイクル完了")
+                    } else {
+                        _pomodoroPhase.value = PomodoroPhase.FOCUS
+                        _pomodoroRemainingS.value = POMODORO_FOCUS_S
+                        _message.emit("🍅 集中開始（25分）")
+                    }
+                } else {
+                    _pomodoroRemainingS.value = left
+                }
+            }
+        }
+    }
+
+    /** 一時停止（段階・残り時間・サイクル数は保持）。 */
+    fun pausePomodoro() {
+        pomodoroJob?.cancel()
+        pomodoroJob = null
+        _pomodoroRunning.value = false
+    }
+
+    /** リセット（サイクル数は保持し、段階をIDLEに戻す）。 */
+    fun resetPomodoro() {
+        pomodoroJob?.cancel()
+        pomodoroJob = null
+        _pomodoroRunning.value = false
+        _pomodoroPhase.value = PomodoroPhase.IDLE
+        _pomodoroRemainingS.value = 0
     }
 }

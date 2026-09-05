@@ -43,6 +43,11 @@ fun ToDoScreen(
     val estimationBias by viewModel.estimationBias.collectAsState()
     val forcedChoiceTask by viewModel.forcedChoiceTask.collectAsState()
     val timeboxExpiredTask by viewModel.timeboxExpiredTask.collectAsState()
+    // ★P5-1: ポモドーロタイマー
+    val pomodoroPhase by viewModel.pomodoroPhase.collectAsState()
+    val pomodoroRemainingS by viewModel.pomodoroRemainingS.collectAsState()
+    val pomodoroCycles by viewModel.pomodoroCycles.collectAsState()
+    val pomodoroRunning by viewModel.pomodoroRunning.collectAsState()
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var postponeTask by remember { mutableStateOf<TaskEntity?>(null) }
@@ -107,6 +112,19 @@ fun ToDoScreen(
                         onPostpone = { postponeTask = task }
                     )
                 }
+            }
+
+            // ── ポモドーロタイマー（★P5-1: 25分集中/5分休憩）──
+            item(key = "pomodoro") {
+                PomodoroCard(
+                    phase = pomodoroPhase,
+                    remainingSeconds = pomodoroRemainingS,
+                    cycles = pomodoroCycles,
+                    running = pomodoroRunning,
+                    onStart = { viewModel.startPomodoro() },
+                    onPause = { viewModel.pausePomodoro() },
+                    onReset = { viewModel.resetPomodoro() }
+                )
             }
 
             // ── 見積もり精度レポート（§8.10.1 / §11.11）──
@@ -267,6 +285,70 @@ private fun RunningTaskCard(
                     Text("延期")
                 }
                 TextButton(onClick = onAbandon) { Text("破棄") }
+            }
+        }
+    }
+}
+
+// ★P5-1: ポモドーロタイマーカード（実行中タスクと独立。VM常駐のため画面回転でも継続）
+@Composable
+private fun PomodoroCard(
+    phase: com.thuvstu.personalencyclopedia.viewmodel.PomodoroPhase,
+    remainingSeconds: Int,
+    cycles: Int,
+    running: Boolean,
+    onStart: () -> Unit,
+    onPause: () -> Unit,
+    onReset: () -> Unit
+) {
+    val title = when (phase) {
+        com.thuvstu.personalencyclopedia.viewmodel.PomodoroPhase.FOCUS -> "🍅 集中中"
+        com.thuvstu.personalencyclopedia.viewmodel.PomodoroPhase.BREAK -> "☕ 休憩中"
+        com.thuvstu.personalencyclopedia.viewmodel.PomodoroPhase.IDLE -> "🍅 ポモドーロ"
+    }
+    val total = when (phase) {
+        com.thuvstu.personalencyclopedia.viewmodel.PomodoroPhase.FOCUS ->
+            com.thuvstu.personalencyclopedia.viewmodel.TaskViewModel.POMODORO_FOCUS_S
+        com.thuvstu.personalencyclopedia.viewmodel.PomodoroPhase.BREAK ->
+            com.thuvstu.personalencyclopedia.viewmodel.TaskViewModel.POMODORO_BREAK_S
+        com.thuvstu.personalencyclopedia.viewmodel.PomodoroPhase.IDLE -> 0
+    }
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text(
+                    "完了 ${cycles}サイクル",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                if (phase == com.thuvstu.personalencyclopedia.viewmodel.PomodoroPhase.IDLE)
+                    "25分集中 → 5分休憩の往復タイマー"
+                else formatDuration(remainingSeconds),
+                style = MaterialTheme.typography.headlineMedium
+            )
+            if (total > 0) {
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { (remainingSeconds.toFloat() / total).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().height(8.dp)
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (running) {
+                    OutlinedButton(onClick = onPause, modifier = Modifier.weight(1f)) { Text("一時停止") }
+                } else {
+                    Button(onClick = onStart, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.PlayArrow, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (phase == com.thuvstu.personalencyclopedia.viewmodel.PomodoroPhase.IDLE) "開始" else "再開")
+                    }
+                }
+                TextButton(onClick = onReset) { Text("リセット") }
             }
         }
     }
