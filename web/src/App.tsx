@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "./api/client";
 import { ConnectPanel } from "./components/ConnectPanel";
 import { ConnectionBar } from "./components/ConnectionBar";
+import { EditorPanel } from "./components/EditorPanel";
 import { EntryDetail } from "./components/EntryDetail";
 import { EntryList } from "./components/EntryList";
 import { GraphView } from "./components/GraphView";
@@ -9,7 +10,7 @@ import { OllamaPanel } from "./components/OllamaPanel";
 import { QuizPanel } from "./components/QuizPanel";
 import { SrsPanel } from "./components/SrsPanel";
 
-type Tab = "entries" | "srs" | "quiz" | "connect" | "ollama";
+type Tab = "entries" | "srs" | "quiz" | "connect" | "edit" | "ollama";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("entries");
@@ -62,6 +63,12 @@ export default function App() {
           つながり
         </button>
         <button
+          className={tab === "edit" ? "tab active" : "tab"}
+          onClick={() => setTab("edit")}
+        >
+          作成
+        </button>
+        <button
           className={tab === "ollama" ? "tab active" : "tab"}
           onClick={() => setTab("ollama")}
         >
@@ -85,6 +92,7 @@ export default function App() {
       {tab === "srs" && <SrsPanel />}
       {tab === "quiz" && <QuizPanel />}
       {tab === "connect" && <ConnectPanel />}
+      {tab === "edit" && <EditorPanel />}
       {tab === "ollama" && <OllamaPanel />}
     </div>
   );

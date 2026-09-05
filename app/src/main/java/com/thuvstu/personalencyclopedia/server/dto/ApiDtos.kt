@@ -94,6 +94,15 @@ data class ConnectionResponse(
     val otherEntryType: String
 )
 
+// ── /api/entries POST ──
+
+@Serializable
+data class CreateEntryRequest(
+    val type: String = "thought",
+    val title: String,
+    val content: String? = null
+)
+
 @Serializable
 data class CreateConnectionRequest(
     val entryAId: String,

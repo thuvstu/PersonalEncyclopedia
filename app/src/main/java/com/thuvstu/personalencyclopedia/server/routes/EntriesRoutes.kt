@@ -1,16 +1,28 @@
 package com.thuvstu.personalencyclopedia.server.routes
 
+import com.thuvstu.personalencyclopedia.db.entity.EntryDefinitionEntity
+import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
+import com.thuvstu.personalencyclopedia.db.entity.EntryThoughtEntity
 import com.thuvstu.personalencyclopedia.server.ServerDependencies
+import com.thuvstu.personalencyclopedia.server.dto.CreateEntryRequest
 import com.thuvstu.personalencyclopedia.server.dto.ErrorResponse
 import com.thuvstu.personalencyclopedia.server.dto.toResponse
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.patch
+import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.coroutines.flow.first
+import java.util.UUID
+
+private val ENTRY_TYPES = setOf(
+    "thought", "definition", "webpage", "book", "video", "document",
+    "media", "person", "org", "place", "event", "liked", "ai_conv"
+)
 
 fun Route.entriesRoutes(deps: ServerDependencies) {
     route("/entries") {
@@ -25,6 +37,42 @@ fun Route.entriesRoutes(deps: ServerDependencies) {
                 deps.entryDao.observeAll(limit, offset).first()
             }
             call.respond(entries.map { it.toResponse() })
+        }
+
+        // ★PC入力: エントリー作成（thought/definitionは拡張まで作成、その他は共通のみ）
+        post {
+            val body = call.receive<CreateEntryRequest>()
+            val type = body.type.ifBlank { "thought" }
+            if (type !in ENTRY_TYPES) {
+                return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Unknown type"))
+            }
+            if (body.title.isBlank()) {
+                return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Title required"))
+            }
+            val id = UUID.randomUUID().toString()
+            val now = System.currentTimeMillis()
+            val entry = EntryEntity(
+                id = id,
+                type = type,
+                title = body.title.trim(),
+                content = body.content?.takeIf { it.isNotBlank() },
+                createdAt = now,
+                updatedAt = now,
+                accessedAt = now
+            )
+            deps.entryDao.insert(entry)
+            if (type == "thought") {
+                deps.thoughtDao.insert(EntryThoughtEntity(entryId = id))
+            } else if (type == "definition") {
+                deps.definitionDao.insert(
+                    EntryDefinitionEntity(
+                        entryId = id,
+                        term = body.title.trim(),
+                        definition = body.content ?: ""
+                    )
+                )
+            }
+            call.respond(HttpStatusCode.Created, entry.toResponse())
         }
 
         get("/{id}") {

@@ -415,6 +415,30 @@ th {
   opacity: 0.85;
 }
 
+/* ── Tiptapエディタ ── */
+.tiptap-wrap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  min-height: 220px;
+  max-width: 720px;
+}
+
+.tiptap-wrap .tiptap {
+  outline: none;
+  min-height: 200px;
+}
+
+.tiptap-wrap .tiptap p {
+  margin: 6px 0;
+}
+
+.saved {
+  color: var(--accent, #1a73e8);
+  margin: 8px 0;
+}
+
 .srs-card,
 .quiz-card {
   border: 1px solid var(--border);

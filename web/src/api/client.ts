@@ -132,6 +132,11 @@ export const api = {
   getEntries: (limit = 50, offset = 0) =>
     request<Entry[]>(`/api/entries?limit=${limit}&offset=${offset}`),
   getEntry: (id: string) => request<Entry>(`/api/entries/${id}`),
+  createEntry: (type: string, title: string, content: string) =>
+    request<Entry>(`/api/entries`, {
+      method: "POST",
+      body: JSON.stringify({ type, title, content }),
+    }),
   search: (q: string, limit = 20, type?: string) =>
     request<Entry[]>(
       `/api/search?q=${encodeURIComponent(q)}&limit=${limit}${
