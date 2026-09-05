@@ -9,12 +9,15 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * G2 (GAP-2/6) + walkthrough4 Round1 + v15.0: v1→v9 の全マイグレーションチェーンを検証する。
+ * G2 (GAP-2/6) + walkthrough4 Round1 + v15.0 + ★#D1: v1→v10 の全マイグレーションチェーンを検証する。
  * - Round C2で復帰させたスキーマJSON(app/schemas)を使って起点DBを作成
  * - Round Eで追加した MIGRATION_6_7 (era_master) が含まれる
  * - walkthrough4で追加した MIGRATION_7_8 (entry_custom_field / repetitionCount / answeredWithinMs) が含まれる
  * - v15.0で追加した MIGRATION_8_9 (task / task_time_log / entry_history / saved_query) が含まれる
+ * - PERF-2で追加した MIGRATION_9_10 (index_progress_events_entityId) が含まれる（★#D1）
  * - 注意: runMigrationsAndValidate の version は「終了バージョン」。
+ * - 注意: app/schemas/ に 3,4,5.json が無いため中間バージョンの単段検証はできない。
+ *   v1→v10フルチェーンとv9→v10単段で代替する。
  */
 @RunWith(AndroidJUnit4::class)
 class MigrationTest {
@@ -36,11 +39,38 @@ class MigrationTest {
         MIGRATION_5_6,
         MIGRATION_6_7,
         MIGRATION_7_8,
-        MIGRATION_8_9
+        MIGRATION_8_9,
+        MIGRATION_9_10
     )
 
     @Test
-    fun migrate1To9_preservesDataAndAddsEraMasterAndV8AndV9() {
+    fun migrate9To10_addsProgressEventsEntityIdIndex() {
+        // v9 スキーマ(9.json)でDBを作成し、進捗イベントを投入
+        helper.createDatabase(testDb, 9).use { db ->
+            db.execSQL(
+                "INSERT INTO entry (id, type, title, content, summary, sourceUrl, lang, isFavorite, isMuted, metadataJson, createdAt, updatedAt) VALUES ('e1', 'thought', 'v9のデータ', '本文', null, null, 'ja', 0, 0, '{}', 1, 1)"
+            )
+            db.execSQL(
+                "INSERT INTO progress_events (id, entityType, entityId, eventType, createdAt) VALUES ('p1', 'entry', 'e1', 'viewed', 100)"
+            )
+        }
+
+        // v9→v10 を適用し、10.json と構造が一致することを検証
+        helper.runMigrationsAndValidate(testDb, 10, true, MIGRATION_9_10).use { db ->
+            val eventCount = db.query("SELECT COUNT(*) FROM progress_events WHERE id = 'p1'").use { c ->
+                c.moveToFirst(); c.getInt(0)
+            }
+            assertEquals("v9のprogress_eventsが保持されていること", 1, eventCount)
+
+            val indexCount = db.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='index_progress_events_entityId'"
+            ).use { c -> c.moveToFirst(); c.getInt(0) }
+            assertEquals("index_progress_events_entityIdが存在すること", 1, indexCount)
+        }
+    }
+
+    @Test
+    fun migrate1To10_fullChainPreservesData() {
         // 1. v1 スキーマ(1.json)でDBを作成し、Phase-0データを投入
         helper.createDatabase(testDb, 1).use { db ->
             db.execSQL(
@@ -56,8 +86,8 @@ class MigrationTest {
             db.execSQL("INSERT INTO entry_tag (entryId, tagId) VALUES ('e1', 't1')")
         }
 
-        // 2. v1→v9 の全マイグレーションを適用し、v9スキーマ(9.json)と構造が一致することを検証
-        helper.runMigrationsAndValidate(testDb, 9, true, *allMigrations).use { db ->
+        // 2. v1→v10 の全マイグレーションを適用し、v10スキーマ(10.json)と構造が一致することを検証
+        helper.runMigrationsAndValidate(testDb, 10, true, *allMigrations).use { db ->
             // Phase-0データが保持されている
             val entryCount = db.query("SELECT COUNT(*) FROM entry WHERE id = 'e1'").use { c ->
                 c.moveToFirst(); c.getInt(0)
@@ -123,6 +153,12 @@ class MigrationTest {
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='index_task_status'"
             ).use { c -> c.moveToFirst(); c.getInt(0) }
             assertEquals("index_task_status が存在すること", 1, taskIndex)
+
+            // PERF-2: v10 の索引
+            val entityIdIndex = db.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='index_progress_events_entityId'"
+            ).use { c -> c.moveToFirst(); c.getInt(0) }
+            assertEquals("index_progress_events_entityId が存在すること", 1, entityIdIndex)
         }
     }
 
