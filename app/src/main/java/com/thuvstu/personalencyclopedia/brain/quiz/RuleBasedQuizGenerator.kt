@@ -132,6 +132,44 @@ object RuleBasedQuizGenerator {
     }
 
     /**
+     * ★P1-3: 並べ替えクイズ。用語を読みの五十音順に並べ、`>` 区切りで答える。
+     * 解答は正規化完全一致で採点できる（MultiStageGraderは空白除去・小文字化のみで `>` を保持）。
+     */
+    fun generateSort(
+        members: List<EntryDefinitionEntity>,
+        topicId: String?
+    ): QuizBankEntity? {
+        if (members.size < 3) return null
+        val ordered = members.sortedBy { it.reading?.ifBlank { null } ?: it.term }
+        val answer = ordered.joinToString(">") { it.term }
+        val shuffled = members.map { it.term }.shuffled()
+            .let { first ->
+                // シャッフル結果が正解と同一なら振り直す（最大5回）
+                var s = first
+                repeat(5) { if (s.joinToString(">") == answer) s = s.shuffled() }
+                s
+            }
+        return QuizBankEntity(
+            id = UUID.randomUUID().toString(),
+            sourceEntryId = members.first().entryId,
+            topicId = topicId,
+            quizType = "sort",
+            question = "次の${members.size}語を読みの五十音順に並べ替え、`>` で区切って答えよ。",
+            choicesJson = json.encodeToString(shuffled),
+            answer = answer,
+            generationMethod = "rule_based",
+            difficulty = 3,
+            gradingContextJson = RubricParser.buildGradingContextJson(
+                items = listOf(
+                    RubricItemJson(kind = "keyword", label = "正順", expected = answer, weight = 1.0f)
+                ),
+                modelAnswers = listOf(answer)
+            ),
+            hintsJson = json.encodeToString(listOf("項目数: ${members.size}"))
+        )
+    }
+
+    /**
      * Batch generate all applicable quiz types from a list of definitions.
      */
     fun generateBatch(
@@ -153,6 +191,8 @@ object RuleBasedQuizGenerator {
             }
             if (sameField.size >= 3) {
                 quizzes.add(generateMcq(def, sameField, topicId))
+                // ★P1-3: 同分野4語で並べ替えを1問
+                generateSort(listOf(def) + sameField.take(3), topicId)?.let { quizzes.add(it) }
             }
 
             // Fill blank

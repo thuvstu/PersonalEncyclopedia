@@ -55,6 +55,9 @@ class QuizRepository @Inject constructor(
             )
             if (distractors.size >= 3) {
                 quizzes.add(RuleBasedQuizGenerator.generateMcq(def, distractors, null))
+                // ★P1-3: 並べ替え（同分野4語）
+                RuleBasedQuizGenerator.generateSort(listOf(def) + distractors.take(3), null)
+                    ?.let { quizzes.add(it) }
             }
             RuleBasedQuizGenerator.generateFillBlank(def, null)?.let { quizzes.add(it) }
             val newQuizzes = quizzes.filter { quizDao.countByQuestion(it.question) == 0 }
@@ -79,7 +82,7 @@ class QuizRepository @Inject constructor(
         topicId: String? = null,
         limit: Int = 10,
         difficultyMin: Int? = null,
-        types: List<String> = listOf("qa", "mcq", "fill_blank")
+        types: List<String> = listOf("qa", "mcq", "fill_blank", "sort")
     ): List<QuizBankEntity> {
         val slice = (limit / 3).coerceAtLeast(1)
         val wrong = quizDao.getWrongUnmasteredQuizzes(topicId, difficultyMin, slice)

@@ -153,8 +153,8 @@ class SettingsRepository @Inject constructor(
     val studyPlusConsumerSecret: StateFlow<String?> = _studyPlusConsumerSecret.asStateFlow()
 
     companion object {
-        // ★最適化: 出題形式はqa/mcq/fill_blankの3種に正式収束（sort/cloze/customは生成・出題対象外）
-        val SUPPORTED_QUIZ_TYPES: Set<String> = setOf("qa", "mcq", "fill_blank")
+        // ★P1-3: 並べ替えを追加し4種に拡大（cloze/customは引き続き生成・出題対象外）
+        val SUPPORTED_QUIZ_TYPES: Set<String> = setOf("qa", "mcq", "fill_blank", "sort")
     }
 
     /** ★ C1: APIキーを暗号化ストアへ保存し、インメモリFlowを更新 */

@@ -74,7 +74,8 @@ fun QuizListScreen(
                                     SuggestionChip(onClick = {}, label = {
                                         Text(when (quiz.quizType) {
                                             "qa" -> "記述"; "mcq" -> "4択"
-                                            "fill_blank" -> "穴埋め"; else -> quiz.quizType
+                                            "fill_blank" -> "穴埋め"; "sort" -> "並べ替え"
+                                            else -> quiz.quizType
                                         })
                                     })
                                     Spacer(Modifier.width(8.dp))

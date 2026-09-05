@@ -20,7 +20,7 @@ fun Route.quizRoutes(deps: ServerDependencies) {
     route("/quiz") {
         get {
             val limit = call.parameters["limit"]?.toIntOrNull() ?: 10
-            val types = call.parameters["type"]?.split(",") ?: listOf("qa", "mcq", "fill_blank")
+            val types = call.parameters["type"]?.split(",") ?: listOf("qa", "mcq", "fill_blank", "sort")
             val quizzes = deps.quizDao.getRandomQuizzes(types, limit)
             call.respond(quizzes.map { it.toQuizResponse() })
         }

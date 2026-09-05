@@ -254,11 +254,32 @@ fun QuizScreen(
                                 }
                             }
                             else -> {
+                                // ★P1-3: 並べ替えは選択肢一覧＋ `>` 区切り入力
+                                if (state.quiz.quizType == "sort" && state.choices.isNotEmpty()) {
+                                    Text(
+                                        "並べ替える用語:",
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    state.choices.forEachIndexed { i, choice ->
+                                        Text(
+                                            "${i + 1}. $choice",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
                                 OutlinedTextField(
                                     value = answerInput,
                                     onValueChange = { answerInput = it },
                                     modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("解答を入力") },
+                                    label = {
+                                        Text(
+                                            if (state.quiz.quizType == "sort") "解答（用語を > で区切る）"
+                                            else "解答を入力"
+                                        )
+                                    },
                                     minLines = 2,
                                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
                                 )
