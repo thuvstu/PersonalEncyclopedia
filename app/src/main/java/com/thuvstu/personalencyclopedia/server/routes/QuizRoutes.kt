@@ -25,6 +25,13 @@ fun Route.quizRoutes(deps: ServerDependencies) {
             call.respond(quizzes.map { it.toQuizResponse() })
         }
 
+        // NOTE: "/count" は "/{id}" より前に定義すること。
+        // Ktorは登録順に解決するため、逆だと "count" が id="count" に吸収され404になる (§13 A1)。
+        get("/count") {
+            val count = deps.quizDao.observeQuizCount().first()
+            call.respond(mapOf("quizCount" to count))
+        }
+
         get("/{id}") {
             val id = call.parameters["id"]
                 ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing id"))
@@ -74,9 +81,5 @@ fun Route.quizRoutes(deps: ServerDependencies) {
             )
         }
 
-        get("/count") {
-            val count = deps.quizDao.observeQuizCount().first()
-            call.respond(mapOf("quizCount" to count))
-        }
     }
 }
