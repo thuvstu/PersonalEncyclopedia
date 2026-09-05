@@ -33,7 +33,8 @@ class EntryRepository @Inject constructor(
     private val tagDao: TagDao,
     private val entryTypeDao: EntryTypeDao,
     private val entryHistoryDao: EntryHistoryDao,
-    private val embeddingQueue: com.thuvstu.personalencyclopedia.brain.ai.EmbeddingQueue
+    private val embeddingQueue: com.thuvstu.personalencyclopedia.brain.ai.EmbeddingQueue,
+    private val geminiClient: com.thuvstu.personalencyclopedia.brain.ai.GeminiClient
 ) {
 
     /**
@@ -53,10 +54,62 @@ class EntryRepository @Inject constructor(
                 entryId = entryId,
                 titleSnapshot = newTitle,
                 contentSnapshot = newContent,
-                changeSummary = "",
+                changeSummary = buildChangeSummary(prev, newTitle, newContent),
                 charCountDelta = newLen - prevLen
             )
         )
+    }
+
+    /**
+     * ★§5.9.2: 変更サマリー。API設定時はLLMが50字以内で要約、未設定時は決定論フォールバック。
+     * 保存をブロックしない（失敗時はフォールバック文）。
+     */
+    private suspend fun buildChangeSummary(
+        prev: EntryEntity?,
+        newTitle: String,
+        newContent: String?
+    ): String {
+        val delta = (newContent?.length ?: 0) - (prev?.content?.length ?: 0)
+        val titleChanged = prev != null && prev.title != newTitle
+        val fallback = buildString {
+            if (titleChanged) append("タイトル変更")
+            if (delta > 0) {
+                if (isNotEmpty()) append("・")
+                append("+${delta}文字")
+            } else if (delta < 0) {
+                if (isNotEmpty()) append("・")
+                append("${delta}文字")
+            }
+            if (isEmpty()) append("軽微な変更")
+        }
+        if (!geminiClient.isConfigured()) return fallback
+        return try {
+            geminiClient.generate(
+                "以下はメモの編集前後です。変更内容を50字以内で1行に要約してください。\n" +
+                    "【旧タイトル】${prev?.title}\n【新タイトル】$newTitle\n" +
+                    "【旧本文】${prev?.content?.take(500)}\n【新本文】${newContent?.take(500)}"
+            )?.trim()?.take(100)?.takeIf { it.isNotBlank() } ?: fallback
+        } catch (_: Exception) {
+            fallback
+        }
+    }
+
+    /**
+     * §11.13: スナップショットへの巻き戻し。entryを上書きし、復元自体も履歴に残す。
+     * 復元後にtrueを返す（対象entryが無ければfalse）。
+     */
+    suspend fun restoreHistory(history: EntryHistoryEntity): Boolean {
+        val current = entryDao.getById(history.entryId) ?: return false
+        val restored = current.copy(
+            title = history.titleSnapshot,
+            content = history.contentSnapshot,
+            updatedAt = System.currentTimeMillis()
+        )
+        entryDao.update(restored)
+        // 復元自体を履歴化（巻き戻しの巻き戻しが可能）
+        recordHistory(history.entryId, current, restored.title, restored.content)
+        embeddingQueue.enqueue(history.entryId)
+        return true
     }
     // ── Observe ──
     fun observeRecent(limit: Int = 10): Flow<List<EntryEntity>> =

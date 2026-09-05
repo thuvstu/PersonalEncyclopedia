@@ -306,12 +306,6 @@ fun EntryDetailScreen(
                 OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("🕘 編集履歴（${history.size}件）", style = MaterialTheme.typography.labelLarge)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            "スナップショットは閲覧のみ。復元（巻き戻し）はv15.0のスコープ外です（§11.13）",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                         Spacer(modifier = Modifier.height(8.dp))
                         history.take(20).forEach { h ->
                             val delta = h.charCountDelta
@@ -329,9 +323,11 @@ fun EntryDetailScreen(
                                         maxLines = 1
                                     )
                                     Text(
-                                        sdf.format(Date(h.recordedAt)),
+                                        h.changeSummary.ifBlank { sdf.format(Date(h.recordedAt)) },
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (h.changeSummary.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant
+                                        else MaterialTheme.colorScheme.primary,
+                                        maxLines = 1
                                     )
                                 }
                                 Text(
@@ -483,11 +479,11 @@ fun EntryDetailScreen(
         )
     }
 
-    // §11.13: 編集履歴プレビュー（読み取り専用）
+    // §11.13: 編集履歴プレビュー＋巻き戻し
     previewHistory?.let { h ->
         AlertDialog(
             onDismissRequest = { previewHistory = null },
-            title = { Text("過去のスナップショット（閲覧のみ）") },
+            title = { Text("過去のスナップショット") },
             text = {
                 Column(
                     modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -504,6 +500,12 @@ fun EntryDetailScreen(
             },
             confirmButton = {
                 TextButton(onClick = { previewHistory = null }) { Text("閉じる") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    viewModel.restoreHistory(h)
+                    previewHistory = null
+                }) { Text("この版に復元") }
             }
         )
     }

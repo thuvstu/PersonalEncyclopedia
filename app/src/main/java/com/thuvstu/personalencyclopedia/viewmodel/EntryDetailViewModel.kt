@@ -153,6 +153,14 @@ class EntryDetailViewModel @Inject constructor(
     fun toggleFavorite() { viewModelScope.launch { repo.toggleFavorite(entryId) } }
     fun softDelete() { viewModelScope.launch { repo.softDelete(entryId) } }
 
+    /** §11.13: スナップショットへの巻き戻し。 */
+    fun restoreHistory(history: EntryHistoryEntity) {
+        viewModelScope.launch {
+            val ok = repo.restoreHistory(history)
+            _message.emit(if (ok) "🕘 スナップショットに復元しました" else "復元できませんでした")
+        }
+    }
+
     fun addTag(tagName: String) {
         if (tagName.isBlank()) return
         viewModelScope.launch { repo.addTag(entryId, tagName.trim()) }
