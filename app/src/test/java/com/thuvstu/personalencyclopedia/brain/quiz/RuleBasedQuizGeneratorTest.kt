@@ -47,6 +47,30 @@ class RuleBasedQuizGeneratorTest {
     }
 
     @Test
+    fun `cloze uses two blanks and sequence answer`() {
+        val q = RuleBasedQuizGenerator.generateCloze(def, null) ?: error("生成失敗")
+        assertEquals("cloze", q.quizType)
+        assertTrue(q.question.contains("＿＿＿"))
+        assertTrue("空欄が2つ以上", QuizFormatSupport.blankCount(q.question) >= 2)
+        val parts = QuizFormatSupport.splitSequence(q.answer)
+        assertTrue(parts.contains("プレート境界"))
+        assertEquals(QuizFormatSupport.blankCount(q.question), parts.size)
+    }
+
+    @Test
+    fun `sort orders by reading and keeps greater-than answer`() {
+        val members = listOf(
+            def,
+            EntryDefinitionEntity(entryId = "d1", term = "断層", definition = "断層の定義", field = "地学", reading = "だんそう"),
+            EntryDefinitionEntity(entryId = "d2", term = "火山", definition = "火山の定義", field = "地学", reading = "かざん")
+        )
+        val q = RuleBasedQuizGenerator.generateSort(members, null) ?: error("生成失敗")
+        assertEquals("sort", q.quizType)
+        assertEquals("火山>断層>プレート境界", q.answer)
+        assertTrue(q.choicesJson.contains("断層"))
+    }
+
+    @Test
     fun `MCQ keeps default empty context and 4 choices`() {
         val distractors = listOf(
             EntryDefinitionEntity("d1", "断層", "断層の定義", "地学"),

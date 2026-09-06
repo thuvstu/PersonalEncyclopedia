@@ -394,7 +394,9 @@ fun SettingsScreen(
                         listOf(
                             "qa" to "記述式",
                             "mcq" to "選択式",
-                            "fill_blank" to "穴埋め"
+                            "fill_blank" to "穴埋め",
+                            "sort" to "並べ替え",
+                            "cloze" to "複数穴埋め"
                         ).forEach { (type, label) ->
                             FilterChip(
                                 selected = type in quizTypes,

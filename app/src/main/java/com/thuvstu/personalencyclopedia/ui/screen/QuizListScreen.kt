@@ -51,7 +51,8 @@ fun QuizListScreen(
                 .padding(horizontal = 16.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(null to "すべて", "qa" to "記述", "mcq" to "4択",
-                    "fill_blank" to "穴埋め").forEach { (type, label) ->
+                    "fill_blank" to "穴埋め", "sort" to "並べ替え", "cloze" to "複数穴埋め")
+                    .forEach { (type, label) ->
                     FilterChip(
                         selected = typeFilter == type,
                         onClick = { viewModel.setTypeFilter(type) },
@@ -75,6 +76,7 @@ fun QuizListScreen(
                                         Text(when (quiz.quizType) {
                                             "qa" -> "記述"; "mcq" -> "4択"
                                             "fill_blank" -> "穴埋め"; "sort" -> "並べ替え"
+                                            "cloze" -> "複数穴埋め"
                                             else -> quiz.quizType
                                         })
                                     })

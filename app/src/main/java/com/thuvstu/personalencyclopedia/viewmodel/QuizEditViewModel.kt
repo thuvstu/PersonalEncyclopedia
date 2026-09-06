@@ -89,7 +89,11 @@ class QuizEditViewModel @Inject constructor(
     }
 
     val canSave: StateFlow<Boolean> = combine(question, answer, quizType, choices) { q, a, t, c ->
-        q.isNotBlank() && a.isNotBlank() && (t != "mcq" || c.count { it.isNotBlank() } >= 2)
+        q.isNotBlank() && a.isNotBlank() && when (t) {
+            "mcq", "sort" -> c.count { it.isNotBlank() } >= 2
+            "cloze" -> q.contains("＿＿＿")
+            else -> true
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     fun save() {

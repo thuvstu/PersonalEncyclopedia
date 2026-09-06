@@ -57,6 +57,22 @@ class MultiStageGrader @Inject constructor(
     }
 
     /**
+     * 並べ替え・複数穴埋め: `>` 区切りトークンを正規化して順比較。
+     * 全角＞・読点・カンマでも区切った入力を受理する。曖昧一致は使わない。
+     */
+    fun gradeSequence(userAnswer: String, correctAnswer: String): GradeResult {
+        val exact = gradeExact(userAnswer, correctAnswer)
+        if (exact.isCorrect) return exact.copy(method = "sequence")
+        val user = QuizFormatSupport.splitSequence(userAnswer).map { normalize(it) }
+        val correct = QuizFormatSupport.splitSequence(correctAnswer).map { normalize(it) }
+        if (correct.isEmpty()) return exact
+        if (user == correct) {
+            return GradeResult(true, 1.0f, "sequence", user.joinToString(">"), correct.joinToString(">"))
+        }
+        return GradeResult(false, 0f, "sequence", user.joinToString(">"), correct.joinToString(">"))
+    }
+
+    /**
      * 和暦→西暦変換。 era_master のデータを元に `元年の西暦 + (yearInEra - 1)` で換算する。
      */
     suspend fun parseYear(text: String): Int? {

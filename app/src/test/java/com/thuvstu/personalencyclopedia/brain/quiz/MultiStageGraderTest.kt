@@ -88,6 +88,22 @@ class MultiStageGraderTest {
     }
 
     @Test
+    fun `gradeSequence matches reordered separators`() {
+        val r = grader.gradeSequence("平均 ＞ 分散、標準偏差", "平均値>分散>標準偏差")
+        assertFalse(r.isCorrect)
+        val ok = grader.gradeSequence("平均値 ＞ 分散、標準偏差", "平均値>分散>標準偏差")
+        assertTrue(ok.isCorrect)
+        assertEquals("sequence", ok.method)
+    }
+
+    @Test
+    fun `gradeSequence rejects wrong order`() {
+        val r = grader.gradeSequence("分散>平均値>標準偏差", "平均値>分散>標準偏差")
+        assertFalse(r.isCorrect)
+        assertEquals("sequence", r.method)
+    }
+
+    @Test
     fun `unknown era is marked undeterminable not incorrect`() = runBlocking {
         // 弘安は era_master シードデータに含まれない → 判定不能として明示
         val result = grader.grade(userAnswer = "弘安5年", correctAnswer = "1282年")

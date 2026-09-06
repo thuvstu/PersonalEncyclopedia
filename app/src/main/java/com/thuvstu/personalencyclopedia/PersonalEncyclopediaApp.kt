@@ -102,6 +102,7 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
         database.entryTypeDao().insertAll(SeedData.entryTypes)
         seedBasicDataIfSparse()
         seedHighSchoolMathIfNeeded()
+        seedQuizFormatsIfNeeded()
     }
 
     /**
@@ -139,6 +140,13 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
             database.tagDao(), database.topicDao(), database.quizDao(),
             database.connectionDao(), database.whiteboardDao(), database.wikiArticleDao()
         )
+    }
+
+    /**
+     * ★wt52: 並べ替え・複数穴埋め等の学習クイズ。数学シード済みDBにも設問文で冪等追記。
+     */
+    private suspend fun seedQuizFormatsIfNeeded() {
+        InitialDataMath.seedFormatQuizzes(database.quizDao())
     }
 
     /** Phase B: Brain Layer初期化。ベクトルインデックス・埋め込みキューの回復。 */

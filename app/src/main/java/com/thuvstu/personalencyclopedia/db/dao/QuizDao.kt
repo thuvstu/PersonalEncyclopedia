@@ -58,12 +58,13 @@ interface QuizDao {
         AND qb.id IN (SELECT qa.quizId FROM quiz_attempts qa WHERE qa.isCorrect = 0)
         AND qb.id NOT IN (SELECT qa.quizId FROM quiz_attempts qa WHERE qa.isCorrect = 1)
         AND (:topicId IS NULL OR :topicId = '' OR qb.topicId = :topicId OR et.topicId = :topicId)
+        AND qb.quizType IN (:types)
         AND (:difficultyMin IS NULL OR qb.difficulty >= :difficultyMin)
         ORDER BY RANDOM()
         LIMIT :limit
     """)
     suspend fun getWrongUnmasteredQuizzes(
-        topicId: String?, difficultyMin: Int?, limit: Int
+        topicId: String?, difficultyMin: Int?, types: List<String>, limit: Int
     ): List<QuizBankEntity>
 
     @Query("""
@@ -72,12 +73,13 @@ interface QuizDao {
         WHERE qb.isActive = 1
         AND qb.id NOT IN (SELECT quizId FROM quiz_attempts)
         AND (:topicId IS NULL OR :topicId = '' OR qb.topicId = :topicId OR et.topicId = :topicId)
+        AND qb.quizType IN (:types)
         AND (:difficultyMin IS NULL OR qb.difficulty >= :difficultyMin)
         ORDER BY RANDOM()
         LIMIT :limit
     """)
     suspend fun getNeverAttemptedQuizzes(
-        topicId: String?, difficultyMin: Int?, limit: Int
+        topicId: String?, difficultyMin: Int?, types: List<String>, limit: Int
     ): List<QuizBankEntity>
 
     @Query("""

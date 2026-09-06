@@ -362,6 +362,70 @@ object InitialDataMath {
         Quiz("点A,B の中点の位置ベクトルは？", "(→OA+→OB)/2", listOf("(→OA+→OB)/2", "→OA+→OB", "→OA-→OB", "2→OA"), "内分 1:1。"),
     )
 
+    /** ★wt52: 穴埋め・並べ替え・複数穴埋め・記述。既存 mcq 60 は触らず設問文で冪等追記。 */
+    val formatQuizzes = listOf(
+        Quiz("空欄を埋めよ:\nsin^2 θ + cos^2 θ = ＿＿＿", "1", emptyList(), "三角比の相互関係。", "fill_blank"),
+        Quiz("空欄を埋めよ:\n2次方程式の判別式 D = ＿＿＿", "b^2-4ac", emptyList(), "D>0 で異なる2実解。", "fill_blank"),
+        Quiz("空欄を埋めよ:\n等差数列の一般項 a_n = ＿＿＿", "a+(n-1)d", emptyList(), "初項+公差×(項番号-1)。", "fill_blank"),
+        Quiz("空欄を埋めよ:\nP(A|B) = ＿＿＿", "P(A∩B)/P(B)", emptyList(), "B を新しい全体集合と見る。", "fill_blank"),
+        Quiz("空欄を埋めよ:\n(sin x)' = ＿＿＿", "cos x", emptyList(), "弧度法。数III。", "fill_blank"),
+        Quiz("空欄を埋めよ:\nlog_a (MN) = ＿＿＿", "log_a M + log_a N", emptyList(), "真数は正。", "fill_blank"),
+        Quiz("空欄を埋めよ:\n内積 a·b = 0 のとき2ベクトルは ＿＿＿", "直交", emptyList(), "cosθ=0。", "fill_blank"),
+        Quiz("空欄を埋めよ:\n離心率 e=1 の曲線は ＿＿＿", "放物線", emptyList(), "e<1 楕円、e>1 双曲線。", "fill_blank"),
+        Quiz(
+            "数の集合を包含の小さい順に並べよ。",
+            "自然数>整数>有理数>実数",
+            listOf("実数", "有理数", "自然数", "整数"),
+            "N ⊂ Z ⊂ Q ⊂ R。",
+            "sort"
+        ),
+        Quiz(
+            "微分の考えを定義の順に並べよ。",
+            "平均変化率>微分係数>導関数",
+            listOf("導関数", "平均変化率", "微分係数"),
+            "割線→接線→関数。",
+            "sort"
+        ),
+        Quiz(
+            "データの散らばり指標を計算の順に並べよ。",
+            "平均値>分散>標準偏差",
+            listOf("標準偏差", "分散", "平均値"),
+            "偏差の2乗平均の平方根。",
+            "sort"
+        ),
+        Quiz(
+            "三角関数の公式を導出の順に並べよ。",
+            "加法定理>2倍角の公式>半角の公式",
+            listOf("半角の公式", "加法定理", "2倍角の公式"),
+            "加法定理が源。",
+            "sort"
+        ),
+        Quiz(
+            "積分の考えを定義の順に並べよ。",
+            "不定積分>定積分>定積分と面積",
+            listOf("定積分と面積", "不定積分", "定積分"),
+            "原始関数→差→符号付き面積。",
+            "sort"
+        ),
+        Quiz(
+            "複素数の表し方を基本から順に並べよ。",
+            "複素数>複素数の極形式>ド・モアブルの定理",
+            listOf("ド・モアブルの定理", "複素数", "複素数の極形式"),
+            "直交→極→n乗。",
+            "sort"
+        ),
+        Quiz("空欄を順に埋めよ:\na/sin A = ＿＿＿ = ＿＿＿", "b/sin B>2R", emptyList(), "正弦定理。R は外接円の半径。", "cloze"),
+        Quiz("空欄を順に埋めよ:\nax^2+bx+c=0 の解の和は ＿＿＿、積は ＿＿＿", "-b/a>c/a", emptyList(), "解と係数の関係。", "cloze"),
+        Quiz("空欄を順に埋めよ:\nB(n,p) で E(X)=＿＿＿、V(X)=＿＿＿", "np>np(1-p)", emptyList(), "二項分布。", "cloze"),
+        Quiz("空欄を順に埋めよ:\n(fg)' = ＿＿＿ + ＿＿＿", "f'g>fg'", emptyList(), "積の微分。", "cloze"),
+        Quiz("空欄を順に埋めよ:\nsin(α+β) = ＿＿＿ + ＿＿＿", "sinα cosβ>cosα sinβ", emptyList(), "加法定理。", "cloze"),
+        Quiz("空欄を順に埋めよ:\n楕円は離心率が ＿＿＿、双曲線は ＿＿＿", "1未満>1より大きい", emptyList(), "放物線はちょうど1。", "cloze"),
+        Quiz("正弦定理を述べよ。", "a/sin A = b/sin B = c/sin C = 2R", emptyList(), "2R は外接円の直径。", "qa"),
+        Quiz("2次方程式 ax^2+bx+c=0 の解の公式を書け。", "x=(-b±√(b^2-4ac))/(2a)", emptyList(), "平方完成からも出る。", "qa"),
+        Quiz("数学的帰納法で自然数の命題を示す2ステップを述べよ。", "n=1 で成立することを示し、n=k を仮定して n=k+1 を示す", emptyList(), "伝播。", "qa"),
+        Quiz("信頼度95%の区間の意味を述べよ。", "同じ作り方の区間の約95%が母数を含む", emptyList(), "母数が入る確率95%ではない。", "qa"),
+    )
+
     val wikis = listOf(
         WikiArticleEntity(
             title = "数学I 全単元マップ", summary = "必履修。式・論理・2次・三角比・データ",
@@ -702,16 +766,19 @@ object InitialDataMath {
         }
 
         var quizAdded = 0
-        if (quizDao != null) for (q in quizzes) {
-            if (quizDao.countByQuestion(q.q) > 0) continue
-            quizDao.insertQuiz(
-                QuizBankEntity(
-                    question = q.q, answer = q.a, choicesJson = jsonArr(q.choices),
-                    explanation = q.exp, quizType = q.type, generationMethod = "initial",
-                    topicId = T_MATH, difficulty = 3
+        if (quizDao != null) {
+            for (q in quizzes) {
+                if (quizDao.countByQuestion(q.q) > 0) continue
+                quizDao.insertQuiz(
+                    QuizBankEntity(
+                        question = q.q, answer = q.a, choicesJson = jsonArr(q.choices),
+                        explanation = q.exp, quizType = q.type, generationMethod = "initial",
+                        topicId = T_MATH, difficulty = 3
+                    )
                 )
-            )
-            quizAdded++
+                quizAdded++
+            }
+            quizAdded += seedFormatQuizzes(quizDao)
         }
 
         if (wikiDao != null) for (w in wikis) {
@@ -804,5 +871,26 @@ object InitialDataMath {
         }
 
         return Result(added = added, skipped = skipped, connections = conns, quizzes = quizAdded)
+    }
+
+    /**
+     * ★wt52: 形式別学習クイズを設問文で冪等追記。数学シード済みDBにも起動ごとに足せる。
+     */
+    suspend fun seedFormatQuizzes(quizDao: QuizDao): Int {
+        fun jsonArr(items: List<String>) =
+            "[" + items.joinToString(",") { "\"" + it.replace("\"", "\\\"") + "\"" } + "]"
+        var n = 0
+        for (q in formatQuizzes) {
+            if (quizDao.countByQuestion(q.q) > 0) continue
+            quizDao.insertQuiz(
+                QuizBankEntity(
+                    question = q.q, answer = q.a, choicesJson = jsonArr(q.choices),
+                    explanation = q.exp, quizType = q.type, generationMethod = "initial",
+                    topicId = T_MATH, difficulty = 3
+                )
+            )
+            n++
+        }
+        return n
     }
 }

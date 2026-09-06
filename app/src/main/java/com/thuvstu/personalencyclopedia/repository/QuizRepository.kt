@@ -60,6 +60,7 @@ class QuizRepository @Inject constructor(
                     ?.let { quizzes.add(it) }
             }
             RuleBasedQuizGenerator.generateFillBlank(def, null)?.let { quizzes.add(it) }
+            RuleBasedQuizGenerator.generateCloze(def, null)?.let { quizzes.add(it) }
             val newQuizzes = quizzes.filter { quizDao.countByQuestion(it.question) == 0 }
             quizDao.insertQuizzes(newQuizzes)
             return newQuizzes.size
@@ -82,11 +83,12 @@ class QuizRepository @Inject constructor(
         topicId: String? = null,
         limit: Int = 10,
         difficultyMin: Int? = null,
-        types: List<String> = listOf("qa", "mcq", "fill_blank", "sort")
+        types: List<String> = listOf("qa", "mcq", "fill_blank", "sort", "cloze")
     ): List<QuizBankEntity> {
+        if (types.isEmpty()) return emptyList()
         val slice = (limit / 3).coerceAtLeast(1)
-        val wrong = quizDao.getWrongUnmasteredQuizzes(topicId, difficultyMin, slice)
-        val unlearned = quizDao.getNeverAttemptedQuizzes(topicId, difficultyMin, slice)
+        val wrong = quizDao.getWrongUnmasteredQuizzes(topicId, difficultyMin, types, slice)
+        val unlearned = quizDao.getNeverAttemptedQuizzes(topicId, difficultyMin, types, slice)
         val random = quizDao.getRandomUnmasteredQuizzes(topicId, types, difficultyMin, limit)
         return (wrong + unlearned + random).distinctBy { it.id }.take(limit)
     }

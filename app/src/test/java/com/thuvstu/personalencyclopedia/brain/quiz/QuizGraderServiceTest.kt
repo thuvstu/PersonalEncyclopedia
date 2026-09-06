@@ -128,6 +128,17 @@ class QuizGraderServiceTest {
     }
 
     @Test
+    fun `sort uses sequence grading not fuzzy`() = runBlocking {
+        val r = service.grade(
+            quiz(type = "sort", answer = "平均値>分散>標準偏差"),
+            userAnswer = "平均値＞分散、標準偏差"
+        )
+        assertEquals(true, r.isCorrect)
+        assertEquals("sequence", r.method)
+        assertTrue(!r.rubricUsed)
+    }
+
+    @Test
     fun `semantic upgrade is skipped when api not configured`() = runBlocking {
         // 不正解のまま（意味的採点はAPI未設定でnull→昇格なし）
         val r = service.grade(quiz(answer = "プレート同士がぶつかる場所"), userAnswer = "あいうえおかきくけこ")

@@ -60,7 +60,13 @@ fun QuizEditScreen(
             // 出題形式
             Text("出題形式", style = MaterialTheme.typography.labelLarge)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("qa" to "記述", "mcq" to "4択", "fill_blank" to "穴埋め").forEach { (v, label) ->
+                listOf(
+                    "qa" to "記述",
+                    "mcq" to "4択",
+                    "fill_blank" to "穴埋め",
+                    "sort" to "並べ替え",
+                    "cloze" to "複数穴埋め"
+                ).forEach { (v, label) ->
                     FilterChip(
                         selected = quizType == v,
                         onClick = { viewModel.setQuizType(v) },
@@ -78,12 +84,37 @@ fun QuizEditScreen(
             OutlinedTextField(
                 value = answer, onValueChange = viewModel::setAnswer,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("正解 *") }
+                label = {
+                    Text(
+                        when (quizType) {
+                            "sort" -> "正解 *（項目を > でつないだ順）"
+                            "cloze" -> "正解 *（空欄順に > で区切る）"
+                            else -> "正解 *"
+                        }
+                    )
+                }
             )
+            if (quizType == "fill_blank" || quizType == "cloze") {
+                Text(
+                    "問題文の空欄は全角 ＿＿＿ で書く。複数穴埋めの正解は空欄の出現順に > で区切る。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (quizType == "sort") {
+                Text(
+                    "下に並べる項目を書き、正解欄にはタップ順と同じ並びを > でつなぐ。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
-            // MCQ選択肢
-            if (quizType == "mcq") {
-                Text("選択肢（正解を含む・2〜6個）", style = MaterialTheme.typography.labelLarge)
+            // MCQ / 並べ替えの項目
+            if (quizType == "mcq" || quizType == "sort") {
+                Text(
+                    if (quizType == "sort") "並べる項目（2〜6個）" else "選択肢（正解を含む・2〜6個）",
+                    style = MaterialTheme.typography.labelLarge
+                )
                 choices.forEachIndexed { i, c ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(

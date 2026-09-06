@@ -36,7 +36,11 @@ class QuizGraderService @Inject constructor(
         answeredWithinMs: Long? = null,   // §8.7.3: 設問表示〜回答までの経過時間
         hintPenalty: Float = 0.3f         // ヒント減点率
     ): GradedResult {
-        var gradeResult = multiStageGrader.grade(userAnswer, quiz.answer)
+        var gradeResult = when (quiz.quizType) {
+            "sort", "cloze" -> multiStageGrader.gradeSequence(userAnswer, quiz.answer)
+            "mcq" -> multiStageGrader.grade(userAnswer, quiz.answer, mode = "exact")
+            else -> multiStageGrader.grade(userAnswer, quiz.answer)
+        }
 
         // ★新採点システム(試作): 記述式はルーブリック採点を適用し、採点根拠を記録する。
         // rubricが正解と判定した場合のみ正解に昇格する(safeな試作統合)。
