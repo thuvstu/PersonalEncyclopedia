@@ -586,7 +586,7 @@ Android設定画面: トークン表示 → PC ConnectionBar: ホスト/ポー�
 
 - **`WebScraper` — 2段階フォールバック**: Stage1 で Jsoup が `<article>/<main>/[role=main]` を優先しノイズ除去(script/nav/footer等)して本文抽出 → **本文100文字未満なら Stage2 で Gemini に「要約せず全文」を返させる**(最大15000文字)。`scraperUsed` に使用経路を記録。readingTimeS は400字/秒想定。最後に `embeddingQueue.enqueue`。
 - **`DuplicateDetector`**: `UrlDuplicateDetector`(sourceUrl一致) + `ContentHashDuplicateDetector`(タイトル絞り込み→正規化本文一致) を **OR合成** (`ImportPipeline.kt:38-40`)。
-- **`AutoLinker` — Trie木の最長一致**: 閲覧時UI装飾のみで **connectionには書き込まない**という明示的な設計方針 (`AutoLinker.kt:9-13`)。`AutoLinkerProvider` が `@Volatile`+`Mutex` の二重チェックロッキングで構築し、**`COUNT-MAX(updatedAt)` 指紋が変わったときだけ再構築(wt44)**。タイトル射影(`EntryDao.getAllTitles`)のみ読み、上限なし。詳細画面・Wiki画面が同じキャッシュを共有。
+- **`AutoLinker` — Trie木の最長一致**: 閲覧時UI装飾のみで **connectionには書き込まない**という明示的な設計方針 (`AutoLinker.kt:9-13`)。`AutoLinkerProvider` が `@Volatile`+`Mutex` の二重チェックロッキングで構築し、**`COUNT-MAX(updatedAt)` 指紋が変わったときだけ再構築(wt44)**。タイトル射影(`EntryDao.getAllTitles`)のみ読み、上限なし。詳細画面・Wiki画面が同じキャッシュを共有。**wt46: 表記揺れ対応** — 1文字→1文字の正規化(全半角・大小文字・半角カナ)で照合し、`EntryDao.getAllAliasForms`(定義 reading／人物 fullName・aliasesJson／組織・場所・出来事の正式名)も同じTrieに登録。別名一致は `[[正式タイトル|原文]]` で埋め込む(`LinkMatch.canonicalTitle`)。英数字は単語境界・カタカナは同種連続境界でのみ一致、ひらがなのみの読みは両側ひらがなの位置では不採用、語末長音「ー」は双方向に吸収。JVMテスト `AutoLinkerTest`(15件)。
 - **`ObsidianImporter` — 2パス方式**: ①エントリ作成(forward reference解決) ②wiki-linkごとに `references` 接続作成。**既知の欠陥**: `ObsidianImporter.kt:46` が `entryDao.getById(note.title)` にタイトルをIDとして渡すため通常データでは常にnull → 重複検査が機能せず直接呼出時は複製される(§13 #9)。単体パイプライン経由時は `DuplicateDetector` が別途救済。
 - **`DocumentExtractor`**: **pdf + docx のみ**(xls/ppt/txt非対応)。
 
@@ -675,7 +675,7 @@ MainActivity.onCreate → handleIncomingIntent (ACTION_SEND: URL→scrape, テ�
 | Wiki / Connections / Candidates / ThoughtEdit / DefinitionEdit / QuizList / QuizEdit | 各機能。空状態のみの画面なし(全てCRUD完備以上) |
 
 ### 10.4 リッチテキスト描画 — 2系統 + 設計予約
-- **RichContentView (WebView方式・メイン採用)**: `[[title|alias]]`→`wiki://` リンク、`{漢字|よみ}`→`<ruby>`、CDNの `marked@11.1.1` + `KaTeX@0.16.9` で Markdown+数式描画。JS失敗時 `innerText` フォールバック (`RichContentView.kt:97-99`)。
+- **RichContentView (WebView方式・メイン採用)**: `[[title|alias]]`→`wiki://` リンク(wt46: href は `Uri.encode`、クリック時 `Uri.decode` で日本語・空白タイトルを往復)、`{漢字|よみ}`→`<ruby>`、CDNの `marked@11.1.1` + `KaTeX@0.16.9` で Markdown+数式描画。JS失敗時 `innerText` フォールバック (`RichContentView.kt:97-99`)。
 - **MarkdownText (Composeネイティブ)**: `AnnotatedString` 方式。`**bold**`/`*italic*`/`` `code` ``/`[[wiki-link]]`/見出し/リスト/引用/コードブロック + `AutoLinker` のTrie最長一致リンク。**現在は未使用**(WebView版が主流)。
 - **設計予約(定義のみ・参照ゼロ)**: `UiSchemaRenderer`(プラグイン `renderSchema` 将来用) / `EntryTypeSections`(個別Section直使いのため孤児疑い) / `AppEventBus`(emit/subscribe共にゼロ)。いずれも削除せず温存中(§13 #3)。
 
