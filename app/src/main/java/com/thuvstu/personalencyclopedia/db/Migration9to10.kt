@@ -1,7 +1,8 @@
 package com.thuvstu.personalencyclopedia.db
 
 import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
 
 /**
  * v9 → v10 (PERF-2):
@@ -10,7 +11,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *   無制限に増えるログテーブルのため、件数増に伴う劣化が顕著になる。
  */
 val MIGRATION_9_10 = object : Migration(9, 10) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("CREATE INDEX IF NOT EXISTS `index_progress_events_entityId` ON `progress_events` (`entityId`)")
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_progress_events_entityId` ON `progress_events` (`entityId`)")
     }
 }

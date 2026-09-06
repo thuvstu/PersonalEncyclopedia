@@ -1,7 +1,8 @@
 package com.thuvstu.personalencyclopedia.db
 
 import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
 
 /**
  * v8 → v9（設計書§5.9 / §11.12、v15.0で新設）:
@@ -11,9 +12,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * - saved_query テーブル新規追加（§11.12 SQL Explorer 保存済みクエリ）
  */
 val MIGRATION_8_9 = object : Migration(8, 9) {
-    override fun migrate(db: SupportSQLiteDatabase) {
+    override fun migrate(connection: SQLiteConnection) {
         // §5.9.1: task
-        db.execSQL(
+        connection.execSQL(
             "CREATE TABLE IF NOT EXISTS `task` (" +
                 "`id` TEXT NOT NULL, " +
                 "`title` TEXT NOT NULL, " +
@@ -28,11 +29,11 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
                 "`completedAt` INTEGER, " +
                 "PRIMARY KEY(`id`))"
         )
-        db.execSQL("CREATE INDEX IF NOT EXISTS `index_task_status` ON `task` (`status`)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS `index_task_deadlineAt` ON `task` (`deadlineAt`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_task_status` ON `task` (`status`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_task_deadlineAt` ON `task` (`deadlineAt`)")
 
         // §5.9.1: task_time_log
-        db.execSQL(
+        connection.execSQL(
             "CREATE TABLE IF NOT EXISTS `task_time_log` (" +
                 "`id` TEXT NOT NULL, " +
                 "`taskId` TEXT NOT NULL, " +
@@ -41,13 +42,13 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
                 "`studyPlusSynced` INTEGER NOT NULL, " +
                 "PRIMARY KEY(`id`))"
         )
-        db.execSQL(
+        connection.execSQL(
             "CREATE INDEX IF NOT EXISTS `index_task_time_log_taskId` " +
                 "ON `task_time_log` (`taskId`)"
         )
 
         // §5.9.2: entry_history
-        db.execSQL(
+        connection.execSQL(
             "CREATE TABLE IF NOT EXISTS `entry_history` (" +
                 "`id` TEXT NOT NULL, " +
                 "`entryId` TEXT NOT NULL, " +
@@ -58,17 +59,17 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
                 "`charCountDelta` INTEGER NOT NULL, " +
                 "PRIMARY KEY(`id`))"
         )
-        db.execSQL(
+        connection.execSQL(
             "CREATE INDEX IF NOT EXISTS `index_entry_history_entryId` " +
                 "ON `entry_history` (`entryId`)"
         )
-        db.execSQL(
+        connection.execSQL(
             "CREATE INDEX IF NOT EXISTS `index_entry_history_recordedAt` " +
                 "ON `entry_history` (`recordedAt`)"
         )
 
         // §11.12: saved_query
-        db.execSQL(
+        connection.execSQL(
             "CREATE TABLE IF NOT EXISTS `saved_query` (" +
                 "`id` TEXT NOT NULL, " +
                 "`name` TEXT NOT NULL, " +

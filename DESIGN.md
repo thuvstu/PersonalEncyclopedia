@@ -194,10 +194,10 @@
 
 ### 5.1 概観
 
-- **ファイル**: `encyclopedia.db` / **バージョン 10** / `exportSchema = true`
+- **ファイル**: `encyclopedia.db` / **バージョン 11** / `exportSchema = true`
 - **44エンティティ(実表43 + FTS4仮想表1) + 2ビュー** (`AppDatabase.kt:9-68`、`10.json` で tableName 44・viewName 2を確認)。旧記述の「40表」は walkthrough14時点の古い値。
-- **マイグレーション**: 9本 (`MIGRATION_1_2`〜`MIGRATION_9_10`)、**破壊的変更ゼロ**の「新規テーブル追加 + ビュー再作成 + カラム追加 + 索引追加」のみ。`DROP TABLE/DELETE/列削除` は全9本にゼロ。`fallbackToDestructiveMigration()` は**未設定**(データ破壊フォールバックなし)。
-- **ドライバ**: `BundledSQLiteDriver().withSqliteVec()` (sqlite-bundled 2.5.2 + room-vec-common 0.1.0-alpha01, walkthrough13/14)で `vec_distance_cosine` をロード。`EmbeddingDao.vecSearch()` がDB側近傍検索を担い、`HybridSearchEngine` はDB優先→InMemoryフォールバック。
+- **マイグレーション**: 10本 (`MIGRATION_1_2`〜`MIGRATION_10_11`)、**破壊的変更ゼロ**の「新規テーブル追加 + ビュー再作成 + カラム追加 + 索引追加」のみ。`DROP TABLE/DELETE/列削除` は全10本にゼロ。`fallbackToDestructiveMigration()` は**未設定**(データ破壊フォールバックなし)。
+- **ドライバ**: `BundledSQLiteDriver().withSqliteVec()` (sqlite-bundled 2.5.2 + room-vec-common 0.1.0-alpha01, walkthrough13/14)で `vec_distance_cosine` をロード。`EmbeddingDao.vecSearch()` がDB側近傍検索を担い、`HybridSearchEngine` はDB優先→InMemoryフォールバック。**walkthrough47で全Migrationと `RoomDatabase.Callback.onOpen` を `SQLiteConnection` 形式へ変換** (`setDriver` 併用時は旧 `SupportSQLiteDatabase` 形式が `NotImplementedError` で実機起動死するため)。
 - **DAOは24本** (`AppDatabase.kt` の abstract fun 24件、`DatabaseModule.kt:55-82` の @Provides 24件が1:1対応)。旧記述の「20個」は誤り。
 - **スキーマ欠落**: `app/schemas/` は `1,2,6,7,8,9,10.json` のみ。**`3,4,5.json` が無い**ため中間状態をJSONで裏付けできず、`MigrationTest` は v1→v9チェーン+単段4種のみで **v10(`index_progress_events_entityId`)未検証**(§13 #2)。
 - **版数の二軸**: DBバージョン(10)とアプリ版数(`AppDatabase.kt` コメント内の v12.0/v15.0表記)は別軸。コメント混在に注意。

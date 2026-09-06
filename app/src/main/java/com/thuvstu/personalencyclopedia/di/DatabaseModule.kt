@@ -3,7 +3,8 @@ package com.thuvstu.personalencyclopedia.di
 import android.content.Context
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
 import com.thuvstu.personalencyclopedia.db.AppDatabase
 import com.thuvstu.personalencyclopedia.db.MIGRATION_1_2
 import com.thuvstu.personalencyclopedia.db.ReadOnlySqlExecutor
@@ -45,10 +46,10 @@ object DatabaseModule {
             .setQueryExecutor(queryExecutor)
             .setTransactionExecutor(transactionExecutor)
             .addCallback(object : RoomDatabase.Callback() {
-                override fun onOpen(db: SupportSQLiteDatabase) {
-                    super.onOpen(db)
+                override fun onOpen(connection: SQLiteConnection) {
+                    super.onOpen(connection)
                     // WALでは fsync 頻度を下げても安全性を保てる。書き込み4倍改善の報告あり
-                    db.execSQL("PRAGMA synchronous = NORMAL")
+                    connection.execSQL("PRAGMA synchronous = NORMAL")
                 }
             })
             .build()

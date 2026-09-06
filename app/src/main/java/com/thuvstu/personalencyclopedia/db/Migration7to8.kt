@@ -1,7 +1,8 @@
 package com.thuvstu.personalencyclopedia.db
 
 import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
 
 /**
  * v7 → v8（設計書§5.8.3 / §5.8.5 / §8.7.3）:
@@ -14,9 +15,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * インデントを Room の出力形式と揃えている（view 検証は完全一致比較）。
  */
 val MIGRATION_7_8 = object : Migration(7, 8) {
-    override fun migrate(db: SupportSQLiteDatabase) {
+    override fun migrate(connection: SQLiteConnection) {
         // §5.8.3: カスタムフィールド
-        db.execSQL(
+        connection.execSQL(
             "CREATE TABLE IF NOT EXISTS `entry_custom_field` (" +
                 "`id` TEXT NOT NULL, " +
                 "`entryId` TEXT NOT NULL, " +
@@ -25,24 +26,24 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
                 "`sortOrder` INTEGER NOT NULL, " +
                 "PRIMARY KEY(`id`))"
         )
-        db.execSQL(
+        connection.execSQL(
             "CREATE INDEX IF NOT EXISTS `index_entry_custom_field_entryId` " +
                 "ON `entry_custom_field` (`entryId`)"
         )
 
         // §5.8.5: 反復回数の明示的記録
-        db.execSQL(
+        connection.execSQL(
             "ALTER TABLE `srs_review` ADD COLUMN `repetitionCount` INTEGER NOT NULL DEFAULT 0"
         )
 
         // §8.7.3: 回答経過時間
-        db.execSQL(
+        connection.execSQL(
             "ALTER TABLE `quiz_attempts` ADD COLUMN `answeredWithinMs` INTEGER"
         )
 
         // SrsCurrentView 再作成（repetitionCount を含む定義へ更新）
-        db.execSQL("DROP VIEW IF EXISTS `SrsCurrentView`")
-        db.execSQL(SRS_CURRENT_VIEW_SQL)
+        connection.execSQL("DROP VIEW IF EXISTS `SrsCurrentView`")
+        connection.execSQL(SRS_CURRENT_VIEW_SQL)
     }
 }
 

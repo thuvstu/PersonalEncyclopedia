@@ -1,12 +1,13 @@
 package com.thuvstu.personalencyclopedia.db
 
 import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
 
 val MIGRATION_5_6 = object : Migration(5, 6) {
-    override fun migrate(db: SupportSQLiteDatabase) {
+    override fun migrate(connection: SQLiteConnection) {
         // ── Heptabase ホワイトボード ──
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `whiteboard` (
                 `id` TEXT NOT NULL PRIMARY KEY,
                 `title` TEXT NOT NULL,
@@ -15,7 +16,7 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
                 `updatedAt` INTEGER NOT NULL
             )
         """)
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `whiteboard_note` (
                 `id` TEXT NOT NULL PRIMARY KEY,
                 `contentMd` TEXT NOT NULL,
@@ -23,7 +24,7 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
                 `updatedAt` INTEGER NOT NULL
             )
         """)
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `whiteboard_node` (
                 `id` TEXT NOT NULL PRIMARY KEY,
                 `boardId` TEXT NOT NULL,
@@ -38,11 +39,11 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
                 `createdAt` INTEGER NOT NULL
             )
         """)
-        db.execSQL("CREATE INDEX IF NOT EXISTS `index_whiteboard_node_boardId` ON `whiteboard_node` (`boardId`)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS `index_whiteboard_node_entryId` ON `whiteboard_node` (`entryId`)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS `index_whiteboard_node_noteId` ON `whiteboard_node` (`noteId`)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS `index_whiteboard_node_sectionId` ON `whiteboard_node` (`sectionId`)")
-        db.execSQL("""
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_whiteboard_node_boardId` ON `whiteboard_node` (`boardId`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_whiteboard_node_entryId` ON `whiteboard_node` (`entryId`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_whiteboard_node_noteId` ON `whiteboard_node` (`noteId`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_whiteboard_node_sectionId` ON `whiteboard_node` (`sectionId`)")
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `whiteboard_section` (
                 `id` TEXT NOT NULL PRIMARY KEY,
                 `boardId` TEXT NOT NULL,
@@ -56,10 +57,10 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
                 `createdAt` INTEGER NOT NULL
             )
         """)
-        db.execSQL("CREATE INDEX IF NOT EXISTS `index_whiteboard_section_boardId` ON `whiteboard_section` (`boardId`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_whiteboard_section_boardId` ON `whiteboard_section` (`boardId`)")
 
         // ── Wikipediaビルダー ──
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `wiki_article` (
                 `id` TEXT NOT NULL PRIMARY KEY,
                 `title` TEXT NOT NULL,
@@ -69,6 +70,6 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
                 `updatedAt` INTEGER NOT NULL
             )
         """)
-        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_wiki_article_title` ON `wiki_article` (`title`)")
+        connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_wiki_article_title` ON `wiki_article` (`title`)")
     }
 }

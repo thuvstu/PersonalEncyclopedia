@@ -1,13 +1,14 @@
 package com.thuvstu.personalencyclopedia.db
 
 import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
 
 val MIGRATION_2_3 = object : Migration(2, 3) {
-    override fun migrate(db: SupportSQLiteDatabase) {
+    override fun migrate(connection: SQLiteConnection) {
 
         // ── Entry extension tables ──
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `entry_webpage` (
                 `entryId` TEXT NOT NULL PRIMARY KEY,
                 `url` TEXT NOT NULL,
@@ -23,7 +24,7 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
             )
         """)
 
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `entry_book` (
                 `entryId` TEXT NOT NULL PRIMARY KEY,
                 `isbn` TEXT,
@@ -40,7 +41,7 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
             )
         """)
 
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `entry_video` (
                 `entryId` TEXT NOT NULL PRIMARY KEY,
                 `platform` TEXT NOT NULL,
@@ -55,7 +56,7 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
             )
         """)
 
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `entry_document` (
                 `entryId` TEXT NOT NULL PRIMARY KEY,
                 `docType` TEXT NOT NULL,
@@ -70,7 +71,7 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
             )
         """)
 
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `entry_media` (
                 `entryId` TEXT NOT NULL PRIMARY KEY,
                 `mediaType` TEXT NOT NULL,
@@ -85,7 +86,7 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
             )
         """)
 
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `entry_person` (
                 `entryId` TEXT NOT NULL PRIMARY KEY,
                 `fullName` TEXT NOT NULL,
@@ -100,7 +101,7 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
             )
         """)
 
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `entry_org` (
                 `entryId` TEXT NOT NULL PRIMARY KEY,
                 `officialName` TEXT NOT NULL,
@@ -113,7 +114,7 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
             )
         """)
 
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `entry_place` (
                 `entryId` TEXT NOT NULL PRIMARY KEY,
                 `placeName` TEXT NOT NULL,
@@ -126,7 +127,7 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
             )
         """)
 
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `entry_event` (
                 `entryId` TEXT NOT NULL PRIMARY KEY,
                 `eventName` TEXT NOT NULL,
@@ -140,7 +141,7 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
             )
         """)
 
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `entry_liked` (
                 `entryId` TEXT NOT NULL PRIMARY KEY,
                 `platform` TEXT NOT NULL,
@@ -153,7 +154,7 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
             )
         """)
 
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `entry_ai_conv` (
                 `entryId` TEXT NOT NULL PRIMARY KEY,
                 `model` TEXT NOT NULL,
@@ -167,7 +168,7 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         """)
 
         // ── Search Document + FTS4 ──
-            db.execSQL("""
+            connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `search_document` (
                 `entryId` TEXT NOT NULL PRIMARY KEY,
                 `combinedText` TEXT NOT NULL,
@@ -177,14 +178,14 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
             )
         """)
 
-            db.execSQL("""
+            connection.execSQL("""
             CREATE VIRTUAL TABLE IF NOT EXISTS `search_document_fts`
             USING FTS4(`ftsContent`)
         """)
 
 
         // ── Embedding ──
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `embedding` (
                 `id` TEXT NOT NULL PRIMARY KEY,
                 `entryId` TEXT NOT NULL,
@@ -195,10 +196,10 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
                 FOREIGN KEY (`entryId`) REFERENCES `entry`(`id`) ON DELETE CASCADE
             )
         """)
-        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_embedding_entryId` ON `embedding` (`entryId`)")
+        connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_embedding_entryId` ON `embedding` (`entryId`)")
 
         // ── Embedding Job Queue ──
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `embedding_job` (
                 `entryId` TEXT NOT NULL PRIMARY KEY,
                 `status` TEXT NOT NULL DEFAULT 'queued',

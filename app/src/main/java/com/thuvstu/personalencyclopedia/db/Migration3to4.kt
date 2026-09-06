@@ -1,12 +1,13 @@
 package com.thuvstu.personalencyclopedia.db
 
 import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
 
 val MIGRATION_3_4 = object : Migration(3, 4) {
-    override fun migrate(db: SupportSQLiteDatabase) {
+    override fun migrate(connection: SQLiteConnection) {
 
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `connection_type_def` (
                 `name` TEXT NOT NULL PRIMARY KEY,
                 `labelJa` TEXT NOT NULL,
@@ -15,7 +16,7 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
             )
         """)
 
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `connection` (
                 `id` TEXT NOT NULL PRIMARY KEY,
                 `entryAId` TEXT NOT NULL,
@@ -30,12 +31,12 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
                 `createdAt` INTEGER NOT NULL
             )
         """)
-        db.execSQL("CREATE INDEX IF NOT EXISTS `index_connection_entryAId` ON `connection` (`entryAId`)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS `index_connection_entryBId` ON `connection` (`entryBId`)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS `index_connection_relationType` ON `connection` (`relationType`)")
-        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_connection_canonical` ON `connection` (`canonicalA`, `canonicalB`, `relationType`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_connection_entryAId` ON `connection` (`entryAId`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_connection_entryBId` ON `connection` (`entryBId`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_connection_relationType` ON `connection` (`relationType`)")
+        connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_connection_canonical` ON `connection` (`canonicalA`, `canonicalB`, `relationType`)")
 
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `connection_candidate` (
                 `id` TEXT NOT NULL PRIMARY KEY,
                 `entryAId` TEXT NOT NULL,
@@ -48,10 +49,10 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
                 `reviewedAt` INTEGER
             )
         """)
-        db.execSQL("CREATE INDEX IF NOT EXISTS `index_connection_candidate_status` ON `connection_candidate` (`status`)")
-        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_connection_candidate_pair` ON `connection_candidate` (`entryAId`, `entryBId`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_connection_candidate_status` ON `connection_candidate` (`status`)")
+        connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_connection_candidate_pair` ON `connection_candidate` (`entryAId`, `entryBId`)")
 
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `ai_explanations` (
                 `id` TEXT NOT NULL PRIMARY KEY,
                 `sourceType` TEXT NOT NULL,
@@ -61,9 +62,9 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
                 `createdAt` INTEGER NOT NULL
             )
         """)
-        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_ai_explanations_source` ON `ai_explanations` (`sourceType`, `sourceId`)")
+        connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_ai_explanations_source` ON `ai_explanations` (`sourceType`, `sourceId`)")
 
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `progress_events` (
                 `id` TEXT NOT NULL PRIMARY KEY,
                 `entityType` TEXT NOT NULL,
@@ -72,11 +73,11 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
                 `createdAt` INTEGER NOT NULL
             )
         """)
-        db.execSQL("CREATE INDEX IF NOT EXISTS `index_progress_events_entityType` ON `progress_events` (`entityType`)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS `index_progress_events_eventType` ON `progress_events` (`eventType`)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS `index_progress_events_createdAt` ON `progress_events` (`createdAt`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_progress_events_entityType` ON `progress_events` (`entityType`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_progress_events_eventType` ON `progress_events` (`eventType`)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_progress_events_createdAt` ON `progress_events` (`createdAt`)")
 
-        db.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `plugins` (
                 `id` TEXT NOT NULL PRIMARY KEY,
                 `name` TEXT NOT NULL,
