@@ -244,7 +244,7 @@
 #### Phase 4 (v6, アウトライナー + Wiki)
 | テーブル | 役割 |
 |---|---|
-| `whiteboard` / `whiteboard_note` / `whiteboard_node` / `whiteboard_section` | **Heptabase型ホワイトボード**(百科の「巻」/「章」/カード配置)。`whiteboard_node` は entry か note の**排他参照** |
+| `whiteboard` / `whiteboard_note` / `whiteboard_node` / `whiteboard_section` / `whiteboard_edge`(v11) | **Heptabase型ホワイトボード**(百科の「巻」/「章」/カード配置/接続線)。`whiteboard_node` は entry か note の**排他参照**。`whiteboard_edge` はボード固有の見た目の線で、承認制 `connection` とは独立(walkthrough40) |
 | `wiki_article` | 内蔵Wiki記事 (`title unique`, `contentMd`) |
 
 #### v7 / v8
@@ -298,7 +298,8 @@
 
 ### 5.6 シードの二重構造 (DemoData vs InitialData)
 - `DemoData.seed()`: 起動 Phase A で実行。topic 4・定義 6・思考 2・クイズ 10・接続 4・白板 2・Wiki 2の最小セット。空DBガード(`observeCount>0` で return)。
-- `InitialData.seedIfEmpty()`: **Dashboardの投入ボタンからの手動実行のみ**(自動投入なし)。古典/数学/英語/地歴/法/経済の定義125件(コメントの「135件」は実測と10件乖離) + 思考 6 + クイズ 30 + Wiki 6 + 接続 20。こちらも空DBガード。
+- `InitialData.seedAppend()`: **Dashboardの投入ボタンからの手動実行のみ**(自動投入なし)。古典/数学/英語/地歴/法/経済の定義125件 + 思考 6 + クイズ 30 + Wiki 6 + 接続 20。**wt45で空DBガード→タイトル一致の冪等追記に変更**(`Result(added, skipped)`)。
+- `InitialData2.seedAppend()` (wt45): 第2弾。**13型すべて**のサンプル(人物12・組織6・場所6・出来事7・書籍9・Web7・動画4・文書3・メディア3・いいね3・AI会話2・定義15・思考3)＋型付き接続67本(authored_by/located_at/occurred_at/exemplifies/extends/references/related)＋タグ16＋Wiki5＋クイズ16(fill_blank含む)＋白板「人物ハブ」(エッジラベル=接続種別)。タイトル/設問文/Wikiタイトル/ボード名で冪等。Dashboardボタンは両弾を順に実行し件数をトースト、`rebuildAllIndices()` で検索文書を差分更新。
 - 両方が空DBガードのため**先勝ちが他方を永久ブロック**する。現状は「Demoが自動・Initialが手動」で競合しないが、順序の明文化がない(§13 #7)。
 
 ### 5.7 読取専用SQL実行器 (SQL Explorerの土台)
@@ -578,13 +579,14 @@ Android設定画面: トークン表示 → PC ConnectionBar: ホスト/ポー�
 |---|---|---|
 | CSV (単語帳) | `importDefinitionsCsv` | ヘッダ正規化で `term/reading/definition/field` 列を解決 → ContentHash/URL重複判定 → entry+definition 挿入 |
 | Markdown | `importMarkdown` | `^#{1,2}\s+` でセクション分割 → thought として保存 |
-| JSON | `importEntriesJson` | 型別に拡張復元。`sourceUrl` があれば URL 重複判定。**エクスポートと往復互換** |
+| JSON | `importEntriesJson` → `EntryJsonCodec` | **完全往復(wt41)**: 旧ID・時刻・お気に入り・タグ・thought＋11型拡張を復元。同IDは再取込スキップ、ID無し旧形式は§12.7重複判定。取込後 `EmbeddingQueue.enqueue` |
+| PDF / DOCX | `importDocumentFile` | **wt43**: `filesDir/blobs/documents/<id>/` に保管、`DocumentExtractor` で本文抽出(pdfbox/docx)、§12.7重複判定、`EmbeddingQueue.enqueue`。PDFは `PdfViewerDialog`(OS `PdfRenderer`)で閲覧 |
 | URLリスト | `importUrlList` | `webScraper.scrapeAndSave` へ委譲 |
 | Notion | `importNotionMarkdown` | `WikiLinkParser` 抽出 → `ObsidianImporter.importNotes` に流用 |
 
 - **`WebScraper` — 2段階フォールバック**: Stage1 で Jsoup が `<article>/<main>/[role=main]` を優先しノイズ除去(script/nav/footer等)して本文抽出 → **本文100文字未満なら Stage2 で Gemini に「要約せず全文」を返させる**(最大15000文字)。`scraperUsed` に使用経路を記録。readingTimeS は400字/秒想定。最後に `embeddingQueue.enqueue`。
 - **`DuplicateDetector`**: `UrlDuplicateDetector`(sourceUrl一致) + `ContentHashDuplicateDetector`(タイトル絞り込み→正規化本文一致) を **OR合成** (`ImportPipeline.kt:38-40`)。
-- **`AutoLinker` — Trie木の最長一致**: 閲覧時UI装飾のみで **connectionには書き込まない**という明示的な設計方針 (`AutoLinker.kt:9-13`)。`AutoLinkerProvider` が `@Volatile`+`Mutex` の二重チェックロッキングで最大5万件を1回だけ構築。
+- **`AutoLinker` — Trie木の最長一致**: 閲覧時UI装飾のみで **connectionには書き込まない**という明示的な設計方針 (`AutoLinker.kt:9-13`)。`AutoLinkerProvider` が `@Volatile`+`Mutex` の二重チェックロッキングで構築し、**`COUNT-MAX(updatedAt)` 指紋が変わったときだけ再構築(wt44)**。タイトル射影(`EntryDao.getAllTitles`)のみ読み、上限なし。詳細画面・Wiki画面が同じキャッシュを共有。
 - **`ObsidianImporter` — 2パス方式**: ①エントリ作成(forward reference解決) ②wiki-linkごとに `references` 接続作成。**既知の欠陥**: `ObsidianImporter.kt:46` が `entryDao.getById(note.title)` にタイトルをIDとして渡すため通常データでは常にnull → 重複検査が機能せず直接呼出時は複製される(§13 #9)。単体パイプライン経由時は `DuplicateDetector` が別途救済。
 - **`DocumentExtractor`**: **pdf + docx のみ**(xls/ppt/txt非対応)。
 
@@ -596,7 +598,7 @@ Android設定画面: トークン表示 → PC ConnectionBar: ホスト/ポー�
 | `BackupExporter` | **SAF経由のクラウド非依存バックアップ**(Drive API不要)。復元時はSQLiteヘッダ(`"SQLite format 3\0"` 16byte)を検証してからDB差し替え |
 | `BackupWorker` | WorkManager 日次・**充電中+Wi-Fi限定+バッテリ低下でない**。WAL checkpoint→DBコピー→暗号化→30世代プルーニング→SAFリモート or `"LOCAL_ONLY"`。失敗時 `runAttemptCount<3` でretry。秒精度ファイル名のため同秒2回実行で衝突の余地 |
 | `PortableExportWorker` | 週次・充電中。Markdown/CSV/JSON の3形式を **純粋関数で書き出し**(テスト容易性)。**注意: 無暗号・世代管理なし・SAF転送なし・上限100k件** — `filesDir` 残置のため端末紛失で消失し得る(§13 #10) |
-| `EntryExporter` | 手動エクスポート(MARKDOWN/CSV/JSON)。SAFへ直接書き込み。JSONはインポートと往復互換 |
+| `EntryExporter` | 手動エクスポート(MARKDOWN/CSV/JSON)。SAFへ直接書き込み。JSONは thought＋11型の全カラム＋lang/metadataJson/accessedAt を書き、`EntryJsonCodec` と完全往復(wt41) |
 
 ### 9.3 プラグインエンジン (plugins/)
 
@@ -644,7 +646,7 @@ PersonalEncyclopediaApp.onCreate ─┬─ Phase A: APIキー暗号化移行 / s
 MainActivity.onCreate → handleIncomingIntent (ACTION_SEND: URL→scrape, テキスト→thought)
   → setContent { EncyclopediaTheme { MainContent } }
 ```
-- **Demo vs Initialの区別**: `DemoData.seed` は起動時自動(最小セット)。`InitialData.seedIfEmpty` (135件体系カリキュラム) は**自動投入なし** — Dashboardの投入ボタンからの手動実行のみ(§5.6)。
+- **Demo vs Initialの区別**: `DemoData.seed` は起動時自動(最小セット)。`InitialData.seedAppend`＋`InitialData2.seedAppend` (13型・約211件・接続87) は**自動投入なし** — Dashboardの投入ボタンからの手動実行のみ。冪等なので何度押しても重複しない(§5.6, wt45)。
 - **共有インテント対応**: 他アプリからURL/テキストを受け取り、スクレイプ or メモ作成 → `IncomingNavigation.setPendingEntry(id)` → Compose側 `LaunchedEffect` が監視して `entry/$id` へ遷移 (`MainActivity.kt:81-88`)。**Activity→Compose Navigationの橋渡しキュー** (§11.4)。
 
 ### 10.2 ナビゲーション — 27ルートの単一NavHost
@@ -660,13 +662,13 @@ MainActivity.onCreate → handleIncomingIntent (ACTION_SEND: URL→scrape, テ�
 | Dashboard | 統計カード/復習・クイズ・白板・Wikiへの導線/最近追加/クイック追加ダイアログ(URL取込+13型グリッド)/接続候補バッジ |
 | EntryDetail | 型バッジ+リッチ本文+wiki-link→`EntryPreviewPopup`/タグ(表記揺れ提案)/接続管理(関係タイプ+強度スライダー)/クイズ自動生成/記事化 |
 | EntryEdit | **全13型を1画面でカバーする統合エディタ**。`when(type)` で61フィールドの `EntryFormState` を分岐 |
-| Search | 4検索モードチップ+型フィルタ、400msデバウンス |
+| Search | 4検索モードチップ+型フィルタ、400msデバウンス、**並べ替え5種・期間・お気に入り・タグANDの後段絞り込み(`SearchRefiner`, wt42)・☆トグル** |
 | Quiz | 通常/サバイバル(1問ミスで終了)/プレッシャーテスト(全列挙) の3モード。ヒント段階開示/MCQ正誤強調/**rubric採点根拠カード**/中断確認 |
 | SrsReview | SM-2/FSRSフラッシュカード、`RubyText` で読み仮名表示、4段階評価 |
 | Stats | ストリーク/学習日数/12週間ヒートマップ/`CoachingEngine` 弱点分析 |
 | Import | CSV/MD/JSON/URL一括+Obsidian貼り付け+AIクイズ一括生成、進捗表示 |
 | Settings | SAF自動バックアップ/Geminiキー/自動接続/Ktorサーバー+トークン(LAN警告)/SRS切替/クイズ演習設定6種/AI設定/メンテナンス |
-| Whiteboard | ボード一覧+キャンバス(パン/ズーム0.3-3x・中心基準・ドラッグ補正・ジェスチャ分離・題名解決・既存entry配置ダイアログ)。残: 接続線・セクション作成/リサイズ・インライン編集 |
+| Whiteboard | ボード一覧+キャンバス(パン/ズーム0.3-3x・中心基準・ドラッグ補正・ジェスチャ分離・題名解決・既存entry配置ダイアログ・セクションCRUD(wt28)・**接続線: 🔗接続モード/ドラッグ追従/ラベル編集/削除(wt40)**)。残: セクションリサイズ・インライン編集・エッジ色分け |
 | ToDo | CRUD+タイムボックス countdown+強制選択モーダル(先延ばし3回超)+見積乖離カード。Repositoryなし・DAO直結 |
 | SqlExplorer | 読取専用クエリ実行+結果表+スキーマブラウザ+DB統計+integrity+保存クエリ。テーブルタップ→`SELECT * LIMIT 100`自動実行+結果へ自動スクロール(DB-1済) |
 | DatabaseManagement | 型別件数+SQL Explorer導線。**「Hub」に相当するScreenは無い** — walkthrough16の「Hub透明性」はDashboard投入ボタン+DB統計表示の運用を指す |
@@ -873,7 +875,7 @@ Macrobenchmarkは個人開発1人で回すには複雑すぎる(Gradle Managed D
 | Round2 | PERF-4 Lazy key(部分済)/ PERF-5巨大Screen分割(未)/ Strong Skipping(未確認)/ Nav短縮(先行済 120/90→80/60) | 部分 |
 | Round3 | PERF-7 Coil 2.7.0 | 済 |
 | Round5/8 | PERF-8 (sqlite導入+vecSearch+InMemory skip+driver再有効化)まで済。**残: vec実機非空確認・largeHeap撤去後50k再計測・FTS膨張対策** | 残あり(§13 E1〜E3) |
-| 新系列 | DB-1 (プレビュー+自動スクロール済) / WB-1〜相当(パン/ズーム/補正/中心/分離/題名/配置済)。残: 接続線・セクション作成/リサイズ・インライン編集 | 残あり |
+| 新系列 | DB-1 (プレビュー+自動スクロール済) / WB-1〜相当(パン/ズーム/補正/中心/分離/題名/配置済) / セクションCRUD(wt28) / 接続線(wt40, DB v11)。残: セクションリサイズ・インライン編集 | 残あり |
 
 - PERF-3/PERF-6の定義は見当たらない(番号が1,2,4,5,7,8に飛ぶ)。計画文書の再発行が望ましい。
 

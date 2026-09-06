@@ -28,9 +28,9 @@
 
 | # | 構想 (RealityTasks.md) | 判定 | 一言 | 詳説 |
 |---|---|---|---|---|
-| 1 | Heptabaseライク画面・ノード関係可視化 | 部分 | 置けるが繋げない・区切れない | §1.1 |
+| 1 | Heptabaseライク画面・ノード関係可視化 | 部分→**改善（2026-09-06）** | 接続線(wt40)・セクションCRUD(wt28)開通。残: カード内編集・リサイズ | §1.1 |
 | 2 | 文書中の単語検出→自動ハイパーリンク→定義ジャンプ | 部分 | 部品はあるがどこでも発動しない | §1.2 |
-| 3 | Wikipedia/ブログ風メディア付きドキュメント (Web風/pdf風) | 部分 | メタ表示止まり。PDF表示なし | §1.3 |
+| 3 | Wikipedia/ブログ風メディア付きドキュメント (Web風/pdf風) | 部分→**改善（2026-09-06）** | PDF/DOCX取込＋アプリ内PDFビューア(wt43)。残: docx表示・xlsx/pptx | §1.3 |
 | 4 | 強制リマインダー付きToDo | 部分 | 強制対峙はあるが通知が無い | §2.1 |
 | 5 | Google Keep風メモ | 部分 | CRUDのみ。Keep的機能なし | §2.2 |
 | 6 | Quizlet/Anki風単語帳 | 部分 | 期限管理は本物。デッキ・同期なし | §2.3 |
@@ -39,7 +39,7 @@
 | 9 | LLM APIでデータ自動生成 | 部分 | クイズ/解説/抽出はあるが要約・タグなし | §3.1 |
 | 10 | SQLiteで50GB・限界耐性・10年利用 | 部分 | 骨格はあるが50GB実測・機種変復元なし | §3.2 |
 | 11 | Embedding+reranking意味検索 | 部分 | rerankは未着手確定。混在運用が危険 | §3.3 |
-| 12 | ソート・フィルター・条件検索の充実 | 部分 | 型×モードのみ。ソート固定・複合条件なし | §3.4 |
+| 12 | ソート・フィルター・条件検索の充実 | 部分→**改善（2026-09-06）** | 並べ替え5種・期間・お気に入り・タグAND(wt42)。残: 保存フィルタ・演算子構文 | §3.4 |
 | 13 | DBの全貌をアプリ内から覗ける | 部分 | 件数・SQLはあるが容量内訳なし | §3.5 |
 | 14 | Material 3 Expressive・無駄な遷移時間なし | 未着手/部分 | Expressive未導入。遷移は速いが起動が重い | §4.1・§4.2 |
 | 15 | bookmark.html取込 / ポモドーロタイマー | 達成（2026-09-06） | P6-1・P5-1実装済み | §2.5・§2.6 |
@@ -56,8 +56,8 @@
 
 無いもの (Heptabase未達の核心):
 
-- **接続線 (エッジ) 表示なし**。`WhiteboardScreen.kt:286-335` はカードの `forEach` のみで `Canvas` はグリッド専用。エッジ用Entity/DAO/`drawLine` が存在しない。`connection` を描くのはWebの `GraphView.tsx` のみで、Androidキャンバスと非連動・編集不可。
-- **セクション作成なし**。Entity (`WhiteboardEntities.kt:56-68`)・DAO (`WhiteboardDao.kt:62-72`)・Repository (`WhiteboardRepository.kt:58-66` の `addSection/deleteSection/setNodeSection`) はあるが**呼出元が皆無** (grepはRepo/Daoのみ)。画面は背景 `Box` 描画だけ (`WhiteboardScreen.kt:270-285`) でCRUD/リサイズ/割付UIなし。
+- ~~**接続線 (エッジ) 表示なし**~~ → **解消（2026-09-06・walkthrough40）**。`whiteboard_edge`(DB v11)＋`Canvas.drawLine`＋🔗接続モード＋ラベル編集/削除を実装。白板固有の線であり `connection` とは独立（承認制を維持）。
+- ~~**セクション作成なし**~~ → **作成/改名/削除は解消（2026-09-06・walkthrough28）**。リサイズ・ノード割付UIは残。
 - **カード内テキスト編集なし**。追加はダイアログのみ、キャンバス上は `maxLines=3` の読み取り表示 (`:321-325`)。`width/height` 変更UIなし。`note.contentMd` のMarkdown/KaTeX/`[[wiki]]` も先頭行表示のみ。
 
 実用上の問題: 関係線が引けないので「関係可視化」にならない。配置はランダムずらし (`WhiteboardViewModel.kt:67-68,91-92`) で重なる。Webグラフは同心円固定 (`GraphView.tsx:74-79`) で50件超は判読不能、走査も `LIMIT 100` 打切り (`ConnectionDao.kt:87-99`)。
@@ -68,7 +68,7 @@
 
 しかし**どこでも発動しない**。詳細画面 (`EntryDetailScreen.kt:159-171`)・定義文 (`EntryTypeSections.kt:329-333`)・Wiki記事 (`WikiScreens.kt:133-150,213-216`) はいずれも `AutoLinker` を渡さず、唯一のconsumer `MarkdownText` は呼出箇所0 (定義行のみ)。`EntryDetailViewModel.kt:107-119` が構築する `_autoLinker` フローも画面がcollectしない死蔵。現動作は手動 `[[wiki-link]]` →プレビューポップアップのみ。
 
-5万件実用性も未検証: VM側5000件打切りとProvider側50000件の不整合、増分更新なし (全再構築・`invalidate()` 呼出なし)、完全一致Trie (表記揺れ・読み仮名非対応)。5万件実測なし。
+~~5万件実用性も未検証: VM側5000件打切りとProvider側50000件の不整合、増分更新なし~~ → **解消（2026-09-06・walkthrough44）**: `AutoLinkerProvider` が `COUNT-MAX(updatedAt)` 指紋で自動再構築、詳細画面も同じ共有キャッシュを使用(上限なし・タイトル列のみ読込)。残: 完全一致Trie (表記揺れ・読み仮名非対応)、5万件実測。
 
 構想の「検出次第自動生成」には、エディタ入力中サジェストか閲覧時装飾の配線のどちらかが要る。現状はどちらも無い。
 
@@ -78,7 +78,7 @@
 
 無いもの:
 
-- **PDF表示なし・抽出のみ**。`DocumentExtractor.kt:32-53` はpdfboxテキスト抽出+docx解凍のみで、表示側に `PdfRenderer`/外部Intentなし。`DocumentSection` は抽出テキストの折畳み、`EntryEditScreen.kt:145` も素のテキストエリア。
+- ~~**PDF表示なし・抽出のみ**~~ → **解消（2026-09-06・walkthrough43）**: `importDocumentFile` が PDF/DOCX を端末内保管＋pdfbox抽出＋検索登録、`PdfViewerDialog`(OS標準 `PdfRenderer`)でアプリ内閲覧(ページ送り・ズーム)。フォルダ一括も pdf/docx 対応。残: docx 本文表示、xlsx/pptx。
 - **メディアリッチなし**。動画プレーヤ・音声・OCRプレビューなし。`transcript/ocrText` はplain `Text`。画像以外に「ドキュメント風」に見えない。
 - **Web風レイアウトなし**。`WebpageSection` は本文トグル表示のみでOGPカード・目次・引用スタイルなし。Web側 `EntryDetail.tsx:43-71` は拡張フィールド・添付を無視。
 
@@ -141,7 +141,7 @@
 - 実測は最大50k件でDB 624M・ほぼFTS (`BASELINE.md:154-159`)。1件12〜16KB換算で50GBは約400万件相当だが**50GB実測なし**。FTS膨張対策は残タスク明言 (`BASELINE.md:194-195`)。`VACUUM/page_size` 調整なし。
 - GB級で破綻する実装: `BackupEncryptor.kt:54,68` の `readBytes()` 全載せ (GBでOOM確実)、30世代×50GBは `filesDir` に不可能、可搬exportはN+1全件取得 (`PortableExportWorker.kt:60-64`)。
 - **機種変不可**: `.enc` はKeystore束縛鍵 (`BackupEncryptor.kt:24-43`) のため新端末で復号できない。しかも復元UIが無い (`DatabaseManagementScreen.kt:181-224` にexportのみ、復元ボタンなし)。
-- **JSON往復が非対称**: Exporterの6型extensionのうち5型をImporterが捨て、タグ・お気に入り・時刻・旧IDを全捨て (`EntryExporter.kt:156-224` vs `ImportPipeline.kt:201-260`)。画面表示「エクスポートと対称」(`ImportScreen.kt:82-84`) は誤解を招く。
+- ~~**JSON往復が非対称**~~ → **解消（2026-09-06・walkthrough41）**。Exporterが thought＋11型全カラム＋lang/metadataJson/accessedAt を書き、`EntryJsonCodec` が旧ID・時刻・お気に入り・タグ・全拡張を復元。同IDは再取込スキップ。JVMテスト7件。
 - `app/schemas/` に `3,4,5.json` 欠落。10年履歴の証跡に穴。
 
 ### §3.3 Embedding+reranking → 部分 (rerank未着手確定・混在危険)
@@ -156,7 +156,7 @@
 
 あるもの: 4モード+型14チップ (`SearchScreen.kt:41-54`)、debounce 400ms、保存クエリ (SQL Explorer専用、`SqlExplorerScreen.kt:261-291`)。
 
-無いもの: **ソート切替なし** (全て `createdAt DESC` 固定、`EntryDao.kt:44,52,71,84`)、タグ/トピック/日付/添付の絞り込みなし、AND/OR/除外/フィールド構文なし、FTS+条件の複合クエリなし (型は後付けメモリfilter、mute除外は `getById` のN+1)。件数表示は30件打切りなのに総数と紛らわしい (`SearchScreen.kt:118`)。`saved_query` は検索画面と分断 (保存・再実行導線なし)。
+~~無いもの: ソート切替なし、タグ/日付の絞り込みなし、件数表示が紛らわしい~~ → **解消（2026-09-06・walkthrough42）**: `SearchRefiner` で並べ替え5種・期間(1週/1月/1年)・お気に入り・タグAND、件数は「候補N件中M件」。残: トピック/添付の絞り込み、AND/OR/除外/フィールド構文、`saved_query` との統合、mute除外の `getById` N+1。
 
 ### §3.5 DB全貌の可視化 → 部分
 
@@ -186,9 +186,9 @@
 
 サーバ22EPに対しWebは4タブ (`entries/srs/quiz/ollama`、`App.tsx:11,38-62`)。接続CRUD・候補承認・ヒートマップ・SRS件数・プラグイン等はサーバ済み・Webなし。**CORS未導入** (`LocalServer.kt:40-47` にinstallなし) のため別オリジン (Vite dev→Ktor) のブラウザ運用で躓く。**平文HTTP固定** (`client.ts:37`) + **平文トークン両端** (`TokenManager.kt:20` のDataStore平文、`client.ts:17-30` のlocalStorage平文)。「PC=閲覧クライアント」の骨格 (AGENTS.md) に対しブラウザ実用・安全運用ができない。
 
-### §4.4 データ投入の現実性 → 未着手 (桁が3〜4桁足りない)
+### §4.4 データ投入の現実性 → 部分 (種は13型に揃った・規模は未実測)
 
-自動シードは定義6+思考2等のみ (`DemoData.kt:22-47`)、手動135件 (`InitialData.kt:12`)。しかも `seedIfEmpty` は1件でもentryがあると何も足さず (`:223-228`)、画面文言「追記 (重複を避けて追加)」(`DashboardScreen.kt:247`) と矛盾。50GB/5万件構想との差を埋める導線が無い: bookmark.html未対応 (§2.6)、フォルダ一括PDF/DOCXなし (`ImportPipeline` は `DocumentExtractor` を呼ばない、xlsx/pptxは表示ラベルのみ)、URL一括は逐次・再開なし (`importUrlList :263-287`)。
+~~自動シードは定義6+思考2等のみ、手動135件。`seedIfEmpty` は1件でもentryがあると何も足さず、画面文言「追記」と矛盾~~ → **改善（2026-09-06・walkthrough45）**: `InitialData.seedAppend`＋`InitialData2.seedAppend` がタイトル一致で冪等追記。**13型すべて**(人物12・組織6・場所6・出来事7・書籍9・Web7・動画4・文書3・メディア3・いいね3・AI会話2＋定義140・思考11)、型付き接続87本、Wiki11、クイズ46、白板「人物ハブ」。~~フォルダ一括PDF/DOCXなし~~ → wt43で解消。残: 50GB/5万件規模の実測、URL一括の逐次・再開なし (`importUrlList`)。
 
 ---
 
@@ -234,7 +234,7 @@
 > 対策の着手順序は `DESIGN.md` §15の比較表へ。本節は「なぜそれか」の根拠。
 
 1. **起動毎の全件FTS rebuild** (`PersonalEncyclopediaApp.kt:99` → `EmbeddingQueue.kt:212-222`)。件数比例で起動が遅くなる逆スケール。5万件常用の最大障害。差分・遅延・バックグラウンド化のいずれかが要る。
-2. **JSON export/import往復の欠落** (`EntryExporter.kt:175-219` vs `ImportPipeline.kt:201-260`)。タグ・拡張5型・時刻・IDを落とす。10年利用の信頼性を崩し、機種変で知識グラフが痩せる。復元UIの欠落・Keystore束縛と合わせて移行不能。
+2. ~~**JSON export/import往復の欠落**~~ → **解消（walkthrough41）**。残るのは暗号化バックアップのKeystore束縛（別端末で復号不可）のみ。可搬JSONが完全往復になったので機種変はJSON経路で成立する。
 3. **PC連携の実用不能** (CORSなし `LocalServer.kt:40-47` + 平文HTTP/平文トークン + 4タブ未配線)。「PC=閲覧」の骨格に反してブラウザ実用・安全運用ができない。直す順は CORS → 保管 → 未配線タブ。
 
 次点: bookmark.html未対応と文書一括なし (§2.6・§4.4)、schemas 3-5欠落 (§3.2)、モデル混在の危険 (§3.3)、bottomBar state破棄 (§4.2)、白板エッジ/セクション (§1.1)。
