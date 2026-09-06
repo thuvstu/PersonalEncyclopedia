@@ -6,10 +6,15 @@ import com.thuvstu.personalencyclopedia.db.dao.EntryDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryDefinitionDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryExtensionDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryThoughtDao
+import com.thuvstu.personalencyclopedia.db.dao.TagDao
 import com.thuvstu.personalencyclopedia.db.entity.EntryDefinitionEntity
+import com.thuvstu.personalencyclopedia.db.entity.EntryDocumentEntity
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
+import com.thuvstu.personalencyclopedia.db.entity.EntryTagEntity
 import com.thuvstu.personalencyclopedia.db.entity.EntryThoughtEntity
 import com.thuvstu.personalencyclopedia.db.entity.EntryWebpageEntity
+import com.thuvstu.personalencyclopedia.db.entity.TagEntity
+import com.thuvstu.personalencyclopedia.brain.ai.EmbeddingQueue
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -30,7 +35,10 @@ class ImportPipeline @Inject constructor(
     private val definitionDao: EntryDefinitionDao,
     private val obsidianImporter: ObsidianImporter,
     private val contentHashDuplicateDetector: ContentHashDuplicateDetector,   // §12.7
-    private val urlDuplicateDetector: UrlDuplicateDetector                    // §12.7
+    private val urlDuplicateDetector: UrlDuplicateDetector,                   // §12.7
+    private val tagDao: TagDao,                                               // ★往復対称: タグ復元
+    private val embeddingQueue: EmbeddingQueue,                               // ★往復対称: 検索文書即時更新
+    private val documentExtractor: DocumentExtractor                          // ★wt43: PDF/DOCX 取込
 ) {
     data class ImportResult(
         val successCount: Int,
@@ -203,6 +211,13 @@ class ImportPipeline @Inject constructor(
         return result
     }
 
+    /**
+     * ★往復対称(mismatch §6-2): `EntryExporter.buildJson` の出力を欠落なく復元する。
+     * - 旧ID・時刻・お気に入り・タグ・11型拡張を保持(`EntryJsonCodec`)。
+     * - 同じIDが既に存在すれば「同一データの再取込」とみなしてスキップ(更新はしない)。
+     * - IDが無い旧形式は §12.7 の重複判定(URL/ハッシュ)でスキップし、新IDで登録する。
+     * - 取り込んだentryは search_document を即時更新する(起動時の差分再構築を待たない)。
+     */
     suspend fun importEntriesJson(uri: Uri): ImportResult {
         val errors = mutableListOf<String>()
         var success = 0
@@ -212,47 +227,31 @@ class ImportPipeline @Inject constructor(
                 it.bufferedReader(Charsets.UTF_8).readText()
             } ?: return ImportResult(0, 1, listOf("Cannot open file"))
 
-            val arr = Json.parseToJsonElement(text).jsonArray
+            val root = Json.parseToJsonElement(text)
+            // 配列直下 or {"entries":[...]} の両方を受ける
+            val arr = (root as? JsonArray) ?: (root as? JsonObject)?.get("entries") as? JsonArray
+                ?: return ImportResult(0, 1, listOf("JSON形式が不正です(配列ではありません)"))
             for ((i, el) in arr.withIndex()) {
                 try {
-                    val obj = el.jsonObject
-                    val type = obj["type"]?.jsonPrimitive?.content ?: "thought"
-                    val title = obj["title"]?.jsonPrimitive?.content ?: continue
-                    val content = obj["content"]?.jsonPrimitive?.content
-                    // §12.7: 重複をスキップ（URL持ちはURL一致、それ以外はタイトル+本文）
-                    val candidate = ImportCandidate(
-                        title = title, type = type, content = content,
-                        sourceUrl = obj["sourceUrl"]?.jsonPrimitive?.content
-                    )
-                    if (isDuplicate(candidate)) {
-                        skipped++
+                    val obj = el as? JsonObject ?: continue
+                    val now = System.currentTimeMillis()
+                    val oldId = obj["id"]?.jsonPrimitive?.contentOrNull
+                    val keepId = oldId != null && entryDao.getById(oldId) == null
+                    if (oldId != null && !keepId) {
+                        skipped++      // 同一IDが既にある = 同じデータ。上書きしない
                         continue
                     }
-                    val id = UUID.randomUUID().toString()
-                    val now = System.currentTimeMillis()
-                    entryDao.insert(
-                        EntryEntity(id = id, type = type, title = title, content = content,
-                            createdAt = now, updatedAt = now, accessedAt = now)
-                    )
-                    // definition拡張の復元
-                    if (type == "definition") {
-                        obj["extension"]?.jsonObject?.let { ext ->
-                            val term = ext["term"]?.jsonPrimitive?.content ?: title
-                            val definition = ext["definition"]?.jsonPrimitive?.content ?: ""
-                            if (definition.isNotBlank()) {
-                                definitionDao.insert(
-                                    EntryDefinitionEntity(
-                                        entryId = id, term = term, definition = definition,
-                                        reading = ext["reading"]?.jsonPrimitive?.content,
-                                        field = ext["field"]?.jsonPrimitive?.content
-                                    )
-                                )
-                            }
-                        }
+                    val decoded = EntryJsonCodec.decode(obj, keepId = keepId, newId = UUID.randomUUID().toString(), now = now)
+                        ?: continue
+                    if (oldId == null) {
+                        // §12.7: 旧形式(ID無し)は内容ベースの重複判定
+                        val candidate = ImportCandidate(
+                            title = decoded.entry.title, type = decoded.entry.type,
+                            content = decoded.entry.content, sourceUrl = decoded.entry.sourceUrl
+                        )
+                        if (isDuplicate(candidate)) { skipped++; continue }
                     }
-                    if (type == "thought") {
-                        thoughtDao.insert(EntryThoughtEntity(entryId = id, context = "json_import"))
-                    }
+                    insertDecoded(decoded)
                     success++
                 } catch (e: Exception) {
                     errors.add("Item ${i + 1}: ${e.message}")
@@ -264,7 +263,30 @@ class ImportPipeline @Inject constructor(
         return ImportResult(successCount = success, errorCount = errors.size, errors = errors, skipCount = skipped)
     }
 
-    /** ★F: URLリスト一括取り込み（1行1URLのtxt/csv） */
+    /** 復元結果をDBへ書き込む(entry→拡張→タグ→検索文書)。 */
+    private suspend fun insertDecoded(d: EntryJsonCodec.Decoded) {
+        entryDao.insert(d.entry)
+        d.thought?.let { thoughtDao.insert(it) }
+        d.definition?.let { definitionDao.insert(it) }
+        d.webpage?.let { extensionDao.insertWebpage(it) }
+        d.book?.let { extensionDao.insertBook(it) }
+        d.video?.let { extensionDao.insertVideo(it) }
+        d.document?.let { extensionDao.insertDocument(it) }
+        d.media?.let { extensionDao.insertMedia(it) }
+        d.person?.let { extensionDao.insertPerson(it) }
+        d.org?.let { extensionDao.insertOrg(it) }
+        d.place?.let { extensionDao.insertPlace(it) }
+        d.event?.let { extensionDao.insertEvent(it) }
+        d.liked?.let { extensionDao.insertLiked(it) }
+        d.aiConv?.let { extensionDao.insertAiConv(it) }
+        for (name in d.tags) {
+            val existing = tagDao.getByName(name)
+            val tagId = existing?.id ?: TagEntity(name = name).also { tagDao.insert(it) }.id
+            tagDao.linkTag(EntryTagEntity(entryId = d.entry.id, tagId = tagId))
+        }
+        try { embeddingQueue.enqueue(d.entry.id) } catch (_: Exception) { /* 検索文書は起動時差分で追いつく */ }
+    }
+
     suspend fun importUrlList(uri: Uri): ImportResult {
         val errors = mutableListOf<String>()
         var success = 0
@@ -414,7 +436,73 @@ class ImportPipeline @Inject constructor(
         out.add(BookmarkItem(url = href, title = title, folderPath = folderPath, addDateMs = addDateMs))
     }
 
-    /** ★Drive橋渡しのSAF版: フォルダ内の md/txt/csv/json/html を拡張子で振り分けて一括取込。
+    /**
+     * ★wt43 (mismatch §1.3): PDF / DOCX を document 型エントリーとして取り込む。
+     * 1. ファイルを `filesDir/blobs/documents/<entryId>/<name>` にコピー(端末内保管。Drive API不使用)
+     * 2. `DocumentExtractor` で本文テキストを抽出(pdfbox / docx解凍)。失敗しても登録は続行(抽出方式 "none")
+     * 3. entry.content には抽出テキストの先頭500字を要約代わりに入れる(カード・検索での視認性)
+     * 重複は §12.7 のタイトル+本文ハッシュ判定。PDF のページ数は pdfbox から取得。
+     */
+    suspend fun importDocumentFile(uri: Uri, displayNameHint: String? = null): ImportResult {
+        val name = displayNameHint ?: queryDisplayName(uri) ?: "document"
+        val lower = name.lowercase()
+        val (docType, mime) = when {
+            lower.endsWith(".pdf") -> "pdf" to "application/pdf"
+            lower.endsWith(".docx") -> "docx" to "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            else -> return ImportResult(0, 1, listOf("対応外の形式です(pdf/docx のみ): $name"))
+        }
+        val title = name.substringBeforeLast('.').ifBlank { name }
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        try {
+            // 1. blob コピー
+            val dir = java.io.File(context.filesDir, "blobs/documents/$id").apply { mkdirs() }
+            val safeName = name.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            val file = java.io.File(dir, safeName)
+            val size = context.contentResolver.openInputStream(uri)?.use { input ->
+                java.io.FileOutputStream(file).use { out -> input.copyTo(out) }
+            } ?: run { dir.deleteRecursively(); return ImportResult(0, 1, listOf("Cannot open file: $name")) }
+
+            // 2. 抽出(失敗しても続行)
+            val extracted = documentExtractor.extractText(Uri.fromFile(file), mime)?.trim()?.takeIf { it.isNotBlank() }
+            val pages = if (docType == "pdf") documentExtractor.pageCount(file) else null
+
+            // 重複判定(タイトル + 抽出本文)
+            if (isDuplicate(ImportCandidate(title = title, type = "document", content = extracted))) {
+                dir.deleteRecursively()
+                return ImportResult(0, 0, emptyList(), skipCount = 1)
+            }
+
+            // 3. 登録
+            entryDao.insert(
+                EntryEntity(
+                    id = id, type = "document", title = title,
+                    content = extracted?.take(500),
+                    createdAt = now, updatedAt = now, accessedAt = now
+                )
+            )
+            extensionDao.insertDocument(
+                EntryDocumentEntity(
+                    entryId = id, docType = docType, blobPath = file.absolutePath, mimeType = mime,
+                    fileSizeBytes = size, pageCount = pages, extractedText = extracted,
+                    extractionMethod = if (extracted != null) (if (docType == "pdf") "pdfbox" else "docx-xml") else "none"
+                )
+            )
+            try { embeddingQueue.enqueue(id) } catch (_: Exception) { /* 検索文書は後の再構築でも復旧可 */ }
+            return ImportResult(1, 0)
+        } catch (e: Exception) {
+            java.io.File(context.filesDir, "blobs/documents/$id").deleteRecursively()
+            return ImportResult(0, 1, listOf("$name: ${e.message}"))
+        }
+    }
+
+    private fun queryDisplayName(uri: Uri): String? = try {
+        context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        } ?: uri.lastPathSegment?.substringAfterLast('/')
+    } catch (_: Exception) { uri.lastPathSegment }
+
+    /** ★Drive橋渡しのSAF版: フォルダ内の md/txt/csv/json/html/pdf/docx を拡張子で振り分けて一括取込。
      * Drive APIは使わない（骨格）。重複は各経路の既存判定に任せる。最大200ファイル。 */
     suspend fun importSafFolder(treeUri: Uri): ImportResult {
         var success = 0
@@ -445,7 +533,8 @@ class ImportPipeline @Inject constructor(
                     val lower = name.lowercase()
                     if (lower.endsWith(".md") || lower.endsWith(".markdown") || lower.endsWith(".txt") ||
                         lower.endsWith(".csv") || lower.endsWith(".json") ||
-                        lower.endsWith(".html") || lower.endsWith(".htm")
+                        lower.endsWith(".html") || lower.endsWith(".htm") ||
+                        lower.endsWith(".pdf") || lower.endsWith(".docx")   // ★wt43
                     ) {
                         items.add(
                             android.provider.DocumentsContract.buildDocumentUriUsingTree(treeUri, docId) to lower
@@ -454,7 +543,7 @@ class ImportPipeline @Inject constructor(
                 }
             }
             if (items.isEmpty()) {
-                return ImportResult(0, 1, listOf("対応ファイル（md/txt/csv/json/html）が見つかりません"))
+                return ImportResult(0, 1, listOf("対応ファイル（md/txt/csv/json/html/pdf/docx）が見つかりません"))
             }
             for ((docUri, lower) in items) {
                 try {
@@ -462,6 +551,7 @@ class ImportPipeline @Inject constructor(
                         lower.endsWith(".csv") -> importDefinitionsCsv(docUri)
                         lower.endsWith(".json") -> importEntriesJson(docUri)
                         lower.endsWith(".html") || lower.endsWith(".htm") -> importBookmarksHtml(docUri)
+                        lower.endsWith(".pdf") || lower.endsWith(".docx") -> importDocumentFile(docUri, lower)   // ★wt43
                         else -> importMarkdown(docUri)
                     }
                     success += r.successCount

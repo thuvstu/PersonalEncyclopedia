@@ -143,13 +143,31 @@ private fun VideoSection(v: EntryVideoEntity) {
 
 @Composable
 private fun DocumentSection(d: EntryDocumentEntity) {
+    // ★wt43 (mismatch §1.3): 端末内に実体(blobPath)がある PDF はアプリ内ビューアで開ける
+    val file = remember(d.blobPath) { d.blobPath?.let { java.io.File(it) }?.takeIf { it.exists() } }
+    var showPdf by remember { mutableStateOf(false) }
     SectionCard("ドキュメント") {
         InfoRow("種別", d.docType.uppercase())
         InfoRow("MIME", d.mimeType)
         InfoRow("サイズ", d.fileSizeBytes?.let { fmtBytes(it) })
         InfoRow("ページ数", d.pageCount?.let { "${it}p" })
         InfoRow("抽出方式", d.extractionMethod)
+        when {
+            file != null && d.docType == "pdf" ->
+                FilledTonalButton(onClick = { showPdf = true }, modifier = Modifier.padding(top = 6.dp)) {
+                    Text("📄 PDFを開く")
+                }
+            file != null ->
+                Text("📎 ${file.name}（端末内に保管。表示は抽出テキストで）",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            d.blobPath != null ->
+                Text("⚠ ファイル実体が見つかりません（別端末から取り込んだデータ）",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
         ExpandableText("抽出テキスト", d.extractedText)
+    }
+    if (showPdf && file != null) {
+        PdfViewerDialog(file = file, title = file.name, onDismiss = { showPdf = false })
     }
 }
 
