@@ -128,6 +128,34 @@ class QuizGraderServiceTest {
     }
 
     @Test
+    fun `multi uses set grading order independent`() = runBlocking {
+        val r = service.grade(
+            quiz(type = "multi", answer = "楕円>放物線>双曲線"),
+            userAnswer = "双曲線、楕円＞放物線"
+        )
+        assertEquals(true, r.isCorrect)
+        assertEquals("set", r.method)
+        assertTrue(!r.rubricUsed)
+    }
+
+    @Test
+    fun `tf grades true false`() = runBlocking {
+        val r = service.grade(quiz(type = "tf", answer = "誤り"), userAnswer = "false")
+        assertEquals(true, r.isCorrect)
+        assertEquals("tf", r.method)
+    }
+
+    @Test
+    fun `match grades pairs as a set`() = runBlocking {
+        val r = service.grade(
+            quiz(type = "match", answer = "平均値=合計÷個数>分散=偏差の2乗平均"),
+            userAnswer = "分散=偏差の2乗平均>平均値=合計÷個数"
+        )
+        assertEquals(true, r.isCorrect)
+        assertEquals("set", r.method)
+    }
+
+    @Test
     fun `sort uses sequence grading not fuzzy`() = runBlocking {
         val r = service.grade(
             quiz(type = "sort", answer = "平均値>分散>標準偏差"),

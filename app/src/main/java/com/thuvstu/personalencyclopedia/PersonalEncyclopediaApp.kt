@@ -143,7 +143,7 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
     }
 
     /**
-     * ★wt52: 並べ替え・複数穴埋め等の学習クイズ。数学シード済みDBにも設問文で冪等追記。
+     * ★wt52/wt53: 形式別学習クイズ。数学シード済みDBにも設問文で冪等追記。
      */
     private suspend fun seedQuizFormatsIfNeeded() {
         InitialDataMath.seedFormatQuizzes(database.quizDao())

@@ -73,6 +73,44 @@ class MultiStageGrader @Inject constructor(
     }
 
     /**
+     * 複数選択・対応づけ: 順不同の集合比較。曖昧一致は使わない。
+     * [pairTokens] なら各トークンを `左=右` に正規化してから比較する。
+     */
+    fun gradeSet(userAnswer: String, correctAnswer: String, pairTokens: Boolean = false): GradeResult {
+        val exact = gradeExact(userAnswer, correctAnswer)
+        if (exact.isCorrect) return exact.copy(method = "set")
+        fun tokens(text: String): Set<String> {
+            val parts = if (pairTokens) QuizFormatSupport.splitMatchSequence(text)
+            else QuizFormatSupport.splitSequence(text)
+            return parts.map { tok ->
+                if (pairTokens) QuizFormatSupport.canonicalizeMatchToken(tok) { normalize(it) }
+                else normalize(tok)
+            }.toSet()
+        }
+        val user = tokens(userAnswer)
+        val correct = tokens(correctAnswer)
+        if (correct.isEmpty()) return exact
+        val nu = user.sorted().joinToString(">")
+        val na = correct.sorted().joinToString(">")
+        if (user == correct) {
+            return GradeResult(true, 1.0f, "set", nu, na)
+        }
+        return GradeResult(false, 0f, "set", nu, na)
+    }
+
+    /** 正誤。正しい/誤りとその表記ゆれだけを見る。 */
+    fun gradeTf(userAnswer: String, correctAnswer: String): GradeResult {
+        val nu = normalize(userAnswer)
+        val na = normalize(correctAnswer)
+        val u = QuizFormatSupport.canonicalizeTf(nu)
+        val c = QuizFormatSupport.canonicalizeTf(na)
+        if (u != null && c != null && u == c) {
+            return GradeResult(true, 1.0f, "tf", u, c)
+        }
+        return GradeResult(false, 0f, "tf", u ?: nu, c ?: na)
+    }
+
+    /**
      * 和暦→西暦変換。 era_master のデータを元に `元年の西暦 + (yearInEra - 1)` で換算する。
      */
     suspend fun parseYear(text: String): Int? {

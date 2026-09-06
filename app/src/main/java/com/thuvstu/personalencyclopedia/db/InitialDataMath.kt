@@ -426,6 +426,72 @@ object InitialDataMath {
         Quiz("信頼度95%の区間の意味を述べよ。", "同じ作り方の区間の約95%が母数を含む", emptyList(), "母数が入る確率95%ではない。", "qa"),
     )
 
+    /** ★wt53: 正誤・複数選択・対応づけ。設問文で冪等追記。 */
+    val flexibleQuizzes = listOf(
+        Quiz("次の文は正しいか。\n対偶は元の命題と同値である。", "正しい", emptyList(), "逆・裏は同値とは限らない。", "tf"),
+        Quiz("次の文は正しいか。\n逆は常に元の命題と同値である。", "誤り", emptyList(), "対偶だけが常に同値。", "tf"),
+        Quiz("次の文は正しいか。\n判別式 D<0 の2次方程式は異なる2実解を持つ。", "誤り", emptyList(), "D<0 は実解なし。", "tf"),
+        Quiz("次の文は正しいか。\n内積が0なら2ベクトルは直交する。", "正しい", emptyList(), "cosθ=0。", "tf"),
+        Quiz("次の文は正しいか。\n離心率 e=1 の曲線は楕円である。", "誤り", emptyList(), "e=1 は放物線。", "tf"),
+        Quiz("次の文は正しいか。\nlog_a 1 = 0 である。", "正しい", emptyList(), "a^0=1。", "tf"),
+        Quiz(
+            "次のうち三角比の相互関係として正しいものをすべて選べ。",
+            "sin^2θ+cos^2θ=1>tanθ=sinθ/cosθ>1+tan^2θ=1/cos^2θ",
+            listOf("sin^2θ+cos^2θ=1", "tanθ=sinθ/cosθ", "1+tan^2θ=1/cos^2θ", "正弦定理"),
+            "正弦定理は辺と角の関係。",
+            "multi"
+        ),
+        Quiz(
+            "次のうち導関数として正しいものをすべて選べ。",
+            "(sin x)'=cos x>(e^x)'=e^x>(log x)'=1/x",
+            listOf("(sin x)'=cos x", "(e^x)'=e^x", "(log x)'=1/x", "(sin x)'=-cos x"),
+            "弧度法。(cos x)'=-sin x。",
+            "multi"
+        ),
+        Quiz(
+            "次のうち二次曲線をすべて選べ。",
+            "楕円>放物線>双曲線",
+            listOf("楕円", "放物線", "双曲線", "立方体"),
+            "離心率で分類。",
+            "multi"
+        ),
+        Quiz(
+            "次のうち数列の種類として正しいものをすべて選べ。",
+            "等差数列>等比数列>階差数列",
+            listOf("等差数列", "等比数列", "階差数列", "正弦定理"),
+            "正弦定理は三角。",
+            "multi"
+        ),
+        Quiz(
+            "定理と内容を対応づけよ。",
+            "正弦定理=a/sin A=2R>余弦定理=c^2=a^2+b^2-2ab cos C>ヘロンの公式=s=(a+b+c)/2",
+            listOf("正弦定理|a/sin A=2R", "余弦定理|c^2=a^2+b^2-2ab cos C", "ヘロンの公式|s=(a+b+c)/2"),
+            "三角の計量。",
+            "match"
+        ),
+        Quiz(
+            "統計量とその意味を対応づけよ。",
+            "平均値=合計÷個数>分散=偏差の2乗平均>標準偏差=分散の正の平方根",
+            listOf("平均値|合計÷個数", "分散|偏差の2乗平均", "標準偏差|分散の正の平方根"),
+            "散らばりの順。",
+            "match"
+        ),
+        Quiz(
+            "積分の用語を対応づけよ。",
+            "不定積分=原始関数+C>定積分=F(b)-F(a)>部分積分=fg-∫f g'",
+            listOf("不定積分|原始関数+C", "定積分|F(b)-F(a)", "部分積分|fg-∫f g'"),
+            "微積の考え。",
+            "match"
+        ),
+        Quiz(
+            "離心率と曲線を対応づけよ。",
+            "楕円=eは1未満>放物線=eは1>双曲線=eは1より大きい",
+            listOf("楕円|eは1未満", "放物線|eは1", "双曲線|eは1より大きい"),
+            "円は e=0。",
+            "match"
+        ),
+    )
+
     val wikis = listOf(
         WikiArticleEntity(
             title = "数学I 全単元マップ", summary = "必履修。式・論理・2次・三角比・データ",
@@ -874,13 +940,13 @@ object InitialDataMath {
     }
 
     /**
-     * ★wt52: 形式別学習クイズを設問文で冪等追記。数学シード済みDBにも起動ごとに足せる。
+     * ★wt52/wt53: 形式別学習クイズを設問文で冪等追記。数学シード済みDBにも起動ごとに足せる。
      */
     suspend fun seedFormatQuizzes(quizDao: QuizDao): Int {
         fun jsonArr(items: List<String>) =
             "[" + items.joinToString(",") { "\"" + it.replace("\"", "\\\"") + "\"" } + "]"
         var n = 0
-        for (q in formatQuizzes) {
+        for (q in formatQuizzes + flexibleQuizzes) {
             if (quizDao.countByQuestion(q.q) > 0) continue
             quizDao.insertQuiz(
                 QuizBankEntity(

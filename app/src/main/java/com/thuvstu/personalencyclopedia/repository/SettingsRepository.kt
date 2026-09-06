@@ -9,6 +9,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.thuvstu.personalencyclopedia.brain.ai.AiModels
 import com.thuvstu.personalencyclopedia.brain.quiz.QuizFormatSupport
+import com.thuvstu.personalencyclopedia.brain.quiz.QuizFormats
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -153,8 +154,8 @@ class SettingsRepository @Inject constructor(
     val studyPlusConsumerSecret: StateFlow<String?> = _studyPlusConsumerSecret.asStateFlow()
 
     companion object {
-        // ★wt52: 並べ替え・複数穴埋めを出題対象に（custom/essay は引き続き対象外）
-        val SUPPORTED_QUIZ_TYPES: Set<String> = setOf("qa", "mcq", "fill_blank", "sort", "cloze")
+        // ★wt53: カタログ準拠。essay/custom は引き続き対象外
+        val SUPPORTED_QUIZ_TYPES: Set<String> = QuizFormats.IDS
     }
 
     /** ★ C1: APIキーを暗号化ストアへ保存し、インメモリFlowを更新 */

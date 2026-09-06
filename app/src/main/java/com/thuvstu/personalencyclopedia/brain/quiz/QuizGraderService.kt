@@ -36,9 +36,13 @@ class QuizGraderService @Inject constructor(
         answeredWithinMs: Long? = null,   // §8.7.3: 設問表示〜回答までの経過時間
         hintPenalty: Float = 0.3f         // ヒント減点率
     ): GradedResult {
-        var gradeResult = when (quiz.quizType) {
-            "sort", "cloze" -> multiStageGrader.gradeSequence(userAnswer, quiz.answer)
-            "mcq" -> multiStageGrader.grade(userAnswer, quiz.answer, mode = "exact")
+        val fmt = QuizFormats.of(quiz.quizType)
+        var gradeResult = when {
+            fmt?.play == QuizPlayKind.TF -> multiStageGrader.gradeTf(userAnswer, quiz.answer)
+            fmt?.play == QuizPlayKind.MATCH -> multiStageGrader.gradeSet(userAnswer, quiz.answer, pairTokens = true)
+            fmt?.setGrade == true -> multiStageGrader.gradeSet(userAnswer, quiz.answer)
+            fmt?.sequenceGrade == true -> multiStageGrader.gradeSequence(userAnswer, quiz.answer)
+            fmt?.exactGrade == true -> multiStageGrader.grade(userAnswer, quiz.answer, mode = "exact")
             else -> multiStageGrader.grade(userAnswer, quiz.answer)
         }
 

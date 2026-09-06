@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.thuvstu.personalencyclopedia.brain.quiz.QuizFormats
 import com.thuvstu.personalencyclopedia.viewmodel.QuizEditViewModel
 import kotlinx.coroutines.flow.collectLatest
 
@@ -60,13 +61,7 @@ fun QuizEditScreen(
             // 出題形式
             Text("出題形式", style = MaterialTheme.typography.labelLarge)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(
-                    "qa" to "記述",
-                    "mcq" to "4択",
-                    "fill_blank" to "穴埋め",
-                    "sort" to "並べ替え",
-                    "cloze" to "複数穴埋め"
-                ).forEach { (v, label) ->
+                QuizFormats.chips().forEach { (v, label) ->
                     FilterChip(
                         selected = quizType == v,
                         onClick = { viewModel.setQuizType(v) },
@@ -89,11 +84,25 @@ fun QuizEditScreen(
                         when (quizType) {
                             "sort" -> "正解 *（項目を > でつないだ順）"
                             "cloze" -> "正解 *（空欄順に > で区切る）"
+                            "multi" -> "正解 *（選ぶ語を > でつなぐ・順不同）"
+                            "match" -> "正解 *（左=右 を > でつなぐ・順不同）"
+                            "tf" -> "正解 *（正しい / 誤り）"
                             else -> "正解 *"
                         }
                     )
                 }
             )
+            if (quizType == "tf") {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("正しい", "誤り").forEach { v ->
+                        FilterChip(
+                            selected = answer == v,
+                            onClick = { viewModel.setAnswer(v) },
+                            label = { Text(v) }
+                        )
+                    }
+                }
+            }
             if (quizType == "fill_blank" || quizType == "cloze") {
                 Text(
                     "問題文の空欄は全角 ＿＿＿ で書く。複数穴埋めの正解は空欄の出現順に > で区切る。",
@@ -108,11 +117,28 @@ fun QuizEditScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-
-            // MCQ / 並べ替えの項目
-            if (quizType == "mcq" || quizType == "sort") {
+            if (quizType == "multi") {
                 Text(
-                    if (quizType == "sort") "並べる項目（2〜6個）" else "選択肢（正解を含む・2〜6個）",
+                    "選択肢から複数選ぶ。正解欄は選ぶ語を > でつなぐ（順は問わない）。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (quizType == "match") {
+                Text(
+                    "各選択肢は「左|右」。正解は「左=右」を > でつなぐ（順は問わない）。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            if (QuizFormats.of(quizType)?.needsChoices == true) {
+                Text(
+                    when (quizType) {
+                        "sort" -> "並べる項目（2〜6個）"
+                        "match" -> "対応の組（左|右・2〜6個）"
+                        else -> "選択肢（正解を含む・2〜6個）"
+                    },
                     style = MaterialTheme.typography.labelLarge
                 )
                 choices.forEachIndexed { i, c ->

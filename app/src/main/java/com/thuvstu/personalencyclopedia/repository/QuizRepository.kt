@@ -2,6 +2,7 @@ package com.thuvstu.personalencyclopedia.repository
 
 import com.thuvstu.personalencyclopedia.brain.ai.GeminiClient
 import com.thuvstu.personalencyclopedia.brain.quiz.LlmQuizGenerator
+import com.thuvstu.personalencyclopedia.brain.quiz.QuizFormats
 import com.thuvstu.personalencyclopedia.brain.quiz.QuizGraderService
 import com.thuvstu.personalencyclopedia.brain.quiz.RuleBasedQuizGenerator
 import com.thuvstu.personalencyclopedia.db.dao.EntryDao
@@ -61,6 +62,17 @@ class QuizRepository @Inject constructor(
             }
             RuleBasedQuizGenerator.generateFillBlank(def, null)?.let { quizzes.add(it) }
             RuleBasedQuizGenerator.generateCloze(def, null)?.let { quizzes.add(it) }
+            val otherFields = allDefs.mapNotNull { it.field?.trim()?.takeIf { f -> f.isNotEmpty() } }
+                .distinct().filter { it != def.field }
+            quizzes.add(RuleBasedQuizGenerator.generateTf(def, otherFields, null))
+            if (distractors.isNotEmpty() && otherFields.isNotEmpty()) {
+                val others = allDefs.filter { it.field != def.field }
+                RuleBasedQuizGenerator.generateMulti(def, distractors, others, null)?.let { quizzes.add(it) }
+            }
+            if (distractors.size >= 2) {
+                RuleBasedQuizGenerator.generateMatch(listOf(def) + distractors.take(3), null)
+                    ?.let { quizzes.add(it) }
+            }
             val newQuizzes = quizzes.filter { quizDao.countByQuestion(it.question) == 0 }
             quizDao.insertQuizzes(newQuizzes)
             return newQuizzes.size
@@ -83,7 +95,7 @@ class QuizRepository @Inject constructor(
         topicId: String? = null,
         limit: Int = 10,
         difficultyMin: Int? = null,
-        types: List<String> = listOf("qa", "mcq", "fill_blank", "sort", "cloze")
+        types: List<String> = QuizFormats.IDS.toList()
     ): List<QuizBankEntity> {
         if (types.isEmpty()) return emptyList()
         val slice = (limit / 3).coerceAtLeast(1)

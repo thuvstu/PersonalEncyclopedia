@@ -218,7 +218,7 @@
 |---|---|
 | `topic` / `entry_topic` | 2階層トピック(ジャンル/分野)。`parentId` 自己参照 + 多対多中間 |
 | `srs_review` | **SM-2/FSRS復習履歴(無限)**。`grade(0-5)/intervalDays/easeFactor/nextReviewAt/repetitionCount(v8)` |
-| `quiz_bank` | クイズ問題バンク。`quizType(qa/mcq/fill_blank/sort/essay/cloze/custom)/choicesJson/answer/gradingContextJson/hintsJson/generationMethod/difficulty/isActive` |
+| `quiz_bank` | クイズ問題バンク。`quizType` は `QuizFormats` カタログ（qa/mcq/fill_blank/sort/cloze/tf/multi/match。essay/customは対象外）/choicesJson/answer/gradingContextJson/hintsJson/generationMethod/difficulty/isActive |
 | `quiz_attempts` | 回答履歴。`isCorrect/score/gradingMethod(exact/fuzzy/semantic/llm)/hintsRevealed/answeredWithinMs(v8)` |
 
 #### Phase 2 (v3, 13タイプ拡張 + 検索基盤)
@@ -303,6 +303,7 @@
 - **wt50 自動投入**: Phase A で DemoData の直後、`entry ≤ 20` かつセンチネル「枕草子」未存在なら両弾を自動実行。Demo 規模の初回/既存デモDBに基本データが入る。自作が多いDBは触らず、Dashboard の「追記」ボタンが残る(冪等)。検索文書は続く Phase B の `rebuildAllSearchDocuments` が拾う。
 - `InitialDataMath.seedAppend()` (wt51): **高校数学・新課程の全単元**。定義215（数I 57 / A 37 / II 47 / B 21 / III 31 / C 22）+ クイズ60(mcq) + Wiki6科目マップ + 接続192 + 白板「高校数学 — 新課程」。トピックは `数学` の子に I/A/II/B/III/C。既存ハブ20件（二次関数等）はタイトル再利用。センチネル「正弦定理」、**件数ゲートなし**（基本データ済みDBにも次起動で一度だけ足す）。行列は新課程必履修外のため既存ハブ以外は増やさない。
 - **wt52 `seedFormatQuizzes`**: 穴埋め8・並べ替え6・複数穴埋め6・記述4（計24）。設問文で冪等。Phase A が数学シード済みDBにも毎回追記を試みる。
+- **wt53 `flexibleQuizzes`**: 正誤6・複数選択4・対応づけ4（計14）を同じ冪等ループに追加。形式の単一ソースは `QuizFormats`。
 
 ### 5.7 読取専用SQL実行器 (SQL Explorerの土台)
 `db/ReadOnlySqlExecutor.kt`: `SELECT`/`WITH` 先頭強制 + 書込キーワード16種のブロックリスト + `useReaderConnection` 上で `PRAGMA query_only=ON` + prepare/step + 500行cap。**wt49**: BundledSQLiteDriver 後に例外になっていた `openHelper.writable/readableDatabase` を新APIへ置換。reader 接続を書き込み可能に戻さないよう query_only は OFF にしない。ゲート関数 `denyReason` は JVM テスト可能。
@@ -377,10 +378,11 @@ HYBRID  → 両者の順位を Reciprocal Rank Fusion で統合
 ### 6.3 クイズドメイン (quiz/)
 
 #### 出題 (2系統)
-- **`RuleBasedQuizGenerator`**: 定義エントリから**コスト0**で5形式生成 (`generationMethod="rule_based"`)。
-  - QA「termの定義」、逆QA「定義→term」、MCQ(同分野の定義3つを誤答)、穴埋め(termを`＿＿＿`に)、並べ替え(読み順)、複数穴埋め(用語+分野/第2トークン)。
+- **`QuizFormats`**: 出題形式の単一カタログ（8種）。設定チップ・編集・一覧・プレイ・採点分岐はここを見る。essay/custom は対象外。
+- **`RuleBasedQuizGenerator`**: 定義エントリから**コスト0**でカタログ形式を生成 (`generationMethod="rule_based"`)。
+  - QA「termの定義」、逆QA「定義→term」、MCQ(同分野の定義3つを誤答)、穴埋め(termを`＿＿＿`に)、並べ替え(読み順)、複数穴埋め(用語+分野/第2トークン)、正誤(分野文)、複数選択(同分野2+他分野2)、対応づけ(用語|定義)。
   - **生成時点で rubric 用 `gradingContextJson` を同梱**(★最適化R5)。ルール出題も新採点システムに対応。
-  - 並べ替え・複数穴埋めの採点は `MultiStageGrader.gradeSequence`（`>` 区切り・曖昧一致なし）。
+  - 並べ替え・複数穴埋めは `gradeSequence`、複数選択・対応づけは `gradeSet`（順不同）、正誤は `gradeTf`。曖昧一致なし。
 - **`LlmQuizGenerator`**: Gemini にJSONモードで `count=3` 問を生成。既存同文は `countByQuestion` で重複スキップ。記述式は正解をkeyword+modelAnswersとして `gradingContextJson` に格納。
 - **`NumericVariantEngine`**: 数値計算問題のバリエーション生成。パラメータを `min + Random.nextInt(0,steps+1)*step` で抽出し、**解答式を Rhino サンドボックス(`optimizationLevel=-1`)で実行**。NaN/例外はnullで安全失敗。
 
@@ -550,7 +552,7 @@ DAO 8個 + `QuizGraderService` を束ねて各ルートへ渡す (`ServerDepende
 |---|---|---|---|
 | エントリ | `EntryList` + `EntryDetail` + `GraphView` | 3ペイン分割。検索+型チップ絞り込み、Markdown描画、グラフ表示 | 型チップはクライアント側フィルタ |
 | 単語帳 | `SrsPanel` | 復習カード → 答え表示 → grade 0-5 → 次カード | |
-| クイズ | `QuizPanel` | 形式チップ(qa/mcq/fill_blank/sort/cloze)。MCQ選択・並べ替えタップ・穴埋め欄・記述。**経過時間計測**、`__UNLEARNED__` 対応、正解+解説 | |
+| クイズ | `QuizPanel` | 形式チップはカタログ8種。MCQ/正誤ボタン、複数選択トグル、対応づけ左右タップ、並べ替えタップ、穴埋め欄、記述。**経過時間計測**、`__UNLEARNED__` 対応、正解+解説 | |
 | Ollama | `OllamaPanel` | LAN内Ollamaへ**直接** `/v1/chat/completions`。設定はlocalStorage。Android起動不要で補助AI使用可能(§7.7) | Ktorを経由しない |
 
 **サーバ実装済みだがWeb導線なし** (次実装の余地。§15 #W1): `getConnections`/`createConnection`(接続CRUD)・候補approve/reject・`getHeatmap`(進捗)・`getSrsDueCount`・`DELETE entries`・`PATCH favorite`・`GET quiz/{id}`・`GET quiz/count`・`GET plugins`。`client.ts` に関数はあるが呼出0件のものを含む。
@@ -667,7 +669,7 @@ MainActivity.onCreate → handleIncomingIntent (共有 / PROCESS_TEXT / ショ�
 | EntryDetail | 型バッジ+リッチ本文+wiki-link→`EntryPreviewPopup`/タグ(表記揺れ提案)/接続管理(関係タイプ+強度スライダー)/クイズ自動生成/記事化 |
 | EntryEdit | **全13型を1画面でカバーする統合エディタ**。`when(type)` で61フィールドの `EntryFormState` を分岐 |
 | Search | 4検索モードチップ+型フィルタ、400msデバウンス、**並べ替え5種・期間・お気に入り・タグANDの後段絞り込み(`SearchRefiner`, wt42)・☆トグル** |
-| Quiz | 通常/サバイバル(1問ミスで終了)/プレッシャーテスト(全列挙) の3モード。ヒント段階開示/MCQ正誤強調/**並べ替えはタップ順・複数穴埋めは空欄欄**/rubric採点根拠カード/中断確認 |
+| Quiz | 通常/サバイバル(1問ミスで終了)/プレッシャーテスト(全列挙) の3モード。ヒント段階開示/MCQ正誤強調/**並べ替えはタップ順・複数穴埋めは空欄欄・正誤2ボタン・複数選択トグル・対応づけ左右タップ**/rubric採点根拠カード/中断確認 |
 | SrsReview | SM-2/FSRSフラッシュカード、`RubyText` で読み仮名表示、4段階評価 |
 | Stats | ストリーク/学習日数/12週間ヒートマップ/`CoachingEngine` 弱点分析 |
 | Import | CSV/MD/JSON/URL一括+Obsidian貼り付け+AIクイズ一括生成、進捗表示 |

@@ -104,6 +104,40 @@ class MultiStageGraderTest {
     }
 
     @Test
+    fun `gradeSet ignores order`() {
+        val ok = grader.gradeSet("放物線>楕円>双曲線", "楕円>放物線>双曲線")
+        assertTrue(ok.isCorrect)
+        assertEquals("set", ok.method)
+        val ng = grader.gradeSet("楕円>放物線", "楕円>放物線>双曲線")
+        assertFalse(ng.isCorrect)
+    }
+
+    @Test
+    fun `gradeSet pairTokens compares left-right`() {
+        val ok = grader.gradeSet(
+            "放物線=eは1>楕円=eは1未満",
+            "楕円=eは1未満>放物線=eは1",
+            pairTokens = true
+        )
+        assertTrue(ok.isCorrect)
+        val ng = grader.gradeSet(
+            "楕円=eは1>放物線=eは1未満",
+            "楕円=eは1未満>放物線=eは1",
+            pairTokens = true
+        )
+        assertFalse(ng.isCorrect)
+    }
+
+    @Test
+    fun `gradeTf accepts synonyms`() {
+        val ok = grader.gradeTf("true", "正しい")
+        assertTrue(ok.isCorrect)
+        assertEquals("tf", ok.method)
+        val ng = grader.gradeTf("正しい", "誤り")
+        assertFalse(ng.isCorrect)
+    }
+
+    @Test
     fun `unknown era is marked undeterminable not incorrect`() = runBlocking {
         // 弘安は era_master シードデータに含まれない → 判定不能として明示
         val result = grader.grade(userAnswer = "弘安5年", correctAnswer = "1282年")
