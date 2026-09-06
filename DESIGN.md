@@ -296,11 +296,11 @@
 #### (d) マイグレーション内シード
 `era_master` の56件は `Migration6to7.kt` 内の `insertEra()` (`INSERT OR REPLACE`) で投入。アプリ版数(v12/v15表記)とDBバージョン(10)は別軸で進んでいる点に注意。
 
-### 5.6 シードの二重構造 (DemoData vs InitialData)
+### 5.6 シードの三重構造 (DemoData / InitialData / InitialData2)
 - `DemoData.seed()`: 起動 Phase A で実行。topic 4・定義 6・思考 2・クイズ 10・接続 4・白板 2・Wiki 2の最小セット。空DBガード(`observeCount>0` で return)。
-- `InitialData.seedAppend()`: **Dashboardの投入ボタンからの手動実行のみ**(自動投入なし)。古典/数学/英語/地歴/法/経済の定義125件 + 思考 6 + クイズ 30 + Wiki 6 + 接続 20。**wt45で空DBガード→タイトル一致の冪等追記に変更**(`Result(added, skipped)`)。
-- `InitialData2.seedAppend()` (wt45): 第2弾。**13型すべて**のサンプル(人物12・組織6・場所6・出来事7・書籍9・Web7・動画4・文書3・メディア3・いいね3・AI会話2・定義15・思考3)＋型付き接続67本(authored_by/located_at/occurred_at/exemplifies/extends/references/related)＋タグ16＋Wiki5＋クイズ16(fill_blank含む)＋白板「人物ハブ」(エッジラベル=接続種別)。タイトル/設問文/Wikiタイトル/ボード名で冪等。Dashboardボタンは両弾を順に実行し件数をトースト、`rebuildAllIndices()` で検索文書を差分更新。
-- 両方が空DBガードのため**先勝ちが他方を永久ブロック**する。現状は「Demoが自動・Initialが手動」で競合しないが、順序の明文化がない(§13 #7)。
+- `InitialData.seedAppend()`: 古典/数学/英語/地歴/法/経済の定義125件 + 思考 6 + クイズ 30 + Wiki 6 + 接続 20。**wt45で空DBガード→タイトル一致の冪等追記に変更**(`Result(added, skipped)`)。
+- `InitialData2.seedAppend()` (wt45): 第2弾。**13型すべて**のサンプル(人物12・組織6・場所6・出来事7・書籍9・Web7・動画4・文書3・メディア3・いいね3・AI会話2・定義15・思考3)＋型付き接続67本(authored_by/located_at/occurred_at/exemplifies/extends/references/related)＋タグ16＋Wiki5＋クイズ16(fill_blank含む)＋白板「人物ハブ」(エッジラベル=接続種別)。タイトル/設問文/Wikiタイトル/ボード名で冪等。
+- **wt50 自動投入**: Phase A で DemoData の直後、`entry ≤ 20` かつセンチネル「枕草子」未存在なら両弾を自動実行。Demo 規模の初回/既存デモDBに基本データが入る。自作が多いDBは触らず、Dashboard の「追記」ボタンが残る(冪等)。検索文書は続く Phase B の `rebuildAllSearchDocuments` が拾う。
 
 ### 5.7 読取専用SQL実行器 (SQL Explorerの土台)
 `db/ReadOnlySqlExecutor.kt`: `SELECT`/`WITH` 先頭強制 + 書込キーワード16種のブロックリスト + `useReaderConnection` 上で `PRAGMA query_only=ON` + prepare/step + 500行cap。**wt49**: BundledSQLiteDriver 後に例外になっていた `openHelper.writable/readableDatabase` を新APIへ置換。reader 接続を書き込み可能に戻さないよう query_only は OFF にしない。ゲート関数 `denyReason` は JVM テスト可能。
@@ -640,13 +640,13 @@ Android設定画面: トークン表示 → PC ConnectionBar: ホスト/ポー�
 ### 10.1 起動フロー
 ```
 AndroidManifest: Application=PersonalEncyclopediaApp, MainActivity=singleTop
-PersonalEncyclopediaApp.onCreate ─┬─ Phase A: APIキー暗号化移行 / seedTypeDefs / ビルトインプラグイン / DemoData(自動・空時のみ) / SeedData
+PersonalEncyclopediaApp.onCreate ─┬─ Phase A: APIキー暗号化移行 / seedTypeDefs / ビルトインプラグイン / DemoData(自動・空時のみ) / SeedData / InitialData+InitialData2(wt50: entry≤20 かつ「枕草子」未存在)
                                   ├─ Phase B: vectorIndex.load / recoverJobs / startWorker / rebuildAllSearchDocuments
                                   └─ Phase C: BackupWorker / PortableExportWorker スケジュール
 MainActivity.onCreate → handleIncomingIntent (共有 / PROCESS_TEXT / ショートカット)
   → setContent { EncyclopediaTheme { MainContent } }
 ```
-- **Demo vs Initialの区別**: `DemoData.seed` は起動時自動(最小セット)。`InitialData.seedAppend`＋`InitialData2.seedAppend` (13型・約211件・接続87) は**自動投入なし** — Dashboardの投入ボタンからの手動実行のみ。冪等なので何度押しても重複しない(§5.6, wt45)。
+- **Demo vs Initialの区別**: `DemoData.seed` は起動時自動(最小セット)。`InitialData.seedAppend`＋`InitialData2.seedAppend` (13型・約211件・接続87) は **wt50 からデモ規模DBへ自動投入**。自作が多いDB(entry>20)は Dashboard の追記ボタンのみ。冪等なので何度押しても重複しない(§5.6, wt45/wt50)。
 - **共有インテント対応 (wt49)**: `ACTION_SEND` / `SEND_MULTIPLE` で `text/plain`・`image/*`・`application/pdf`、加えて `ACTION_PROCESS_TEXT`（文字選択→「百科事典に保存」）。テキストはURLスクレイプ or メモ、画像は `createMedia`、PDFは `ImportPipeline.importDocumentFile`(wt43)。完了は Toast ではなく Snackbar「保存しました」+「開く」。`IncomingNavigation` が entry / route / notice のキュー。**Activity→Compose Navigationの橋渡し** (§11.4)。
 - **ランチャーショートカット / 予測型戻る (wt49)**: アイコン長押しで新規メモ／検索／今日の復習。`android:enableOnBackInvokedCallback="true"`。
 

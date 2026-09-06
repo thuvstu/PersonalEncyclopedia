@@ -158,7 +158,7 @@ class DashboardViewModel @Inject constructor(
 
     fun resetScrapeState() { _scrapeState.value = ScrapeState.Idle }
 
-    // ── 初期データ明示投入 (Hubの透明性) ──
+    // ── 基本データ追記 (wt50: 初回は Phase A が自動投入。自作が多いDB向けにボタン残置) ──
     private val _seedState = MutableStateFlow<String?>(null)
     val seedState: StateFlow<String?> = _seedState
     private val _isSeeding = MutableStateFlow(false)

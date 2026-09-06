@@ -213,13 +213,13 @@ fun DashboardScreen(
                     Column(modifier = Modifier.padding(14.dp)) {
                         if (totalCount == 0) {
                             Text(
-                                "📚 初期データがまだありません",
+                                "📚 基本データを準備しています",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                "13型すべてのサンプル211件（定義140・人物12・書籍9・出来事7ほか）、型付き接続87・Wiki11・クイズ46を投入できます",
+                                "初回起動で古典・数学・英語・地歴・法・経済と13型サンプルを自動投入します。届かないときは下のボタンから。",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -230,7 +230,7 @@ fun DashboardScreen(
                                 enabled = !isSeeding
                             ) {
                                 if (isSeeding) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                                else Text("📥 初期データを投入")
+                                else Text("📥 基本データを投入")
                             }
                         } else {
                             Text(
@@ -244,7 +244,7 @@ fun DashboardScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 enabled = !isSeeding
                             ) {
-                                Text("📥 初期データを追記（タイトル一致で重複回避）")
+                                Text("📥 基本データを追記（タイトル一致で重複回避）")
                             }
                         }
                     }

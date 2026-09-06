@@ -25,9 +25,9 @@
 
 `PersonalEncyclopediaApp.kt` の `runStep` が3段階で起動する。
 
-1. `initDatabase` … Room DB 初期化。
-2. `initBrainLayer` … ベクトル索引のロード、埋め込みワーカーの起動、未完了ジョブの復旧。
-3. `scheduleBackgroundWorkers` … バックグラウンド処理(接続候補生成など)の定期実行。
+1. `initDatabase` … Room DB 初期化。空DBなら DemoData、デモ規模(entry≤20)なら InitialData+InitialData2 の基本データも自動投入(wt50)。
+2. `initBrainLayer` … ベクトル索引のロード、埋め込みワーカーの起動、未完了ジョブの復旧、検索文書の再構築。
+3. `scheduleBackgroundWorkers` … バックグラウンド処理(バックアップ・可搬export・ToDo期限チェック)の定期実行。
 
 どの段階で失敗してもアプリが落ちないよう、各段階は独立してトライされ、失敗はログに残る。
 

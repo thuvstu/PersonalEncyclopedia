@@ -13,6 +13,8 @@ import com.thuvstu.personalencyclopedia.brain.connection.ConnectionEngine
 import com.thuvstu.personalencyclopedia.brain.search.InMemoryVectorIndex
 import com.thuvstu.personalencyclopedia.db.AppDatabase
 import com.thuvstu.personalencyclopedia.db.DemoData
+import com.thuvstu.personalencyclopedia.db.InitialData
+import com.thuvstu.personalencyclopedia.db.InitialData2
 import com.thuvstu.personalencyclopedia.db.SeedData
 import com.thuvstu.personalencyclopedia.plugins.PluginEngine
 import com.thuvstu.personalencyclopedia.repository.SettingsRepository
@@ -27,6 +29,13 @@ import javax.inject.Inject
 
 @HiltAndroidApp
 class PersonalEncyclopediaApp : Application(), Configuration.Provider {
+
+    companion object {
+        /** DemoData は 8 件。少し自作しても自動投入する上限 */
+        private const val BASIC_DATA_AUTO_MAX = 20
+        private const val BASIC_DATA_SENTINEL = "枕草子"
+    }
+
     @Inject lateinit var database: AppDatabase
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var embeddingQueue: EmbeddingQueue
@@ -90,6 +99,30 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
             wikiDao = database.wikiArticleDao()
         )
         database.entryTypeDao().insertAll(SeedData.entryTypes)
+        seedBasicDataIfSparse()
+    }
+
+    /**
+     * ★wt50: 基本データ(InitialData+InitialData2)の自動投入。
+     * DemoData 程度の空〜最小DBに限り、第1弾(古典/数学/英語/地歴/法/経済)と第2弾(13型グラフ)を冪等追記する。
+     * 自作エントリーが多いDBは触らない(Dashboard の「追記」ボタンが残る)。
+     * センチネルは InitialData 第1件「枕草子」(DemoData に無い)。
+     */
+    private suspend fun seedBasicDataIfSparse() {
+        val entryDao = database.entryDao()
+        val count = entryDao.observeCount().first()
+        if (count > BASIC_DATA_AUTO_MAX) return
+        if (entryDao.findByTitle(BASIC_DATA_SENTINEL) != null) return
+        InitialData.seedAppend(
+            entryDao, database.entryThoughtDao(), database.entryDefinitionDao(),
+            database.topicDao(), database.quizDao(), database.connectionDao(), database.wikiArticleDao()
+        )
+        InitialData2.seedAppend(
+            entryDao, database.entryThoughtDao(), database.entryDefinitionDao(),
+            database.entryExtensionDao(), database.tagDao(),
+            database.topicDao(), database.quizDao(), database.connectionDao(),
+            database.whiteboardDao(), database.wikiArticleDao()
+        )
     }
 
     /** Phase B: Brain Layer初期化。ベクトルインデックス・埋め込みキューの回復。 */
