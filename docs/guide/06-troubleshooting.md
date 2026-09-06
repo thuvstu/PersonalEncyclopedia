@@ -23,6 +23,10 @@
 | 自動接続候補が大量に出る/まったく出ない | `AUTO_CONNECT_ENABLED` と `AUTO_CONNECT_THRESHOLD`(既定 0.88)の設定を確認。既定 OFF が仕様(§8.4、03-connection.md) |
 | Web クライアントが「API error 401」 | トークン不一致。Android 側に表示されているアクセストークンを Web の接続設定に入力する(§4.3) |
 | 取り込み時に重複がスキップされる | 重複検出(`DuplicateDetector`、§12.7)の仕様。skip 数は import 結果に表示される |
+| 定期バックアップが毎回失敗する / SQL Explorer が即エラー | wt47 で `BundledSQLiteDriver` にした後、旧 `openHelper.writableDatabase` が例外になる。wt49 で `useWriterConnection` / `useReaderConnection` に置換済み。残っているなら APK が古い |
+| 詳細画面の本文が生 HTML (`<a href="wiki://…">`) のまま / ダークで白い箱 / 長文が切れる | 旧実装は marked.js を CDN 依存 + `color:#222` 固定 + `heightIn(max=400.dp)`。wt49 で assets 同梱・テーマ色注入・scrollHeight 合わせ済み |
+| ホームが空のまま / 基本データが無い | wt50 からデモ規模DBは起動 Phase A で InitialData+InitialData2 を自動投入。自作が21件超だと触らない。Dashboard の「基本データを追記」で手動投入可(タイトル一致で冪等) |
+
 
 ## テストの実行方法
 

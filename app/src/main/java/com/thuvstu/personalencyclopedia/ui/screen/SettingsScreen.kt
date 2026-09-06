@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Security
 import com.thuvstu.personalencyclopedia.brain.ai.AiModels
+import com.thuvstu.personalencyclopedia.brain.quiz.QuizFormats
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -391,11 +392,7 @@ fun SettingsScreen(
                     Text("出題形式", style = MaterialTheme.typography.labelMedium)
                     Spacer(modifier = Modifier.height(4.dp))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf(
-                            "qa" to "記述式",
-                            "mcq" to "選択式",
-                            "fill_blank" to "穴埋め"
-                        ).forEach { (type, label) ->
+                        QuizFormats.chips().forEach { (type, label) ->
                             FilterChip(
                                 selected = type in quizTypes,
                                 onClick = {

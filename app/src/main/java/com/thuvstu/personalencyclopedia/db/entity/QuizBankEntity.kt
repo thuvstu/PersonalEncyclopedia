@@ -12,7 +12,7 @@ data class QuizBankEntity(
     val sourceEntryId: String? = null,
     val topicId: String? = null,
     val pluginId: String? = null,
-    val quizType: String,           // qa/mcq/fill_blank/sort/essay/cloze/custom
+    val quizType: String,           // カタログ: qa/mcq/fill_blank/sort/cloze/tf/multi/match。essay/custom は対象外
     val question: String,
     val choicesJson: String = "[]",
     val answer: String,

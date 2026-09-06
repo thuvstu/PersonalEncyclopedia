@@ -35,7 +35,7 @@ fun EntryTypeSection(
 ) {
     when (type) {
         "thought" -> thought?.let { ThoughtSection(it) }
-        "definition" -> definition?.let { DefinitionSection(it) }
+        "definition" -> definition?.let { DefinitionSection(it, onInternalLink) }
         "webpage" -> (extension as? EntryWebpageEntity)?.let { WebpageSection(it) }
         "book" -> (extension as? EntryBookEntity)?.let { BookSection(it) }
         "video" -> (extension as? EntryVideoEntity)?.let { VideoSection(it) }
@@ -47,7 +47,6 @@ fun EntryTypeSection(
         "event" -> (extension as? EntryEventEntity)?.let { EventSection(it) }
         "liked" -> (extension as? EntryLikedEntity)?.let { LikedSection(it) }
         "ai_conv" -> (extension as? EntryAiConvEntity)?.let { AiConvSection(it) }
-        "definition" -> definition?.let { DefinitionSection(it, onInternalLink) }
     }
 }
 
@@ -63,33 +62,7 @@ private fun ThoughtSection(t: EntryThoughtEntity) {
     }
 }
 
-@Composable
-private fun DefinitionSection(d: EntryDefinitionEntity) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = entryTypeColor("definition").copy(alpha = 0.08f))
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(d.term, style = MaterialTheme.typography.headlineMedium)
-            if (!d.reading.isNullOrBlank())
-                Text(d.reading, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (!d.field.isNullOrBlank()) {
-                Spacer(Modifier.height(4.dp))
-                SuggestionChip(onClick = {}, label = { Text(d.field) },
-                    modifier = Modifier.height(28.dp))
-            }
-            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-            Text(d.definition, style = MaterialTheme.typography.bodyLarge)
-            parseList(d.examplesJson).takeIf { it.isNotEmpty() }?.let { ex ->
-                Spacer(Modifier.height(8.dp))
-                Text("例", style = MaterialTheme.typography.labelLarge)
-                ex.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall) }
-            }
-        }
-    }
-}
+
 
 @Composable
 private fun WebpageSection(w: EntryWebpageEntity) {
@@ -347,7 +320,7 @@ private fun DefinitionSection(d: EntryDefinitionEntity, onInternalLink: ((String
             RichContentView(
                 content = d.definition,
                 onWikiLinkClick = { onInternalLink?.invoke(it) },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp, max = 300.dp)
+                modifier = Modifier.fillMaxWidth()
             )
             parseList(d.examplesJson).takeIf { it.isNotEmpty() }?.let { ex ->
                 Spacer(Modifier.height(8.dp))

@@ -58,7 +58,7 @@
 - 通常演習の問題数(5〜20問、既定10)
 - サバイバルの上限(5〜50問、既定30)
 - 難易度フィルタ(すべて/やさしめ/標準以上/むずかしめ)
-- 出題形式(**qa / mcq / fill_blank の3種に正式収束**。sort/cloze/customは生成・出題対象外)
+- 出題形式は `QuizFormats` カタログの **8種**（qa / mcq / fill_blank / sort / cloze / tf / multi / match。essay/customは生成・出題対象外）。旧設定で3種・4種・5種すべてオンなら起動時に現行 SUPPORTED へ拡張。並べ替えはタップ順、複数穴埋めは空欄ごとに入力し `>` で結合して `gradeSequence`。正誤は正しい/誤り、複数選択は順不同の集合、対応づけは左右タップで `左=右` を集合比較（`gradeSet` / `gradeTf`）。
 - プレッシャーテストの制限時間(15〜180秒、既定60)
 - ヒント1回あたりの減点率(0〜50%、既定30%)
 
@@ -104,7 +104,7 @@ Rubric分解(RubricParser) → feature抽出(RubricFeatureExtractor)
 
 `QuizScreen` の表示を最適化し、答え合わせの質と操作性を改善した。
 
-- 形式・採点方式ラベルを日本語に統一(`quizTypeLabel` / `gradingMethodLabel`)。DBに存在しうる形式(sort/cloze/custom等)は生文字列を出さずマッピング。
+- 形式・採点方式ラベルを日本語に統一(`quizTypeLabel` / `gradingMethodLabel`)。ラベルは `QuizFormats` が単一ソース。essay/custom のみ例外マッピング。
 - **答え合わせ画面**: 進捗(問x/y)、あなたの回答、MCQは全選択肢に正解(primaryContainer+「✓ 正解」)・あなたの回答(errorContainer)を強調表示。
 - 出題画面: MCQ選択肢に①〜⑧の番号、テキスト入力は `ImeAction.Done`、サバイバルでは「未習(終了)」と明示。
 - **破棄確認**: セッション進行中(Question/Answered/EnumerateQuestion)の戻る操作は確認ダイアログを表示。

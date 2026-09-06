@@ -144,7 +144,8 @@ fun WikiArticleScreen(
                             }
                         )
                     },
-                    modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)
+                    modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+                    autoHeight = false
                 )
             }
             else -> {
@@ -210,7 +211,8 @@ fun WikiEditScreen(
             if (preview) {
                 RichContentView(
                     content = content,
-                    modifier = Modifier.fillMaxWidth().weight(1f)
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    autoHeight = false
                 )
             } else {
                 OutlinedTextField(

@@ -197,7 +197,7 @@
 - **ファイル**: `encyclopedia.db` / **バージョン 11** / `exportSchema = true`
 - **44エンティティ(実表43 + FTS4仮想表1) + 2ビュー** (`AppDatabase.kt:9-68`、`10.json` で tableName 44・viewName 2を確認)。旧記述の「40表」は walkthrough14時点の古い値。
 - **マイグレーション**: 10本 (`MIGRATION_1_2`〜`MIGRATION_10_11`)、**破壊的変更ゼロ**の「新規テーブル追加 + ビュー再作成 + カラム追加 + 索引追加」のみ。`DROP TABLE/DELETE/列削除` は全10本にゼロ。`fallbackToDestructiveMigration()` は**未設定**(データ破壊フォールバックなし)。
-- **ドライバ**: `BundledSQLiteDriver().withSqliteVec()` (sqlite-bundled 2.5.2 + room-vec-common 0.1.0-alpha01, walkthrough13/14)で `vec_distance_cosine` をロード。`EmbeddingDao.vecSearch()` がDB側近傍検索を担い、`HybridSearchEngine` はDB優先→InMemoryフォールバック。**walkthrough47で全Migrationと `RoomDatabase.Callback.onOpen` を `SQLiteConnection` 形式へ変換** (`setDriver` 併用時は旧 `SupportSQLiteDatabase` 形式が `NotImplementedError` で実機起動死するため)。
+- **ドライバ**: `BundledSQLiteDriver().withSqliteVec()` (sqlite-bundled 2.5.2 + room-vec-common 0.1.0-alpha01, walkthrough13/14)で `vec_distance_cosine` をロード。`EmbeddingDao.vecSearch()` がDB側近傍検索を担い、`HybridSearchEngine` はDB優先→InMemoryフォールバック。**walkthrough47で全Migrationと `RoomDatabase.Callback.onOpen` を `SQLiteConnection` 形式へ変換** (`setDriver` 併用時は旧 `SupportSQLiteDatabase` 形式が `NotImplementedError` で実機起動死するため)。**wt49で残っていた `openHelper.writable/readableDatabase` 8箇所（Backup / SQL Explorer）を `useWriterConnection` / `useReaderConnection` へ置換。**
 - **DAOは24本** (`AppDatabase.kt` の abstract fun 24件、`DatabaseModule.kt:55-82` の @Provides 24件が1:1対応)。旧記述の「20個」は誤り。
 - **スキーマ欠落**: `app/schemas/` は `1,2,6,7,8,9,10.json` のみ。**`3,4,5.json` が無い**ため中間状態をJSONで裏付けできず、`MigrationTest` は v1→v9チェーン+単段4種のみで **v10(`index_progress_events_entityId`)未検証**(§13 #2)。
 - **版数の二軸**: DBバージョン(10)とアプリ版数(`AppDatabase.kt` コメント内の v12.0/v15.0表記)は別軸。コメント混在に注意。
@@ -218,7 +218,7 @@
 |---|---|
 | `topic` / `entry_topic` | 2階層トピック(ジャンル/分野)。`parentId` 自己参照 + 多対多中間 |
 | `srs_review` | **SM-2/FSRS復習履歴(無限)**。`grade(0-5)/intervalDays/easeFactor/nextReviewAt/repetitionCount(v8)` |
-| `quiz_bank` | クイズ問題バンク。`quizType(qa/mcq/fill_blank/sort/essay/cloze/custom)/choicesJson/answer/gradingContextJson/hintsJson/generationMethod/difficulty/isActive` |
+| `quiz_bank` | クイズ問題バンク。`quizType` は `QuizFormats` カタログ（qa/mcq/fill_blank/sort/cloze/tf/multi/match。essay/customは対象外）/choicesJson/answer/gradingContextJson/hintsJson/generationMethod/difficulty/isActive |
 | `quiz_attempts` | 回答履歴。`isCorrect/score/gradingMethod(exact/fuzzy/semantic/llm)/hintsRevealed/answeredWithinMs(v8)` |
 
 #### Phase 2 (v3, 13タイプ拡張 + 検索基盤)
@@ -296,14 +296,17 @@
 #### (d) マイグレーション内シード
 `era_master` の56件は `Migration6to7.kt` 内の `insertEra()` (`INSERT OR REPLACE`) で投入。アプリ版数(v12/v15表記)とDBバージョン(10)は別軸で進んでいる点に注意。
 
-### 5.6 シードの二重構造 (DemoData vs InitialData)
+### 5.6 シードの三重構造 (DemoData / InitialData / InitialData2)
 - `DemoData.seed()`: 起動 Phase A で実行。topic 4・定義 6・思考 2・クイズ 10・接続 4・白板 2・Wiki 2の最小セット。空DBガード(`observeCount>0` で return)。
-- `InitialData.seedAppend()`: **Dashboardの投入ボタンからの手動実行のみ**(自動投入なし)。古典/数学/英語/地歴/法/経済の定義125件 + 思考 6 + クイズ 30 + Wiki 6 + 接続 20。**wt45で空DBガード→タイトル一致の冪等追記に変更**(`Result(added, skipped)`)。
-- `InitialData2.seedAppend()` (wt45): 第2弾。**13型すべて**のサンプル(人物12・組織6・場所6・出来事7・書籍9・Web7・動画4・文書3・メディア3・いいね3・AI会話2・定義15・思考3)＋型付き接続67本(authored_by/located_at/occurred_at/exemplifies/extends/references/related)＋タグ16＋Wiki5＋クイズ16(fill_blank含む)＋白板「人物ハブ」(エッジラベル=接続種別)。タイトル/設問文/Wikiタイトル/ボード名で冪等。Dashboardボタンは両弾を順に実行し件数をトースト、`rebuildAllIndices()` で検索文書を差分更新。
-- 両方が空DBガードのため**先勝ちが他方を永久ブロック**する。現状は「Demoが自動・Initialが手動」で競合しないが、順序の明文化がない(§13 #7)。
+- `InitialData.seedAppend()`: 古典/数学/英語/地歴/法/経済の定義125件 + 思考 6 + クイズ 30 + Wiki 6 + 接続 20。**wt45で空DBガード→タイトル一致の冪等追記に変更**(`Result(added, skipped)`)。
+- `InitialData2.seedAppend()` (wt45): 第2弾。**13型すべて**のサンプル(人物12・組織6・場所6・出来事7・書籍9・Web7・動画4・文書3・メディア3・いいね3・AI会話2・定義15・思考3)＋型付き接続67本(authored_by/located_at/occurred_at/exemplifies/extends/references/related)＋タグ16＋Wiki5＋クイズ16(fill_blank含む)＋白板「人物ハブ」(エッジラベル=接続種別)。タイトル/設問文/Wikiタイトル/ボード名で冪等。
+- **wt50 自動投入**: Phase A で DemoData の直後、`entry ≤ 20` かつセンチネル「枕草子」未存在なら両弾を自動実行。Demo 規模の初回/既存デモDBに基本データが入る。自作が多いDBは触らず、Dashboard の「追記」ボタンが残る(冪等)。検索文書は続く Phase B の `rebuildAllSearchDocuments` が拾う。
+- `InitialDataMath.seedAppend()` (wt51): **高校数学・新課程の全単元**。定義215（数I 57 / A 37 / II 47 / B 21 / III 31 / C 22）+ クイズ60(mcq) + Wiki6科目マップ + 接続192 + 白板「高校数学 — 新課程」。トピックは `数学` の子に I/A/II/B/III/C。既存ハブ20件（二次関数等）はタイトル再利用。センチネル「正弦定理」、**件数ゲートなし**（基本データ済みDBにも次起動で一度だけ足す）。行列は新課程必履修外のため既存ハブ以外は増やさない。
+- **wt52 `seedFormatQuizzes`**: 穴埋め8・並べ替え6・複数穴埋め6・記述4（計24）。設問文で冪等。Phase A が数学シード済みDBにも毎回追記を試みる。
+- **wt53 `flexibleQuizzes`**: 正誤6・複数選択4・対応づけ4（計14）を同じ冪等ループに追加。形式の単一ソースは `QuizFormats`。
 
 ### 5.7 読取専用SQL実行器 (SQL Explorerの土台)
-`db/ReadOnlySqlExecutor.kt`: `SELECT`/`WITH` 先頭強制 + 書込キーワード16種のブロックリスト + `PRAGMA query_only=ON→OFF` + 500行cap。ブロックリスト依存のため厳密性は `query_only` が実質防御線。Room単一コネクション前提の綱渡りであり、マルチコネクション化で崩れる旨をコメント自認。幸いKtor/Web非公開のローカル専用のため現状リスクは低い。
+`db/ReadOnlySqlExecutor.kt`: `SELECT`/`WITH` 先頭強制 + 書込キーワード16種のブロックリスト + `useReaderConnection` 上で `PRAGMA query_only=ON` + prepare/step + 500行cap。**wt49**: BundledSQLiteDriver 後に例外になっていた `openHelper.writable/readableDatabase` を新APIへ置換。reader 接続を書き込み可能に戻さないよう query_only は OFF にしない。ゲート関数 `denyReason` は JVM テスト可能。
 
 ### 5.5 複雑なDAOクエリ集
 
@@ -375,9 +378,11 @@ HYBRID  → 両者の順位を Reciprocal Rank Fusion で統合
 ### 6.3 クイズドメイン (quiz/)
 
 #### 出題 (2系統)
-- **`RuleBasedQuizGenerator`**: 定義エントリから**コスト0**で4形式生成 (`generationMethod="rule_based"`)。
-  - QA「termの定義」、逆QA「定義→term」、MCQ(同分野の定義3つを誤答)、穴埋め(termを`＿＿＿`に)。
+- **`QuizFormats`**: 出題形式の単一カタログ（8種）。設定チップ・編集・一覧・プレイ・採点分岐はここを見る。essay/custom は対象外。
+- **`RuleBasedQuizGenerator`**: 定義エントリから**コスト0**でカタログ形式を生成 (`generationMethod="rule_based"`)。
+  - QA「termの定義」、逆QA「定義→term」、MCQ(同分野の定義3つを誤答)、穴埋め(termを`＿＿＿`に)、並べ替え(読み順)、複数穴埋め(用語+分野/第2トークン)、正誤(分野文)、複数選択(同分野2+他分野2)、対応づけ(用語|定義)。
   - **生成時点で rubric 用 `gradingContextJson` を同梱**(★最適化R5)。ルール出題も新採点システムに対応。
+  - 並べ替え・複数穴埋めは `gradeSequence`、複数選択・対応づけは `gradeSet`（順不同）、正誤は `gradeTf`。曖昧一致なし。
 - **`LlmQuizGenerator`**: Gemini にJSONモードで `count=3` 問を生成。既存同文は `countByQuestion` で重複スキップ。記述式は正解をkeyword+modelAnswersとして `gradingContextJson` に格納。
 - **`NumericVariantEngine`**: 数値計算問題のバリエーション生成。パラメータを `min + Random.nextInt(0,steps+1)*step` で抽出し、**解答式を Rhino サンドボックス(`optimizationLevel=-1`)で実行**。NaN/例外はnullで安全失敗。
 
@@ -547,7 +552,7 @@ DAO 8個 + `QuizGraderService` を束ねて各ルートへ渡す (`ServerDepende
 |---|---|---|---|
 | エントリ | `EntryList` + `EntryDetail` + `GraphView` | 3ペイン分割。検索+型チップ絞り込み、Markdown描画、グラフ表示 | 型チップはクライアント側フィルタ |
 | 単語帳 | `SrsPanel` | 復習カード → 答え表示 → grade 0-5 → 次カード | |
-| クイズ | `QuizPanel` | 形式チップ(qa/mcq/fill_blank)。MCQ選択/記述入力。**経過時間計測**、`__UNLEARNED__` 対応、正解+解説 | |
+| クイズ | `QuizPanel` | 形式チップはカタログ8種。MCQ/正誤ボタン、複数選択トグル、対応づけ左右タップ、並べ替えタップ、穴埋め欄、記述。**経過時間計測**、`__UNLEARNED__` 対応、正解+解説 | |
 | Ollama | `OllamaPanel` | LAN内Ollamaへ**直接** `/v1/chat/completions`。設定はlocalStorage。Android起動不要で補助AI使用可能(§7.7) | Ktorを経由しない |
 
 **サーバ実装済みだがWeb導線なし** (次実装の余地。§15 #W1): `getConnections`/`createConnection`(接続CRUD)・候補approve/reject・`getHeatmap`(進捗)・`getSrsDueCount`・`DELETE entries`・`PATCH favorite`・`GET quiz/{id}`・`GET quiz/count`・`GET plugins`。`client.ts` に関数はあるが呼出0件のものを含む。
@@ -595,8 +600,8 @@ Android設定画面: トークン表示 → PC ConnectionBar: ホスト/ポー�
 | コンポーネント | 仕組み |
 |---|---|
 | `BackupEncryptor` | **AES-256-GCM**。鍵は AndroidKeyStore(`encyclopedia_backup_key`)内に保持されファイルに含まれない(デバイスバインド)。出力形式 `[12byte IV][ciphertext+tag]`。**注意: ファイル全体を `readBytes()` 一括読込**(大規模DBでOOMの留意。§13 #6) |
-| `BackupExporter` | **SAF経由のクラウド非依存バックアップ**(Drive API不要)。復元時はSQLiteヘッダ(`"SQLite format 3\0"` 16byte)を検証してからDB差し替え |
-| `BackupWorker` | WorkManager 日次・**充電中+Wi-Fi限定+バッテリ低下でない**。WAL checkpoint→DBコピー→暗号化→30世代プルーニング→SAFリモート or `"LOCAL_ONLY"`。失敗時 `runAttemptCount<3` でretry。秒精度ファイル名のため同秒2回実行で衝突の余地 |
+| `BackupExporter` | **SAF経由のクラウド非依存バックアップ**(Drive API不要)。復元時はSQLiteヘッダ(`"SQLite format 3\0"` 16byte)を検証してからDB差し替え。WAL checkpoint は `useWriterConnection { execSQL("PRAGMA wal_checkpoint(TRUNCATE)") }` (**wt49**: 旧 `openHelper.writableDatabase` は BundledSQLiteDriver 下で例外) |
+| `BackupWorker` | WorkManager 日次・**充電中+Wi-Fi限定+バッテリ低下でない**。WAL checkpoint(同上)→DBコピー→暗号化→30世代プルーニング→SAFリモート or `"LOCAL_ONLY"`。失敗時 `runAttemptCount<3` でretry。秒精度ファイル名のため同秒2回実行で衝突の余地 |
 | `PortableExportWorker` | 週次・充電中。Markdown/CSV/JSON の3形式を **純粋関数で書き出し**(テスト容易性)。**注意: 無暗号・世代管理なし・SAF転送なし・上限100k件** — `filesDir` 残置のため端末紛失で消失し得る(§13 #10) |
 | `EntryExporter` | 手動エクスポート(MARKDOWN/CSV/JSON)。SAFへ直接書き込み。JSONは thought＋11型の全カラム＋lang/metadataJson/accessedAt を書き、`EntryJsonCodec` と完全往復(wt41) |
 
@@ -640,14 +645,15 @@ Android設定画面: トークン表示 → PC ConnectionBar: ホスト/ポー�
 ### 10.1 起動フロー
 ```
 AndroidManifest: Application=PersonalEncyclopediaApp, MainActivity=singleTop
-PersonalEncyclopediaApp.onCreate ─┬─ Phase A: APIキー暗号化移行 / seedTypeDefs / ビルトインプラグイン / DemoData(自動・空時のみ) / SeedData
+PersonalEncyclopediaApp.onCreate ─┬─ Phase A: APIキー暗号化移行 / seedTypeDefs / ビルトインプラグイン / DemoData(自動・空時のみ) / SeedData / InitialData+InitialData2(wt50: entry≤20 かつ「枕草子」未存在) / InitialDataMath(wt51: 「正弦定理」未存在なら件数無制限) / seedFormatQuizzes(wt52: 設問冪等)
                                   ├─ Phase B: vectorIndex.load / recoverJobs / startWorker / rebuildAllSearchDocuments
                                   └─ Phase C: BackupWorker / PortableExportWorker スケジュール
-MainActivity.onCreate → handleIncomingIntent (ACTION_SEND: URL→scrape, テキスト→thought)
+MainActivity.onCreate → handleIncomingIntent (共有 / PROCESS_TEXT / ショートカット)
   → setContent { EncyclopediaTheme { MainContent } }
 ```
-- **Demo vs Initialの区別**: `DemoData.seed` は起動時自動(最小セット)。`InitialData.seedAppend`＋`InitialData2.seedAppend` (13型・約211件・接続87) は**自動投入なし** — Dashboardの投入ボタンからの手動実行のみ。冪等なので何度押しても重複しない(§5.6, wt45)。
-- **共有インテント対応**: 他アプリからURL/テキストを受け取り、スクレイプ or メモ作成 → `IncomingNavigation.setPendingEntry(id)` → Compose側 `LaunchedEffect` が監視して `entry/$id` へ遷移 (`MainActivity.kt:81-88`)。**Activity→Compose Navigationの橋渡しキュー** (§11.4)。
+- **Demo vs Initialの区別**: `DemoData.seed` は起動時自動(最小セット)。`InitialData.seedAppend`＋`InitialData2.seedAppend` (13型・約211件・接続87) は **wt50 からデモ規模DBへ自動投入**。自作が多いDB(entry>20)は Dashboard の追記ボタンのみ。冪等なので何度押しても重複しない(§5.6, wt45/wt50)。
+- **共有インテント対応 (wt49)**: `ACTION_SEND` / `SEND_MULTIPLE` で `text/plain`・`image/*`・`application/pdf`、加えて `ACTION_PROCESS_TEXT`（文字選択→「百科事典に保存」）。テキストはURLスクレイプ or メモ、画像は `createMedia`、PDFは `ImportPipeline.importDocumentFile`(wt43)。完了は Toast ではなく Snackbar「保存しました」+「開く」。`IncomingNavigation` が entry / route / notice のキュー。**Activity→Compose Navigationの橋渡し** (§11.4)。
+- **ランチャーショートカット / 予測型戻る (wt49)**: アイコン長押しで新規メモ／検索／今日の復習。`android:enableOnBackInvokedCallback="true"`。
 
 ### 10.2 ナビゲーション — 27ルートの単一NavHost
 - `Routes` オブジェクトに27ルート定義、フラットな単一 NavHost (`NavGraph.kt:15-44, 58-273`)。`startDestination = DASHBOARD`。旧記述の「28ルート」は誤り。
@@ -663,7 +669,7 @@ MainActivity.onCreate → handleIncomingIntent (ACTION_SEND: URL→scrape, テ�
 | EntryDetail | 型バッジ+リッチ本文+wiki-link→`EntryPreviewPopup`/タグ(表記揺れ提案)/接続管理(関係タイプ+強度スライダー)/クイズ自動生成/記事化 |
 | EntryEdit | **全13型を1画面でカバーする統合エディタ**。`when(type)` で61フィールドの `EntryFormState` を分岐 |
 | Search | 4検索モードチップ+型フィルタ、400msデバウンス、**並べ替え5種・期間・お気に入り・タグANDの後段絞り込み(`SearchRefiner`, wt42)・☆トグル** |
-| Quiz | 通常/サバイバル(1問ミスで終了)/プレッシャーテスト(全列挙) の3モード。ヒント段階開示/MCQ正誤強調/**rubric採点根拠カード**/中断確認 |
+| Quiz | 通常/サバイバル(1問ミスで終了)/プレッシャーテスト(全列挙) の3モード。ヒント段階開示/MCQ正誤強調/**並べ替えはタップ順・複数穴埋めは空欄欄・正誤2ボタン・複数選択トグル・対応づけ左右タップ**/rubric採点根拠カード/中断確認 |
 | SrsReview | SM-2/FSRSフラッシュカード、`RubyText` で読み仮名表示、4段階評価 |
 | Stats | ストリーク/学習日数/12週間ヒートマップ/`CoachingEngine` 弱点分析 |
 | Import | CSV/MD/JSON/URL一括+Obsidian貼り付け+AIクイズ一括生成、進捗表示 |
@@ -675,7 +681,7 @@ MainActivity.onCreate → handleIncomingIntent (ACTION_SEND: URL→scrape, テ�
 | Wiki / Connections / Candidates / ThoughtEdit / DefinitionEdit / QuizList / QuizEdit | 各機能。空状態のみの画面なし(全てCRUD完備以上) |
 
 ### 10.4 リッチテキスト描画 — 2系統 + 設計予約
-- **RichContentView (WebView方式・メイン採用)**: `[[title|alias]]`→`wiki://` リンク(wt46: href は `Uri.encode`、クリック時 `Uri.decode` で日本語・空白タイトルを往復)、`{漢字|よみ}`→`<ruby>`、CDNの `marked@11.1.1` + `KaTeX@0.16.9` で Markdown+数式描画。JS失敗時 `innerText` フォールバック (`RichContentView.kt:97-99`)。
+- **RichContentView (WebView方式・メイン採用)**: `[[title|alias]]`→`wiki://` リンク(wt46: href は `Uri.encode`、クリック時 `Uri.decode` で日本語・空白タイトルを往復)、`{漢字|よみ}`→`<ruby>`。**wt49**: `marked@11.1.1` を `assets/marked.min.js` に同梱（オフラインでも Markdown / wiki-link が描画される。フォールバックは `innerHTML` で生タグを出さない）。KaTeX@0.16.9 は CDN 継続。MaterialTheme の色を CSS 変数で注入（ダークモード対応）。カード内は `evaluateJavascript` で `scrollHeight` に高さを合わせ、外側 `verticalScroll` との競合を避ける（Wiki 全画面は `autoHeight=false`）。
 - **MarkdownText (Composeネイティブ)**: `AnnotatedString` 方式。`**bold**`/`*italic*`/`` `code` ``/`[[wiki-link]]`/見出し/リスト/引用/コードブロック + `AutoLinker` のTrie最長一致リンク。**現在は未使用**(WebView版が主流)。
 - **設計予約(定義のみ・参照ゼロ)**: `UiSchemaRenderer`(プラグイン `renderSchema` 将来用) / `EntryTypeSections`(個別Section直使いのため孤児疑い) / `AppEventBus`(emit/subscribe共にゼロ)。いずれも削除せず温存中(§13 #3)。
 
@@ -709,6 +715,7 @@ MainActivity.onCreate → handleIncomingIntent (ACTION_SEND: URL→scrape, テ�
 | `TextNormConsistencyTest` | `TextNorm` を **既存 `MultiStageGrader` と対拍**し仕様乖離を防止 |
 | `InMemoryVectorIndexConcurrencyTest` | ★D1 の無ロック索引の並行安全性 |
 | `TaskEngineTest` (8 @Test) | v15追加分。start/complete/postpone上限3/forceFinish/abandon/bias を Fake DAO で検証 |
+| `ReadOnlySqlExecutorTest` (6 @Test) | wt49。SELECT/WITH許可・書込拒否・コメント内キーワード無視 |
 
 ### 11.2 インストゥルメントテスト (`app/src/androidTest`)
 | テスト | 対象 |
@@ -783,7 +790,7 @@ MainActivity.onCreate → handleIncomingIntent (ACTION_SEND: URL→scrape, テ�
 | B3 | ○ | `PluginEngine.kt:130-136,165-169` | **JSソースへの文字列直接補間**で注入余地 + ClassShutter/タイムアウトなし。「サンドボックス」は構成上の制約のみ | → §15 #P1 |
 | B4 | △ | `BackupEncryptor.kt:54` | ファイル全体を一括メモリ読込。大規模DBでOOMの留意 | → §15 #K1 |
 | B5 | △ | `PortableExportWorker.kt:55-70` | **平文・世代管理なし・SAF転送なし**で `filesDir` 残置。端末紛失で消失し得る | → §15 #K2 |
-| B6 | △ | `ReadOnlySqlExecutor.kt:32-54` | 書込遮断がブロックリスト依存。実質防御は `PRAGMA query_only`。単一コネクション前提の綱渡り(コメント自認)。ローカル専用のため現状低リスク | 温存・監視 |
+| B6 | △ | `ReadOnlySqlExecutor.kt` | 書込遮断はブロックリスト + `useReaderConnection` 上の `PRAGMA query_only=ON`（wt49で旧 openHelper API から置換済み）。ローカル専用 | 済(wt49) |
 
 #### C. 設計予約・孤児 (消さずに温存中)
 | # | 深刻度 | 対象 | 内容 | 着手点 |
@@ -791,7 +798,7 @@ MainActivity.onCreate → handleIncomingIntent (ACTION_SEND: URL→scrape, テ�
 | C1 | △ | `AppEventBus.kt:26` | **emit/subscribe共にゼロ**。将来のイベント駆動化の予約点 | 温存 |
 | C2 | △ | `UiSchemaRenderer.kt:13` | 定義のみ・参照ゼロ。プラグイン `renderSchema` 将来用 | 温存 |
 | C3 | △ | `RichText.kt:31 MarkdownText` | 定義のみ・参照ゼロ。WebView版に敗北 | 温存 |
-| C4 | △ | `EntryTypeSections.kt` | `ui/screen` からのimportゼロの孤児疑い。個別Section直使いのため | 実態確認 → §15 #U3 |
+| C4 | △ | `EntryTypeSections.kt` | `EntryDetailScreen` から使用。wt49で死んでいた definition 分岐を RichContentView 版に一本化 | 済(wt49) |
 | C5 | ◎ | `web/src` 未配線群 | 接続CRUD・候補承認・ヒートマップ・SRS件数・プラグイン一覧・お気に入り・削除は**サーバ実装済みだがWeb導線なし** | → §15 #W1 |
 
 #### D. 乖離・陳腐化 (ドキュメントと実装の差)

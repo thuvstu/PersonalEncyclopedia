@@ -25,6 +25,12 @@ class IncomingNavigation @Inject constructor() {
     private val _pendingEntryId = MutableStateFlow<String?>(null)
     val pendingEntryId: StateFlow<String?> = _pendingEntryId.asStateFlow()
 
+    private val _pendingRoute = MutableStateFlow<String?>(null)
+    val pendingRoute: StateFlow<String?> = _pendingRoute.asStateFlow()
+
+    private val _pendingNotice = MutableStateFlow<IncomingNotice?>(null)
+    val pendingNotice: StateFlow<IncomingNotice?> = _pendingNotice.asStateFlow()
+
     fun setPendingEntry(entryId: String) {
         _pendingEntryId.value = entryId
     }
@@ -32,4 +38,25 @@ class IncomingNavigation @Inject constructor() {
     fun clear() {
         _pendingEntryId.value = null
     }
+
+    fun setPendingRoute(route: String) {
+        _pendingRoute.value = route
+    }
+
+    fun clearRoute() {
+        _pendingRoute.value = null
+    }
+
+    fun setNotice(message: String, entryId: String? = null) {
+        _pendingNotice.value = IncomingNotice(message, entryId)
+    }
+
+    fun clearNotice() {
+        _pendingNotice.value = null
+    }
 }
+
+data class IncomingNotice(
+    val message: String,
+    val entryId: String? = null
+)

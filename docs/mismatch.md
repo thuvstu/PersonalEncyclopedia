@@ -34,7 +34,7 @@
 | 4 | 強制リマインダー付きToDo | 部分 | 強制対峙はあるが通知が無い | §2.1 |
 | 5 | Google Keep風メモ | 部分 | CRUDのみ。Keep的機能なし | §2.2 |
 | 6 | Quizlet/Anki風単語帳 | 部分 | 期限管理は本物。デッキ・同期なし | §2.3 |
-| 7 | QuizKnock風多様な企画形式 | 部分 | 遊べるのは3形式。4形式は死にスキーマ | §2.4 |
+| 7 | QuizKnock風多様な企画形式 | 部分→**改善（2026-09-06）** | カタログ8種が実プレイ可(wt52/53)。essay/custom は未配線 | §2.4 |
 | 8 | 知識の可視化・理解深化に時間を使いやすく (目的) | 部分 | 上記1〜3・§4の総和で未達 | §1・§4 |
 | 9 | LLM APIでデータ自動生成 | 部分 | クイズ/解説/抽出はあるが要約・タグなし | §3.1 |
 | 10 | SQLiteで50GB・限界耐性・10年利用 | 部分 | 骨格はあるが50GB実測・機種変復元なし | §3.2 |
@@ -108,11 +108,9 @@
 
 無いもの: デッキ/サブデッキ、学習ステップ・新規/復習上限の調整、対象は `definition` 型のみ (thought/webpageはSRS不可)、画像・音声・TTS、同期 (AnkiWeb相当)、統計グラフ。個人用間隔反復としては動作するが体系的暗記運用・マルチデバイスはできない。
 
-### §2.4 QuizKnock風多様形式 → 部分 (3形式+2モード・4形式は死にスキーマ)
+### §2.4 QuizKnock風多様形式 → 部分→改善（2026-09-06・wt52/wt53）
 
-スキーマ上は7形式 (`QuizBankEntity.kt:15`: `qa/mcq/fill_blank/sort/essay/cloze/custom`) だが、`SettingsRepository.kt:156-157` が `sort/cloze/customは生成・出題対象外` と明言し、取得既定も3形式 (`QuizRepository.kt:82`)。`LlmQuizGenerator` はmcq固定要求。プレイ画面 (`QuizScreen.kt:236-293`) の分岐は「mcq→選択肢 / else→記述」のみでsort並替え・cloze複数空欄UIなし。`custom` 用プラグイン機構はあるが (`PluginEngine.kt:28-54`) 出題系からの呼出が無く未接続。
-
-遊べるのは `qa/mcq/fill_blank` + セッション形式3種 (通常/サバイバル/プレッシャー列挙)。QuizKnock的企画拡張性はない。
+~~スキーマ上は7形式だが設定・プレイは3形式、sort/cloze は死にスキーマ~~ → **改善**: `QuizFormats` カタログ8種（qa/mcq/fill_blank/sort/cloze/tf/multi/match）が設定・編集・一覧・プレイ・生成・採点まで一本。essay/custom とプラグインJS配線は未着手のまま。`LlmQuizGenerator` は引き続き mcq 固定要求。
 
 ### §2.5 ポモドーロタイマー → 達成（2026-09-06・P5-1）
 

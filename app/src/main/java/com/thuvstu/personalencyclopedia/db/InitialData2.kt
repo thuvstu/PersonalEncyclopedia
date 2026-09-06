@@ -16,6 +16,7 @@ import java.util.UUID
  *
  * 冪等: 各項目は **タイトル(定義は term)一致で存在確認** してから追加する。空DBガードではないので、
  * 第1弾投入済み・自作エントリー混在のDBに「追記」しても重複しない(Dashboard の文言どおり)。
+ * ★wt50: 起動 Phase A がデモ規模DBへ自動で呼ぶ。自作が多いDBは Dashboard 追記ボタンのみ。
  *
  * 端末固有パス(blobPath/coverPath/photoPath)は入れない。document/media は本文テキストだけ持つ
  * (ビューアは「実体なし」を明示する設計・wt43)。

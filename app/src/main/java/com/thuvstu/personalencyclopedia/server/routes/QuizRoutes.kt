@@ -1,5 +1,6 @@
 package com.thuvstu.personalencyclopedia.server.routes
 
+import com.thuvstu.personalencyclopedia.brain.quiz.QuizFormats
 import com.thuvstu.personalencyclopedia.server.ServerDependencies
 import com.thuvstu.personalencyclopedia.server.dto.ErrorResponse
 import com.thuvstu.personalencyclopedia.server.dto.QuizAttemptRequest
@@ -20,7 +21,7 @@ fun Route.quizRoutes(deps: ServerDependencies) {
     route("/quiz") {
         get {
             val limit = call.parameters["limit"]?.toIntOrNull() ?: 10
-            val types = call.parameters["type"]?.split(",") ?: listOf("qa", "mcq", "fill_blank", "sort")
+            val types = call.parameters["type"]?.split(",") ?: QuizFormats.IDS.toList()
             val quizzes = deps.quizDao.getRandomQuizzes(types, limit)
             call.respond(quizzes.map { it.toQuizResponse() })
         }

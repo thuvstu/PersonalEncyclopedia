@@ -20,18 +20,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.thuvstu.personalencyclopedia.brain.quiz.QuizFormatSupport
+import com.thuvstu.personalencyclopedia.brain.quiz.QuizFormats
+import com.thuvstu.personalencyclopedia.brain.quiz.QuizPlayKind
 import com.thuvstu.personalencyclopedia.viewmodel.QuizViewModel
 
-// ★最適化R4: 形式・採点方式のラベルを日本語に統一（DBに存在する全形式を網羅し生文字列出力を排除）
 private fun quizTypeLabel(type: String): String = when (type) {
-    "qa" -> "記述式"
     "essay" -> "記述式"
-    "mcq" -> "選択式"
-    "fill_blank" -> "穴埋め"
-    "cloze" -> "穴埋め"
-    "sort" -> "並べ替え"
     "custom" -> "カスタム"
-    else -> "クイズ"
+    else -> QuizFormats.label(type).ifBlank { "クイズ" }
 }
 
 private fun gradingMethodLabel(method: String): String = when (method) {
@@ -41,6 +38,9 @@ private fun gradingMethodLabel(method: String): String = when (method) {
     "semantic" -> "意味的採点"
     "rubric" -> "ルーブリック採点"
     "multi_answer" -> "複数回答一致"
+    "sequence" -> "順序一致"
+    "set" -> "集合一致"
+    "tf" -> "正誤一致"
     else -> method
 }
 
@@ -48,7 +48,7 @@ private val NUM_MARKS = listOf("①", "②", "③", "④", "⑤", "⑥", "⑦", 
 
 private const val QUIZ_CARD_ELEVATION = 2
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun QuizScreen(
     onBack: () -> Unit,
@@ -233,83 +233,94 @@ fun QuizScreen(
                         }
 
                         // Answer input
-                        when (state.quiz.quizType) {
-                            "mcq" -> {
-                                state.choices.forEachIndexed { i, choice ->
-                                    OutlinedButton(
-                                        onClick = {
-                                            answerInput = choice
-                                            viewModel.submitAnswer(choice)
-                                        },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 4.dp),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Text(
-                                            "${NUM_MARKS.getOrElse(i) { "${i + 1}." }} $choice",
-                                            modifier = Modifier.padding(8.dp)
-                                        )
-                                    }
-                                }
-                            }
-                            else -> {
-                                // ★P1-3: 並べ替えは選択肢一覧＋ `>` 区切り入力
-                                if (state.quiz.quizType == "sort" && state.choices.isNotEmpty()) {
-                                    Text(
-                                        "並べ替える用語:",
-                                        style = MaterialTheme.typography.labelLarge
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
+                        key(state.quiz.id) {
+                            val unlearnedLabel =
+                                if (state.mode == QuizViewModel.SessionMode.SURVIVAL) "未習(終了)" else "未習"
+                            val blanks = QuizFormatSupport.blankCount(state.quiz.question)
+                            val fmt = QuizFormats.of(state.quiz.quizType)
+                            val matchPairs = QuizFormatSupport.parseMatchPairs(state.choices)
+                            when {
+                                fmt?.play == QuizPlayKind.CHOICE -> {
                                     state.choices.forEachIndexed { i, choice ->
-                                        Text(
-                                            "${i + 1}. $choice",
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
-                                        )
+                                        OutlinedButton(
+                                            onClick = {
+                                                answerInput = choice
+                                                viewModel.submitAnswer(choice)
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text(
+                                                "${NUM_MARKS.getOrElse(i) { "${i + 1}." }} $choice",
+                                                modifier = Modifier.padding(8.dp)
+                                            )
+                                        }
                                     }
-                                    Spacer(modifier = Modifier.height(8.dp))
                                 }
-                                OutlinedTextField(
-                                    value = answerInput,
-                                    onValueChange = { answerInput = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = {
-                                        Text(
-                                            if (state.quiz.quizType == "sort") "解答（用語を > で区切る）"
-                                            else "解答を入力"
-                                        )
-                                    },
-                                    minLines = 2,
-                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Button(
-                                        onClick = {
+                                fmt?.play == QuizPlayKind.SORT && state.choices.isNotEmpty() -> {
+                                    SortAnswerPanel(
+                                        items = state.choices,
+                                        unlearnedLabel = unlearnedLabel,
+                                        onSubmit = { viewModel.submitAnswer(it) },
+                                        onUnlearned = { viewModel.markUnlearned() }
+                                    )
+                                }
+                                fmt?.play == QuizPlayKind.TF -> {
+                                    TfAnswerPanel(
+                                        unlearnedLabel = unlearnedLabel,
+                                        onSubmit = { viewModel.submitAnswer(it) },
+                                        onUnlearned = { viewModel.markUnlearned() }
+                                    )
+                                }
+                                fmt?.play == QuizPlayKind.MULTI && state.choices.isNotEmpty() -> {
+                                    MultiAnswerPanel(
+                                        items = state.choices,
+                                        unlearnedLabel = unlearnedLabel,
+                                        onSubmit = { viewModel.submitAnswer(it) },
+                                        onUnlearned = { viewModel.markUnlearned() }
+                                    )
+                                }
+                                fmt?.play == QuizPlayKind.MATCH && matchPairs.size >= 2 -> {
+                                    MatchAnswerPanel(
+                                        pairs = matchPairs,
+                                        unlearnedLabel = unlearnedLabel,
+                                        onSubmit = { viewModel.submitAnswer(it) },
+                                        onUnlearned = { viewModel.markUnlearned() }
+                                    )
+                                }
+                                state.quiz.quizType == "cloze" ||
+                                    (state.quiz.quizType == "fill_blank" && blanks > 0) -> {
+                                    ClozeAnswerPanel(
+                                        blankCount = blanks.coerceAtLeast(1),
+                                        unlearnedLabel = unlearnedLabel,
+                                        onSubmit = { viewModel.submitAnswer(it) },
+                                        onUnlearned = { viewModel.markUnlearned() }
+                                    )
+                                }
+                                else -> {
+                                    OutlinedTextField(
+                                        value = answerInput,
+                                        onValueChange = { answerInput = it },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        label = { Text("解答を入力") },
+                                        minLines = 2,
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    WrittenSubmitRow(
+                                        enabled = answerInput.isNotBlank(),
+                                        unlearnedLabel = unlearnedLabel,
+                                        onSubmit = {
                                             viewModel.submitAnswer(answerInput)
                                             answerInput = ""
                                         },
-                                        modifier = Modifier.weight(1f),
-                                        enabled = answerInput.isNotBlank()
-                                    ) {
-                                        Text("回答")
-                                    }
-                                    OutlinedButton(
-                                        onClick = {
+                                        onUnlearned = {
                                             viewModel.markUnlearned()
                                             answerInput = ""
-                                        },
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(
-                                            if (state.mode == QuizViewModel.SessionMode.SURVIVAL) "未習(終了)"
-                                            else "未習"
-                                        )
-                                    }
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -358,7 +369,7 @@ fun QuizScreen(
                                     Text("あなたの回答", style = MaterialTheme.typography.labelLarge)
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        state.userAnswer,
+                                        formatSequenceDisplay(state.quiz.quizType, state.userAnswer),
                                         style = MaterialTheme.typography.bodyLarge
                                     )
                                 }
@@ -427,7 +438,7 @@ fun QuizScreen(
                                 Text("正解", style = MaterialTheme.typography.labelLarge)
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    state.quiz.answer,
+                                    formatSequenceDisplay(state.quiz.quizType, state.quiz.answer),
                                     style = MaterialTheme.typography.bodyLarge
                                 )
                             }
@@ -674,4 +685,267 @@ fun QuizScreen(
             }
         )
     }
+}
+
+
+private fun formatSequenceDisplay(quizType: String, raw: String): String {
+    val fmt = QuizFormats.of(quizType)
+    return when {
+        fmt?.play == QuizPlayKind.MATCH -> {
+            val parts = QuizFormatSupport.splitMatchSequence(raw)
+            if (parts.size <= 1) raw.replace("=", " ⇔ ")
+            else parts.joinToString("、") { it.replace("=", " ⇔ ") }
+        }
+        fmt?.setGrade == true -> {
+            val parts = QuizFormatSupport.splitSequence(raw)
+            if (parts.size <= 1) raw else parts.joinToString("、")
+        }
+        fmt?.sequenceGrade == true -> {
+            val parts = QuizFormatSupport.splitSequence(raw)
+            if (parts.size <= 1) raw else parts.joinToString(" → ")
+        }
+        else -> raw
+    }
+}
+
+@Composable
+private fun WrittenSubmitRow(
+    enabled: Boolean,
+    unlearnedLabel: String,
+    onSubmit: () -> Unit,
+    onUnlearned: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Button(
+            onClick = onSubmit,
+            modifier = Modifier.weight(1f),
+            enabled = enabled
+        ) { Text("回答") }
+        OutlinedButton(
+            onClick = onUnlearned,
+            modifier = Modifier.weight(1f)
+        ) { Text(unlearnedLabel) }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun SortAnswerPanel(
+    items: List<String>,
+    unlearnedLabel: String,
+    onSubmit: (String) -> Unit,
+    onUnlearned: () -> Unit
+) {
+    var picked by remember { mutableStateOf(listOf<Int>()) }
+    val remaining = items.indices.filter { it !in picked }
+    Text(
+        "タップして並べる（並べた語をタップで戻す）",
+        style = MaterialTheme.typography.labelLarge
+    )
+    Spacer(Modifier.height(8.dp))
+    if (remaining.isNotEmpty()) {
+        Text("残り", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(4.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            remaining.forEach { idx ->
+                FilterChip(
+                    selected = false,
+                    onClick = { picked = picked + idx },
+                    label = { Text(items[idx]) }
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+    }
+    if (picked.isNotEmpty()) {
+        Text("現在の順", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.height(4.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            picked.forEachIndexed { order, idx ->
+                FilterChip(
+                    selected = true,
+                    onClick = { picked = picked.filterNot { it == idx } },
+                    label = { Text("${order + 1}. ${items[idx]}") }
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+    }
+    WrittenSubmitRow(
+        enabled = picked.size == items.size && items.isNotEmpty(),
+        unlearnedLabel = unlearnedLabel,
+        onSubmit = { onSubmit(QuizFormatSupport.joinSequence(picked.map { items[it] })) },
+        onUnlearned = onUnlearned
+    )
+}
+
+@Composable
+private fun ClozeAnswerPanel(
+    blankCount: Int,
+    unlearnedLabel: String,
+    onSubmit: (String) -> Unit,
+    onUnlearned: () -> Unit
+) {
+    val n = blankCount.coerceAtLeast(1)
+    var blanks by remember { mutableStateOf(List(n) { "" }) }
+    Text(
+        if (n == 1) "空欄を埋めよ" else "空欄を出現順に埋めよ",
+        style = MaterialTheme.typography.labelLarge
+    )
+    Spacer(Modifier.height(8.dp))
+    blanks.forEachIndexed { i, value ->
+        OutlinedTextField(
+            value = value,
+            onValueChange = { next ->
+                blanks = blanks.toMutableList().also { it[i] = next }
+            },
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            label = { Text(if (n == 1) "空欄" else "空欄 ${i + 1}") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = if (i == n - 1) ImeAction.Done else ImeAction.Next)
+        )
+    }
+    Spacer(Modifier.height(12.dp))
+    WrittenSubmitRow(
+        enabled = blanks.all { it.isNotBlank() },
+        unlearnedLabel = unlearnedLabel,
+        onSubmit = { onSubmit(QuizFormatSupport.joinSequence(blanks.map { it.trim() })) },
+        onUnlearned = onUnlearned
+    )
+}
+
+
+@Composable
+private fun TfAnswerPanel(
+    unlearnedLabel: String,
+    onSubmit: (String) -> Unit,
+    onUnlearned: () -> Unit
+) {
+    Text("正しいか誤りか選べ", style = MaterialTheme.typography.labelLarge)
+    Spacer(Modifier.height(8.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(
+            onClick = { onSubmit("正しい") },
+            modifier = Modifier.weight(1f).height(52.dp)
+        ) { Text("正しい") }
+        OutlinedButton(
+            onClick = { onSubmit("誤り") },
+            modifier = Modifier.weight(1f).height(52.dp)
+        ) { Text("誤り") }
+    }
+    Spacer(Modifier.height(12.dp))
+    OutlinedButton(onClick = onUnlearned, modifier = Modifier.fillMaxWidth()) {
+        Text(unlearnedLabel)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun MultiAnswerPanel(
+    items: List<String>,
+    unlearnedLabel: String,
+    onSubmit: (String) -> Unit,
+    onUnlearned: () -> Unit
+) {
+    var selected by remember { mutableStateOf(setOf<Int>()) }
+    Text("当てはまるものをすべて選べ", style = MaterialTheme.typography.labelLarge)
+    Spacer(Modifier.height(8.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        items.forEachIndexed { i, c ->
+            FilterChip(
+                selected = i in selected,
+                onClick = {
+                    selected = if (i in selected) selected - i else selected + i
+                },
+                label = { Text(c) }
+            )
+        }
+    }
+    Spacer(Modifier.height(12.dp))
+    WrittenSubmitRow(
+        enabled = selected.isNotEmpty(),
+        unlearnedLabel = unlearnedLabel,
+        onSubmit = { onSubmit(QuizFormatSupport.joinSequence(selected.sorted().map { items[it] })) },
+        onUnlearned = onUnlearned
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun MatchAnswerPanel(
+    pairs: List<Pair<String, String>>,
+    unlearnedLabel: String,
+    onSubmit: (String) -> Unit,
+    onUnlearned: () -> Unit
+) {
+    var leftRemain by remember { mutableStateOf(pairs.map { it.first }.shuffled()) }
+    var rightRemain by remember { mutableStateOf(pairs.map { it.second }.shuffled()) }
+    var matched by remember { mutableStateOf(listOf<Pair<String, String>>()) }
+    var selL by remember { mutableStateOf<String?>(null) }
+    var selR by remember { mutableStateOf<String?>(null) }
+
+    fun pairIfReady() {
+        val l = selL
+        val r = selR
+        if (l != null && r != null) {
+            matched = matched + (l to r)
+            leftRemain = leftRemain.toMutableList().also { it.remove(l) }
+            rightRemain = rightRemain.toMutableList().also { it.remove(r) }
+            selL = null
+            selR = null
+        }
+    }
+
+    Text("左右をタップして対応づけよ（組をタップで戻す）", style = MaterialTheme.typography.labelLarge)
+    Spacer(Modifier.height(8.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("左", style = MaterialTheme.typography.labelSmall)
+            leftRemain.forEach { item ->
+                FilterChip(
+                    selected = selL == item,
+                    onClick = { selL = if (selL == item) null else item; pairIfReady() },
+                    label = { Text(item) }
+                )
+            }
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("右", style = MaterialTheme.typography.labelSmall)
+            rightRemain.forEach { item ->
+                FilterChip(
+                    selected = selR == item,
+                    onClick = { selR = if (selR == item) null else item; pairIfReady() },
+                    label = { Text(item) }
+                )
+            }
+        }
+    }
+    if (matched.isNotEmpty()) {
+        Spacer(Modifier.height(12.dp))
+        Text("組", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.height(4.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            matched.forEach { (l, r) ->
+                FilterChip(
+                    selected = true,
+                    onClick = {
+                        matched = matched.filterNot { it.first == l && it.second == r }
+                        leftRemain = leftRemain + l
+                        rightRemain = rightRemain + r
+                    },
+                    label = { Text("$l ⇔ $r") }
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(12.dp))
+    WrittenSubmitRow(
+        enabled = leftRemain.isEmpty() && rightRemain.isEmpty() && matched.isNotEmpty(),
+        unlearnedLabel = unlearnedLabel,
+        onSubmit = { onSubmit(QuizFormatSupport.joinMatchAnswer(matched)) },
+        onUnlearned = onUnlearned
+    )
 }

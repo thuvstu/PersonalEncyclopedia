@@ -14,6 +14,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Encyclopedia"
+        android:enableOnBackInvokedCallback="true"
         tools:targetApi="34">
 
         <!-- perf計測用: shellからのプロファイリング(simpleperf/CPU Profiler)をreleaseビルドでも可能にする -->
@@ -32,12 +33,32 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- ★§11.4 共有メニュー連携 -->
-            <intent-filter>
+            <!-- ★§11.4 共有メニュー連携（テキスト / 画像 / PDF） -->
+            <intent-filter android:label="@string/share_to_encyclopedia">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="application/pdf" />
             </intent-filter>
+            <intent-filter android:label="@string/share_to_encyclopedia">
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+
+            <!-- どのアプリでも文字選択 → 「百科事典に保存」 -->
+            <intent-filter android:label="@string/process_text_label">
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <provider

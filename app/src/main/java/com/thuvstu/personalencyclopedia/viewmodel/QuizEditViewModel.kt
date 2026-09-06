@@ -3,6 +3,8 @@ package com.thuvstu.personalencyclopedia.viewmodel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.thuvstu.personalencyclopedia.brain.quiz.QuizFormatSupport
+import com.thuvstu.personalencyclopedia.brain.quiz.QuizFormats
 import com.thuvstu.personalencyclopedia.db.dao.QuizDao
 import com.thuvstu.personalencyclopedia.db.entity.QuizBankEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -89,7 +91,12 @@ class QuizEditViewModel @Inject constructor(
     }
 
     val canSave: StateFlow<Boolean> = combine(question, answer, quizType, choices) { q, a, t, c ->
-        q.isNotBlank() && a.isNotBlank() && (t != "mcq" || c.count { it.isNotBlank() } >= 2)
+        q.isNotBlank() && a.isNotBlank() && when {
+            QuizFormats.of(t)?.needsChoices == true -> c.count { it.isNotBlank() } >= 2
+            t == "cloze" -> q.contains("＿＿＿")
+            t == "tf" -> QuizFormatSupport.canonicalizeTf(a.trim().lowercase()) != null
+            else -> true
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     fun save() {
@@ -100,7 +107,8 @@ class QuizEditViewModel @Inject constructor(
                 question = _question.value.trim(),
                 answer = _answer.value.trim(),
                 choicesJson = Json.encodeToString(
-                    if (_quizType.value == "mcq") _choices.value.filter { it.isNotBlank() }
+                    if (QuizFormats.of(_quizType.value)?.needsChoices == true)
+                        _choices.value.filter { it.isNotBlank() }
                     else emptyList()
                 ),
                 hintsJson = Json.encodeToString(_hints.value.filter { it.isNotBlank() }),

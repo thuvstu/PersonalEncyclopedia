@@ -26,7 +26,7 @@ class LlmQuizGenerator @Inject constructor(
     @Serializable
     data class GeneratedQuiz(
         val question: String,
-        val quizType: String = "mcq", // qa/mcq/fill_blank/sort/essay/cloze
+        val quizType: String = "mcq", // カタログ id。LLM は当面 mcq 固定要求
         val choices: List<String> = emptyList(),
         val answer: String,
         val hints: List<String> = emptyList(),

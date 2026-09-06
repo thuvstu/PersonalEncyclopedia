@@ -3,6 +3,7 @@ package com.thuvstu.personalencyclopedia.backup
 import android.content.Context
 import android.util.Log
 import androidx.hilt.work.HiltWorker
+import androidx.room.execSQL
 import androidx.work.*
 import com.thuvstu.personalencyclopedia.db.AppDatabase
 import android.net.Uri
@@ -69,7 +70,8 @@ class BackupWorker @AssistedInject constructor(
         val context = applicationContext
 
         // 1. Checkpoint WAL to ensure all data is in the main DB file
-        database.openHelper.writableDatabase.execSQL("PRAGMA wal_checkpoint(TRUNCATE)")
+        // wt47 以降は BundledSQLiteDriver のため旧 openHelper API は例外
+        database.useWriterConnection { it.execSQL("PRAGMA wal_checkpoint(TRUNCATE)") }
 
         // 2. Locate the DB file
         val dbFile = context.getDatabasePath("encyclopedia.db")

@@ -8,6 +8,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.thuvstu.personalencyclopedia.brain.ai.AiModels
+import com.thuvstu.personalencyclopedia.brain.quiz.QuizFormatSupport
+import com.thuvstu.personalencyclopedia.brain.quiz.QuizFormats
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -136,8 +138,7 @@ class SettingsRepository @Inject constructor(
         context.settingsDataStore.data.map { it[Keys.QUIZ_DIFFICULTY_MIN] ?: 1 }
     val quizTypes: Flow<Set<String>> =
         context.settingsDataStore.data.map { pref ->
-            pref[Keys.QUIZ_TYPES]?.split(",")?.map { it.trim() }?.filter { it in SUPPORTED_QUIZ_TYPES }
-                ?.toSet() ?: SUPPORTED_QUIZ_TYPES
+            QuizFormatSupport.resolveEnabledTypes(pref[Keys.QUIZ_TYPES], SUPPORTED_QUIZ_TYPES)
         }
     val quizPressureSeconds: Flow<Int> =
         context.settingsDataStore.data.map { it[Keys.QUIZ_PRESSURE_SECONDS] ?: 60 }
@@ -153,8 +154,8 @@ class SettingsRepository @Inject constructor(
     val studyPlusConsumerSecret: StateFlow<String?> = _studyPlusConsumerSecret.asStateFlow()
 
     companion object {
-        // ★P1-3: 並べ替えを追加し4種に拡大（cloze/customは引き続き生成・出題対象外）
-        val SUPPORTED_QUIZ_TYPES: Set<String> = setOf("qa", "mcq", "fill_blank", "sort")
+        // ★wt53: カタログ準拠。essay/custom は引き続き対象外
+        val SUPPORTED_QUIZ_TYPES: Set<String> = QuizFormats.IDS
     }
 
     /** ★ C1: APIキーを暗号化ストアへ保存し、インメモリFlowを更新 */

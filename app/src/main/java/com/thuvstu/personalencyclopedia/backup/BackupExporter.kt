@@ -4,6 +4,7 @@ package com.thuvstu.personalencyclopedia.backup
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
+import androidx.room.execSQL
 import com.thuvstu.personalencyclopedia.db.AppDatabase
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -25,8 +26,8 @@ class BackupExporter @Inject constructor(
      */
     suspend fun exportToSaf(treeUri: Uri): Result<String> = withContext(Dispatchers.IO) {
         try {
-            // 1. WALを本体に統合
-            database.openHelper.writableDatabase.execSQL("PRAGMA wal_checkpoint(TRUNCATE)")
+            // 1. WALを本体に統合（wt47 以降は BundledSQLiteDriver のため旧 openHelper API は例外）
+            database.useWriterConnection { it.execSQL("PRAGMA wal_checkpoint(TRUNCATE)") }
 
             // 2. DBファイル確認
             val dbFile = context.getDatabasePath("encyclopedia.db")
@@ -105,9 +106,9 @@ class BackupExporter @Inject constructor(
                 return@withContext Result.failure(Exception("復号されたファイルは有効なSQLiteデータベースではありません"))
             }
 
-            // 4. 既存DBのWALチェックポイント
+            // 4. 既存DBのWALチェックポイント（wt47 以降は BundledSQLiteDriver のため旧 openHelper API は例外）
             runCatching {
-                database.openHelper.writableDatabase.execSQL("PRAGMA wal_checkpoint(TRUNCATE)")
+                database.useWriterConnection { it.execSQL("PRAGMA wal_checkpoint(TRUNCATE)") }
             }
 
             // 5. DBファイル差し替え

@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.thuvstu.personalencyclopedia.brain.quiz.QuizFormats
 import com.thuvstu.personalencyclopedia.viewmodel.QuizListViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,8 +51,10 @@ fun QuizListScreen(
             Row(Modifier.horizontalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(null to "すべて", "qa" to "記述", "mcq" to "4択",
-                    "fill_blank" to "穴埋め").forEach { (type, label) ->
+                buildList {
+                    add(null to "すべて")
+                    QuizFormats.chips().forEach { add(it.first to it.second) }
+                }.forEach { (type, label) ->
                     FilterChip(
                         selected = typeFilter == type,
                         onClick = { viewModel.setTypeFilter(type) },
@@ -72,11 +75,7 @@ fun QuizListScreen(
                             Column(Modifier.padding(14.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     SuggestionChip(onClick = {}, label = {
-                                        Text(when (quiz.quizType) {
-                                            "qa" -> "記述"; "mcq" -> "4択"
-                                            "fill_blank" -> "穴埋め"; "sort" -> "並べ替え"
-                                            else -> quiz.quizType
-                                        })
+                                        Text(QuizFormats.label(quiz.quizType))
                                     })
                                     Spacer(Modifier.width(8.dp))
                                     Text("難易度 ${quiz.difficulty}",
