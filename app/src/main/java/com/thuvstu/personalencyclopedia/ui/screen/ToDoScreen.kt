@@ -54,6 +54,9 @@ fun ToDoScreen(
     val pomodoroRemainingS by viewModel.pomodoroRemainingS.collectAsState()
     val pomodoroCycles by viewModel.pomodoroCycles.collectAsState()
     val pomodoroRunning by viewModel.pomodoroRunning.collectAsState()
+    // ★おまかせ提案: 先読み自動生成 (承認制)
+    val suggestions by viewModel.suggestions.collectAsState()
+    val suggesting by viewModel.suggesting.collectAsState()
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var postponeTask by remember { mutableStateOf<TaskEntity?>(null) }
@@ -149,6 +152,37 @@ fun ToDoScreen(
                 item(key = "bias") {
                     EstimationBiasCard(estimationBias)
                 }
+            }
+
+            // ── おまかせ提案（先読み自動生成・承認制。直接タスクは作らない）──
+            item(key = "suggest-header") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "🔮 おまかせ提案",
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (suggesting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        TextButton(onClick = { viewModel.refreshSuggestions() }) {
+                            Text(if (suggestions.isEmpty()) "提案を生成" else "再生成")
+                        }
+                    }
+                }
+            }
+            items(suggestions, key = { "sug-${it.key}" }) { s ->
+                SuggestionCard(
+                    suggestion = s,
+                    onAdopt = { viewModel.adoptSuggestion(s) },
+                    onDismiss = { viewModel.dismissSuggestion(s) }
+                )
             }
 
             val now = System.currentTimeMillis()
@@ -260,6 +294,38 @@ private fun SectionHeader(text: String, count: Int) {
         style = MaterialTheme.typography.titleSmall,
         modifier = Modifier.padding(top = 4.dp)
     )
+}
+
+/** ★おまかせ提案カード: 理由・見積もり・締切を表示し、採用/却下する。 */
+@Composable
+private fun SuggestionCard(
+    suggestion: com.thuvstu.personalencyclopedia.brain.task.SuggestedTask,
+    onAdopt: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(suggestion.title, style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(4.dp))
+            Text(suggestion.description, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "💡 ${suggestion.reason} / 目安 ${suggestion.estimatedMinutes}分",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onAdopt, modifier = Modifier.weight(1f)) {
+                    Text("タスク化する")
+                }
+                TextButton(onClick = onDismiss) { Text("いらない") }
+            }
+        }
+    }
 }
 
 @Composable

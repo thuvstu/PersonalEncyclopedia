@@ -69,6 +69,13 @@ interface EntryExtensionDao {
     @Query("SELECT * FROM entry_event WHERE entryId = :entryId")
     suspend fun getEvent(entryId: String): EntryEventEntity?
 
+    /**
+     * ★おまかせ提案用: 直近に始まるイベント (TaskSuggester の先読み信号)。
+     * クエリ追加のみのためスキーマ変更・マイグレーション不要。
+     */
+    @Query("SELECT * FROM entry_event WHERE startedAt BETWEEN :from AND :to ORDER BY startedAt ASC LIMIT :limit")
+    suspend fun getUpcomingEvents(from: Long, to: Long, limit: Int = 5): List<EntryEventEntity>
+
     // ── Liked ──
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLiked(entity: EntryLikedEntity)

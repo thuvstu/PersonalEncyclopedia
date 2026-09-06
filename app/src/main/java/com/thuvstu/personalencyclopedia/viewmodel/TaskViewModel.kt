@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.thuvstu.personalencyclopedia.brain.task.EstimationBias
 import com.thuvstu.personalencyclopedia.brain.task.PostponeResult
+import com.thuvstu.personalencyclopedia.brain.task.SuggestedTask
 import com.thuvstu.personalencyclopedia.brain.task.TaskEngine
+import com.thuvstu.personalencyclopedia.brain.task.TaskSuggester
 import com.thuvstu.personalencyclopedia.db.dao.EntryDao
 import com.thuvstu.personalencyclopedia.db.dao.TaskDao
 import com.thuvstu.personalencyclopedia.db.dao.TaskTimeLogDao
@@ -33,6 +35,7 @@ class TaskViewModel @Inject constructor(
     private val taskDao: TaskDao,
     private val timeLogDao: TaskTimeLogDao,
     private val taskEngine: TaskEngine,
+    private val taskSuggester: TaskSuggester,
     private val topicDao: TopicDao,
     private val entryDao: EntryDao,
     private val studyPlusClient: StudyPlusClient,
@@ -79,6 +82,43 @@ class TaskViewModel @Inject constructor(
 
     fun refreshEstimationBias() {
         viewModelScope.launch { _estimationBias.value = taskEngine.estimationBiasReport() }
+    }
+
+    // ── ★おまかせ提案: 先読み信号からの自動生成 (承認制。直接タスクは作らない) ──
+    private val _suggestions = MutableStateFlow<List<SuggestedTask>>(emptyList())
+    val suggestions: StateFlow<List<SuggestedTask>> = _suggestions
+
+    private val _suggesting = MutableStateFlow(false)
+    val suggesting: StateFlow<Boolean> = _suggesting
+
+    private val dismissedKeys = mutableSetOf<String>()
+
+    fun refreshSuggestions() {
+        if (_suggesting.value) return
+        viewModelScope.launch {
+            _suggesting.value = true
+            try {
+                _suggestions.value = taskSuggester.suggest().filter { it.key !in dismissedKeys }
+                if (_suggestions.value.isEmpty()) _message.emit("今のところ提案はありません。良い調子です")
+            } catch (e: Exception) {
+                _message.emit("提案の生成に失敗しました")
+            } finally {
+                _suggesting.value = false
+            }
+        }
+    }
+
+    /** 採用: 提案を通常タスク化する (見積もり・締切・紐付けは提案の値を引き継ぐ)。 */
+    fun adoptSuggestion(s: SuggestedTask) {
+        createTask(s.title, s.description, s.estimatedMinutes, s.deadlineAt, s.linkedEntryId, s.linkedTopicId)
+        dismissedKeys.add(s.key)
+        _suggestions.value = _suggestions.value.filter { it.key != s.key }
+        viewModelScope.launch { _message.emit("📝 提案をタスク化しました") }
+    }
+
+    fun dismissSuggestion(s: SuggestedTask) {
+        dismissedKeys.add(s.key)
+        _suggestions.value = _suggestions.value.filter { it.key != s.key }
     }
 
     fun createTask(

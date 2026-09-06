@@ -488,6 +488,7 @@ v15 (§8.10) で追加。`brain/task/TaskEngine.kt` のみ。**Repository層な�
 | `estimationBiasReport` | `actual/estimated` 平均(空→null)。見積精度の可視化 |
 
 `TaskViewModel` が `StudyPlusClient.syncTaskTimeLog`(未設定時は静かにskip)を呼ぶ。テストは `TaskEngineTest`(Fake DAO・8 @Test)。
+`brain/task/TaskSuggester.kt` (walkthrough55): 先読み信号 (SRS到来・未克服誤答・未挑戦・7日以内イベント・48h以内締切) → 決定論 `TaskSuggestionBuilder.build` (純粋関数・`TaskSuggesterTest` 6件) → LLM設定時のみ `GeminiClient.generate` で題名・説明を整形 (見積もり・締切・紐付けは決定論を保持)。承認制のため直接タスクは作らず、ToDo画面の「🔮おまかせ提案」から採用/却下する。提案は揮発性 (却下キーはVM内のみ)。
 
 ### 6.7 brain層の設計思想のまとめ
 
