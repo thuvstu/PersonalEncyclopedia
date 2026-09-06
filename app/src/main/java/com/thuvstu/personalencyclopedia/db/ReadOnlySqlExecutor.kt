@@ -1,6 +1,7 @@
 package com.thuvstu.personalencyclopedia.db
 
 import androidx.room.execSQL
+import androidx.room.useReaderConnection
 import androidx.sqlite.SQLiteStatement
 import com.thuvstu.personalencyclopedia.util.AppLogger
 import kotlinx.coroutines.Dispatchers

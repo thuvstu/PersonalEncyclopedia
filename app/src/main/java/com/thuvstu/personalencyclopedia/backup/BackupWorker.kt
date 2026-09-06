@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.room.execSQL
+import androidx.room.useWriterConnection
 import androidx.work.*
 import com.thuvstu.personalencyclopedia.db.AppDatabase
 import android.net.Uri
