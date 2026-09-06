@@ -75,6 +75,14 @@ interface EntryDao {
     @Query("SELECT COUNT(*) FROM entry WHERE deletedAt IS NULL")
     fun observeCount(): Flow<Int>
 
+    /** ★wt44: 自動リンク索引の鮮度判定用。件数と最終更新時刻が変わっていなければ再構築不要 */
+    @Query("SELECT COUNT(*) || '-' || IFNULL(MAX(updatedAt), 0) FROM entry WHERE deletedAt IS NULL")
+    suspend fun linkerFingerprint(): String
+
+    /** ★wt44: 自動リンク索引の構築用(タイトルは全件必要。本文は読まない) */
+    @Query("SELECT id, title FROM entry WHERE deletedAt IS NULL")
+    suspend fun getAllTitles(): List<EntryTitle>
+
     @Query("SELECT COUNT(*) FROM entry WHERE deletedAt IS NULL AND type = :type")
     fun observeCountByType(type: String): Flow<Int>
 
@@ -119,3 +127,6 @@ WHERE deletedAt IS NULL GROUP BY type ORDER BY cnt DESC
 }
 
 data class TypeCount(val type: String, val cnt: Int)
+
+/** ★wt44: 自動リンク索引用の軽量射影 */
+data class EntryTitle(val id: String, val title: String)

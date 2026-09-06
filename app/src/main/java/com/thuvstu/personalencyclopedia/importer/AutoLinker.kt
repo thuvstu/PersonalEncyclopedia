@@ -17,7 +17,13 @@ import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
  * - テキスト1000文字の走査 → O(n × maxTitleLen) ≒ 数ms
  * - エントリー追加/削除時は rebuild() で再構築（起動時+変更時のみ）
  */
-class AutoLinker(entries: List<EntryEntity>) {
+class AutoLinker private constructor(titles: Sequence<Pair<String, String>>) {
+    // 主コンストラクタは Sequence を取る(List<EntryEntity> 版と JVM シグネチャが衝突しないため)
+
+    /** 互換: 全カラムの EntryEntity から構築(削除済みは除外) */
+    constructor(entries: List<EntryEntity>) : this(
+        entries.asSequence().filter { it.deletedAt == null }.map { it.id to it.title }
+    )
 
     private class TrieNode {
         val children = mutableMapOf<Char, TrieNode>()
@@ -28,13 +34,11 @@ class AutoLinker(entries: List<EntryEntity>) {
     private val root = TrieNode()
 
     init {
-        for (entry in entries) {
-            val title = entry.title.trim()
+        for ((id, rawTitle) in titles) {
+            val title = rawTitle.trim()
             // 1文字のタイトルは誤判定が多いためスキップ
             if (title.length < 2) continue
-            // 削除済みエントリーは除外
-            if (entry.deletedAt != null) continue
-            insert(title, entry.id)
+            insert(title, id)
         }
     }
 
@@ -131,5 +135,8 @@ class AutoLinker(entries: List<EntryEntity>) {
          * 起動時・エントリー変更時に呼び出す。
          */
         fun build(entries: List<EntryEntity>): AutoLinker = AutoLinker(entries)
+
+        /** ★wt44: (id, title) の軽量射影から構築。`EntryDao.getAllTitles()` 用 */
+        fun fromTitles(titles: List<Pair<String, String>>): AutoLinker = AutoLinker(titles.asSequence())
     }
 }
