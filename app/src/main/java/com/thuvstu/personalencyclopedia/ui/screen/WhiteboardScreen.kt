@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,13 +28,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.thuvstu.personalencyclopedia.db.entity.WhiteboardEdgeEntity
 import com.thuvstu.personalencyclopedia.viewmodel.WhiteboardViewModel
+import kotlinx.coroutines.flow.collectLatest
+import android.widget.Toast
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -145,9 +151,18 @@ fun WhiteboardBoardScreen(
     val nodes by viewModel.nodes.collectAsState()
     val resolvedTitles by viewModel.resolvedTitles.collectAsState()
     val sections by viewModel.sections.collectAsState()
+    val edges by viewModel.edges.collectAsState()
+    val linkSourceNodeId by viewModel.linkSourceNodeId.collectAsState()
     val currentBoard by viewModel.currentBoard.collectAsState()
     val entryResults by viewModel.entryResults.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
+    // ★P3-1: エッジのラベル編集/削除ダイアログ
+    var editEdge by remember { mutableStateOf<WhiteboardEdgeEntity?>(null) }
+    var editEdgeLabel by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        viewModel.message.collectLatest { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+    }
     var showEntryDialog by remember { mutableStateOf(false) }
     var entryQueryText by remember { mutableStateOf("") }
     // ★P1-1: セクション作成・改名ダイアログ
@@ -158,6 +173,8 @@ fun WhiteboardBoardScreen(
     val density = LocalDensity.current
     var scale by remember { mutableFloatStateOf(1f) }
     var canvasOffset by remember { mutableStateOf(Offset.Zero) }
+    // ★P3-1: ドラッグ中のノード位置（エッジ描画が指に追従するための共有状態。確定後は消す）
+    val livePositions = remember { mutableStateMapOf<String, Offset>() }
 
     Scaffold(
         topBar = {
@@ -182,7 +199,11 @@ fun WhiteboardBoardScreen(
                     }) {
                         Icon(Icons.Default.Search, contentDescription = "エントリーを配置")
                     }
-                    Text("${nodes.size}件", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 12.dp))
+                    Text(
+                        if (edges.isEmpty()) "${nodes.size}件" else "${nodes.size}件 · 🔗${edges.size}",
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(end = 12.dp)
+                    )
                 }
             )
         },
@@ -192,6 +213,8 @@ fun WhiteboardBoardScreen(
             }
         }
     ) { padding ->
+        // ★P3-1: 接続モードのバナー（起点選択後、次にタップしたカードへ線を張る）
+        val linkSourceTitle = linkSourceNodeId?.let { resolvedTitles[it] }
         // Unit キーのまま最新ノード配置を参照するためのスナップショット
         val latestNodes by rememberUpdatedState(nodes)
         Box(
@@ -277,6 +300,49 @@ fun WhiteboardBoardScreen(
                     drawLine(Color(0x11000000), start = Offset(0f, y * step), end = Offset(w, y * step), strokeWidth = 1f)
                 }
             }
+            // ★P3-1: エッジ（接続線）。ノードの中心同士を結ぶ。
+            // 座標系はノードと同じ内容px（node.x/y/width/height はpx値。offset{IntOffset}で直接使われている）。
+            // ドラッグ中は livePositions を優先して線が指に追従する。
+            val edgeColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)
+            val nodeById = remember(nodes) { nodes.associateBy { it.id } }
+            fun centerOf(nodeId: String): Offset? {
+                val n = nodeById[nodeId] ?: return null
+                val pos = livePositions[nodeId] ?: Offset(n.x, n.y)
+                return Offset(pos.x + n.width / 2f, pos.y + n.height / 2f)
+            }
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                edges.forEach { edge ->
+                    val start = centerOf(edge.sourceNodeId) ?: return@forEach
+                    val end = centerOf(edge.targetNodeId) ?: return@forEach
+                    drawLine(edgeColor, start = start, end = end, strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+                }
+            }
+            // エッジ中点のチップ（ラベル表示＋タップで編集/削除）
+            edges.forEach { edge ->
+                val a = centerOf(edge.sourceNodeId) ?: return@forEach
+                val b = centerOf(edge.targetNodeId) ?: return@forEach
+                val mx = (a.x + b.x) / 2f
+                val my = (a.y + b.y) / 2f
+                Surface(
+                    modifier = Modifier
+                        .offset { IntOffset(mx.roundToInt() - 24, my.roundToInt() - 12) }
+                        .clickable {
+                            editEdge = edge
+                            editEdgeLabel = edge.label ?: ""
+                        },
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    tonalElevation = 2.dp
+                ) {
+                    Text(
+                        edge.label?.takeIf { it.isNotBlank() } ?: "🔗",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
             // セクション（背景の枠＋タイトル改名＋削除。★P1-1でCRUD開通）
             sections.forEach { section ->
                 Box(
@@ -307,7 +373,10 @@ fun WhiteboardBoardScreen(
             // ノード
             nodes.forEach { node ->
                 var dragOffset by remember(node.id) { mutableStateOf(Offset(node.x, node.y)) }
-                LaunchedEffect(node.x, node.y) { dragOffset = Offset(node.x, node.y) }
+                LaunchedEffect(node.x, node.y) {
+                    dragOffset = Offset(node.x, node.y)
+                    livePositions.remove(node.id)   // ★P3-1: DB位置が追いついたら live 位置を破棄
+                }
                 ElevatedCard(
                     modifier = Modifier
                         .offset { IntOffset(dragOffset.x.roundToInt(), dragOffset.y.roundToInt()) }
@@ -321,14 +390,24 @@ fun WhiteboardBoardScreen(
                                 onDrag = { change, dragAmount ->
                                     change.consume()
                                     dragOffset += dragAmount / scale
+                                    livePositions[node.id] = dragOffset
                                 },
                                 onDragEnd = {
+                                    // DB反映(node.x/y更新)まで live 位置を保持し、線が一瞬戻るのを防ぐ
                                     viewModel.moveNode(node.id, dragOffset.x, dragOffset.y)
-                                }
+                                },
+                                onDragCancel = { livePositions.remove(node.id) }
                             )
                         }
-                        .clickable(enabled = node.entryId != null) { node.entryId?.let { onNavigateToEntry(it) } },
+                        // ★P3-1: 接続モード中はタップで接続先を確定。通常時は従来通りentryへ遷移
+                        .clickable(enabled = linkSourceNodeId != null || node.entryId != null) {
+                            if (linkSourceNodeId != null) viewModel.completeLink(node.id)
+                            else node.entryId?.let { onNavigateToEntry(it) }
+                        },
                     shape = RoundedCornerShape(10.dp),
+                    colors = if (linkSourceNodeId == node.id)
+                        CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+                    else CardDefaults.elevatedCardColors(),
                     elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
                 ) {
                     Box(Modifier.fillMaxSize().padding(10.dp)) {
@@ -351,18 +430,92 @@ fun WhiteboardBoardScreen(
                         ) {
                             Icon(Icons.Default.Close, contentDescription = "削除", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                        // ★P3-1: 接続の起点にする（もう一度押すと解除）
+                        IconButton(
+                            onClick = {
+                                if (linkSourceNodeId == node.id) viewModel.cancelLink() else viewModel.startLink(node.id)
+                            },
+                            modifier = Modifier.align(Alignment.BottomEnd).size(24.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Link, contentDescription = "接続",
+                                modifier = Modifier.size(14.dp),
+                                tint = if (linkSourceNodeId == node.id) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
             if (nodes.isEmpty() && sections.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))) {
-                        Text("＋でメモを追加、エントリーをドラッグして配置", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall)
+                        Text("＋でメモを追加、🔍でエントリーを配置。カードの🔗→別カードで線が引けます", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
             }
+            // ★P3-1: 接続モードのバナー（graphicsLayerの外＝ズームに追従しない固定UI）
+            if (linkSourceNodeId != null) {
+                Surface(
+                    modifier = Modifier.align(Alignment.TopCenter).padding(12.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    tonalElevation = 4.dp
+                ) {
+                    Row(Modifier.padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "「${(linkSourceTitle ?: "…").take(14)}」→ 接続先のカードをタップ",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        TextButton(onClick = { viewModel.cancelLink() }, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                            Text("取消", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    // ★P3-1: エッジのラベル編集／削除
+    editEdge?.let { edge ->
+        AlertDialog(
+            onDismissRequest = { editEdge = null },
+            title = { Text("接続線") },
+            text = {
+                Column {
+                    Text(
+                        "${(resolvedTitles[edge.sourceNodeId] ?: "…").take(16)} ↔ ${(resolvedTitles[edge.targetNodeId] ?: "…").take(16)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editEdgeLabel,
+                        onValueChange = { editEdgeLabel = it },
+                        label = { Text("ラベル（任意）") },
+                        placeholder = { Text("例: 原因→結果") },
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.setEdgeLabel(edge, editEdgeLabel)
+                    editEdge = null
+                }) { Text("保存") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        viewModel.deleteEdge(edge)
+                        editEdge = null
+                    }) { Text("線を削除", color = MaterialTheme.colorScheme.error) }
+                    TextButton(onClick = { editEdge = null }) { Text("閉じる") }
+                }
+            }
+        )
     }
 
     if (showAddDialog) {

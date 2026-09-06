@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.thuvstu.personalencyclopedia.db.dao.EntryDao
 import com.thuvstu.personalencyclopedia.db.dao.WhiteboardDao
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
+import com.thuvstu.personalencyclopedia.db.entity.WhiteboardEdgeEntity
 import com.thuvstu.personalencyclopedia.db.entity.WhiteboardEntity
 import com.thuvstu.personalencyclopedia.db.entity.WhiteboardNodeEntity
 import com.thuvstu.personalencyclopedia.db.entity.WhiteboardNoteEntity
@@ -41,6 +42,46 @@ class WhiteboardViewModel @Inject constructor(
     val sections: StateFlow<List<WhiteboardSectionEntity>> = boardId?.let {
         repo.observeSections(it).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     } ?: MutableStateFlow(emptyList())
+
+    // ── ★P3-1: エッジ（接続線）──
+    val edges: StateFlow<List<WhiteboardEdgeEntity>> = boardId?.let {
+        repo.observeEdges(it).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    } ?: MutableStateFlow(emptyList())
+
+    /** 接続モードの起点ノード。null以外のとき、次にタップしたカードが接続先になる */
+    private val _linkSourceNodeId = MutableStateFlow<String?>(null)
+    val linkSourceNodeId: StateFlow<String?> = _linkSourceNodeId
+
+    private val _message = MutableSharedFlow<String>()
+    val message: SharedFlow<String> = _message
+
+    fun startLink(nodeId: String) {
+        _linkSourceNodeId.value = nodeId
+    }
+
+    fun cancelLink() {
+        _linkSourceNodeId.value = null
+    }
+
+    /** 接続モード中にカードをタップ→エッジ作成。同一カード・既存ペアは弾く（Repo側で判定） */
+    fun completeLink(targetNodeId: String) {
+        val bId = boardId ?: return
+        val source = _linkSourceNodeId.value ?: return
+        _linkSourceNodeId.value = null
+        if (source == targetNodeId) return
+        viewModelScope.launch {
+            val id = repo.addEdge(bId, source, targetNodeId)
+            _message.emit(if (id != null) "🔗 接続しました" else "既に接続されています")
+        }
+    }
+
+    fun setEdgeLabel(edge: WhiteboardEdgeEntity, label: String?) {
+        viewModelScope.launch { repo.updateEdgeLabel(edge, label) }
+    }
+
+    fun deleteEdge(edge: WhiteboardEdgeEntity) {
+        viewModelScope.launch { repo.deleteEdge(edge) }
+    }
 
     /** ノードID → 表示タイトル(entry表題 or メモ先頭行)。表示専用の解決マップ。
      *  geometry/drag用の nodes フローには触れず、タイトル解決だけを分離する */
@@ -102,8 +143,10 @@ class WhiteboardViewModel @Inject constructor(
     }
 
     fun deleteNode(nodeId: String) {
+        if (_linkSourceNodeId.value == nodeId) _linkSourceNodeId.value = null
         viewModelScope.launch {
-            whiteboardDao.deleteNode(nodeId)
+            // ★P3-1: Repo経由にして、繋がっているエッジも同時に掃除する
+            repo.deleteNode(nodeId)
             boardId?.let { repo.touchBoard(it) }
         }
     }

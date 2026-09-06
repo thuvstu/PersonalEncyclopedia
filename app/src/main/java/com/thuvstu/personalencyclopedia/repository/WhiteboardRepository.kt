@@ -51,9 +51,42 @@ class WhiteboardRepository @Inject constructor(
     suspend fun setNodeSection(nodeId: String, sectionId: String?) =
         whiteboardDao.setNodeSection(nodeId, sectionId)
 
-    suspend fun deleteNode(nodeId: String) = whiteboardDao.deleteNode(nodeId)
+    /** ノード削除。★P3-1: そのノードに繋がるエッジも同時に掃除する（孤児線を残さない） */
+    suspend fun deleteNode(nodeId: String) {
+        whiteboardDao.deleteEdgesForNode(nodeId)
+        whiteboardDao.deleteNode(nodeId)
+    }
 
     suspend fun touchBoard(boardId: String) = whiteboardDao.touchBoard(boardId)
+
+    // ── ★P3-1: エッジ（接続線）──
+    fun observeEdges(boardId: String): Flow<List<WhiteboardEdgeEntity>> = whiteboardDao.observeEdges(boardId)
+
+    /**
+     * 2ノード間に線を張る。自己ループ・既存ペア（向き不問）は張らず null を返す。
+     * connection テーブルには書かない（承認制の骨格を崩さない）。
+     */
+    suspend fun addEdge(boardId: String, sourceNodeId: String, targetNodeId: String, label: String? = null): String? {
+        if (sourceNodeId == targetNodeId) return null
+        if (whiteboardDao.countEdgeBetween(sourceNodeId, targetNodeId) > 0) return null
+        val edge = WhiteboardEdgeEntity(
+            boardId = boardId, sourceNodeId = sourceNodeId, targetNodeId = targetNodeId,
+            label = label?.trim()?.takeIf { it.isNotEmpty() }
+        )
+        whiteboardDao.upsertEdge(edge)
+        whiteboardDao.touchBoard(boardId)
+        return edge.id
+    }
+
+    suspend fun updateEdgeLabel(edge: WhiteboardEdgeEntity, label: String?) {
+        whiteboardDao.upsertEdge(edge.copy(label = label?.trim()?.takeIf { it.isNotEmpty() }))
+        whiteboardDao.touchBoard(edge.boardId)
+    }
+
+    suspend fun deleteEdge(edge: WhiteboardEdgeEntity) {
+        whiteboardDao.deleteEdge(edge.id)
+        whiteboardDao.touchBoard(edge.boardId)
+    }
 
     suspend fun addSection(boardId: String, title: String, x: Float, y: Float, colorHex: String? = null): String {
         val section = WhiteboardSectionEntity(
