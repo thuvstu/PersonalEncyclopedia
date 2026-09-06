@@ -219,7 +219,7 @@ fun DashboardScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                "古典/数学/英語/地歴/法/経済の135件を一括投入できます",
+                                "13型すべてのサンプル211件（定義140・人物12・書籍9・出来事7ほか）、型付き接続87・Wiki11・クイズ46を投入できます",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -244,7 +244,7 @@ fun DashboardScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 enabled = !isSeeding
                             ) {
-                                Text("📥 初期データを追記（重複を避けて追加）")
+                                Text("📥 初期データを追記（タイトル一致で重複回避）")
                             }
                         }
                     }

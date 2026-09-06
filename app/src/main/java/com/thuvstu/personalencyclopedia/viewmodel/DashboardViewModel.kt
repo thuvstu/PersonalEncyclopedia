@@ -6,6 +6,7 @@ import com.thuvstu.personalencyclopedia.brain.ResurfacingEngine
 import com.thuvstu.personalencyclopedia.brain.task.EstimationBias
 import com.thuvstu.personalencyclopedia.brain.task.TaskEngine
 import com.thuvstu.personalencyclopedia.db.InitialData
+import com.thuvstu.personalencyclopedia.db.InitialData2
 import com.thuvstu.personalencyclopedia.db.AppDatabase
 import com.thuvstu.personalencyclopedia.db.dao.TaskDao
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
@@ -13,6 +14,7 @@ import com.thuvstu.personalencyclopedia.importer.WebScraper
 import com.thuvstu.personalencyclopedia.repository.ConnectionRepository
 import com.thuvstu.personalencyclopedia.repository.EntryRepository
 import com.thuvstu.personalencyclopedia.repository.QuizRepository
+import com.thuvstu.personalencyclopedia.repository.SearchRepository
 import com.thuvstu.personalencyclopedia.repository.SrsRepository
 import com.thuvstu.personalencyclopedia.repository.ThoughtDraft
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,7 +32,8 @@ class DashboardViewModel @Inject constructor(
     private val resurfacingEngine: ResurfacingEngine,    // ★§7.5
     private val taskEngine: TaskEngine,                   // ★§8.10/§11.11 タスク
     private val taskDao: TaskDao,
-    private val db: AppDatabase
+    private val db: AppDatabase,
+    private val searchRepo: SearchRepository                // ★wt45: 投入後の検索文書更新
 ) : ViewModel() {
 
     val recentEntries: StateFlow<List<EntryEntity>> =
@@ -167,8 +170,18 @@ class DashboardViewModel @Inject constructor(
             _isSeeding.value = true
             _seedState.value = "投入中…"
             try {
-                InitialData.seedIfEmpty(db.entryDao(), db.entryThoughtDao(), db.entryDefinitionDao(), db.topicDao(), db.quizDao(), db.connectionDao(), db.wikiArticleDao())
-                _seedState.value = "初期データ投入完了"
+                // ★wt45: 第1弾(定義125+思考6)と第2弾(13型・人物ハブ・型付き接続)を冪等に追記
+                val r1 = InitialData.seedAppend(db.entryDao(), db.entryThoughtDao(), db.entryDefinitionDao(), db.topicDao(), db.quizDao(), db.connectionDao(), db.wikiArticleDao())
+                val r2 = InitialData2.seedAppend(
+                    db.entryDao(), db.entryThoughtDao(), db.entryDefinitionDao(), db.entryExtensionDao(), db.tagDao(),
+                    db.topicDao(), db.quizDao(), db.connectionDao(), db.whiteboardDao(), db.wikiArticleDao()
+                )
+                val added = r1.added + r2.added
+                val skipped = r1.skipped + r2.skipped
+                _seedState.value = if (added == 0) "初期データは投入済みです（${skipped}件は既存）"
+                    else "初期データ ${added}件を追加しました（既存${skipped}件はスキップ・接続${r2.connections}件）"
+                // 検索文書を追記分だけ更新(差分なので既存はスキップされる)
+                try { searchRepo.rebuildAllIndices() } catch (_: Exception) {}
             } catch (e: Exception) {
                 _seedState.value = "投入失敗: ${e.message}"
             }
