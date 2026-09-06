@@ -15,6 +15,7 @@ import com.thuvstu.personalencyclopedia.db.AppDatabase
 import com.thuvstu.personalencyclopedia.db.DemoData
 import com.thuvstu.personalencyclopedia.db.InitialData
 import com.thuvstu.personalencyclopedia.db.InitialData2
+import com.thuvstu.personalencyclopedia.db.InitialDataMath
 import com.thuvstu.personalencyclopedia.db.SeedData
 import com.thuvstu.personalencyclopedia.plugins.PluginEngine
 import com.thuvstu.personalencyclopedia.repository.SettingsRepository
@@ -100,6 +101,7 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
         )
         database.entryTypeDao().insertAll(SeedData.entryTypes)
         seedBasicDataIfSparse()
+        seedHighSchoolMathIfNeeded()
     }
 
     /**
@@ -122,6 +124,20 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
             database.entryExtensionDao(), database.tagDao(),
             database.topicDao(), database.quizDao(), database.connectionDao(),
             database.whiteboardDao(), database.wikiArticleDao()
+        )
+    }
+
+    /**
+     * ★wt51: 高校数学全範囲。件数ゲートなし（既存の基本データ済みDBにも一度だけ足す）。
+     * センチネルは InitialDataMath.SENTINEL（正弦定理）。
+     */
+    private suspend fun seedHighSchoolMathIfNeeded() {
+        val entryDao = database.entryDao()
+        if (entryDao.findByTitle(InitialDataMath.SENTINEL) != null) return
+        InitialDataMath.seedAppend(
+            entryDao, database.entryThoughtDao(), database.entryDefinitionDao(),
+            database.tagDao(), database.topicDao(), database.quizDao(),
+            database.connectionDao(), database.whiteboardDao(), database.wikiArticleDao()
         )
     }
 

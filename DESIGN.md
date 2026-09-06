@@ -301,6 +301,7 @@
 - `InitialData.seedAppend()`: 古典/数学/英語/地歴/法/経済の定義125件 + 思考 6 + クイズ 30 + Wiki 6 + 接続 20。**wt45で空DBガード→タイトル一致の冪等追記に変更**(`Result(added, skipped)`)。
 - `InitialData2.seedAppend()` (wt45): 第2弾。**13型すべて**のサンプル(人物12・組織6・場所6・出来事7・書籍9・Web7・動画4・文書3・メディア3・いいね3・AI会話2・定義15・思考3)＋型付き接続67本(authored_by/located_at/occurred_at/exemplifies/extends/references/related)＋タグ16＋Wiki5＋クイズ16(fill_blank含む)＋白板「人物ハブ」(エッジラベル=接続種別)。タイトル/設問文/Wikiタイトル/ボード名で冪等。
 - **wt50 自動投入**: Phase A で DemoData の直後、`entry ≤ 20` かつセンチネル「枕草子」未存在なら両弾を自動実行。Demo 規模の初回/既存デモDBに基本データが入る。自作が多いDBは触らず、Dashboard の「追記」ボタンが残る(冪等)。検索文書は続く Phase B の `rebuildAllSearchDocuments` が拾う。
+- `InitialDataMath.seedAppend()` (wt51): **高校数学・新課程の全単元**。定義215（数I 57 / A 37 / II 47 / B 21 / III 31 / C 22）+ クイズ60 + Wiki6科目マップ + 接続192 + 白板「高校数学 — 新課程」。トピックは `数学` の子に I/A/II/B/III/C。既存ハブ20件（二次関数等）はタイトル再利用。センチネル「正弦定理」、**件数ゲートなし**（基本データ済みDBにも次起動で一度だけ足す）。行列は新課程必履修外のため既存ハブ以外は増やさない。
 
 ### 5.7 読取専用SQL実行器 (SQL Explorerの土台)
 `db/ReadOnlySqlExecutor.kt`: `SELECT`/`WITH` 先頭強制 + 書込キーワード16種のブロックリスト + `useReaderConnection` 上で `PRAGMA query_only=ON` + prepare/step + 500行cap。**wt49**: BundledSQLiteDriver 後に例外になっていた `openHelper.writable/readableDatabase` を新APIへ置換。reader 接続を書き込み可能に戻さないよう query_only は OFF にしない。ゲート関数 `denyReason` は JVM テスト可能。
@@ -640,7 +641,7 @@ Android設定画面: トークン表示 → PC ConnectionBar: ホスト/ポー�
 ### 10.1 起動フロー
 ```
 AndroidManifest: Application=PersonalEncyclopediaApp, MainActivity=singleTop
-PersonalEncyclopediaApp.onCreate ─┬─ Phase A: APIキー暗号化移行 / seedTypeDefs / ビルトインプラグイン / DemoData(自動・空時のみ) / SeedData / InitialData+InitialData2(wt50: entry≤20 かつ「枕草子」未存在)
+PersonalEncyclopediaApp.onCreate ─┬─ Phase A: APIキー暗号化移行 / seedTypeDefs / ビルトインプラグイン / DemoData(自動・空時のみ) / SeedData / InitialData+InitialData2(wt50: entry≤20 かつ「枕草子」未存在) / InitialDataMath(wt51: 「正弦定理」未存在なら件数無制限)
                                   ├─ Phase B: vectorIndex.load / recoverJobs / startWorker / rebuildAllSearchDocuments
                                   └─ Phase C: BackupWorker / PortableExportWorker スケジュール
 MainActivity.onCreate → handleIncomingIntent (共有 / PROCESS_TEXT / ショートカット)

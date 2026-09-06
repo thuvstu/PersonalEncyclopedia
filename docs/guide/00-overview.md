@@ -25,7 +25,7 @@
 
 `PersonalEncyclopediaApp.kt` の `runStep` が3段階で起動する。
 
-1. `initDatabase` … Room DB 初期化。空DBなら DemoData、デモ規模(entry≤20)なら InitialData+InitialData2 の基本データも自動投入(wt50)。
+1. `initDatabase` … Room DB 初期化。空DBなら DemoData、デモ規模(entry≤20)なら InitialData+InitialData2 の基本データも自動投入(wt50)。高校数学全範囲は `InitialDataMath` が「正弦定理」未存在なら件数に関係なく一度投入(wt51)。
 2. `initBrainLayer` … ベクトル索引のロード、埋め込みワーカーの起動、未完了ジョブの復旧、検索文書の再構築。
 3. `scheduleBackgroundWorkers` … バックグラウンド処理(バックアップ・可搬export・ToDo期限チェック)の定期実行。
 

@@ -7,6 +7,7 @@ import com.thuvstu.personalencyclopedia.brain.task.EstimationBias
 import com.thuvstu.personalencyclopedia.brain.task.TaskEngine
 import com.thuvstu.personalencyclopedia.db.InitialData
 import com.thuvstu.personalencyclopedia.db.InitialData2
+import com.thuvstu.personalencyclopedia.db.InitialDataMath
 import com.thuvstu.personalencyclopedia.db.AppDatabase
 import com.thuvstu.personalencyclopedia.db.dao.TaskDao
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
@@ -170,16 +171,20 @@ class DashboardViewModel @Inject constructor(
             _isSeeding.value = true
             _seedState.value = "投入中…"
             try {
-                // ★wt45: 第1弾(定義125+思考6)と第2弾(13型・人物ハブ・型付き接続)を冪等に追記
+                // ★wt45: 第1弾+第2弾。★wt51: 高校数学全範囲も冪等追記
                 val r1 = InitialData.seedAppend(db.entryDao(), db.entryThoughtDao(), db.entryDefinitionDao(), db.topicDao(), db.quizDao(), db.connectionDao(), db.wikiArticleDao())
                 val r2 = InitialData2.seedAppend(
                     db.entryDao(), db.entryThoughtDao(), db.entryDefinitionDao(), db.entryExtensionDao(), db.tagDao(),
                     db.topicDao(), db.quizDao(), db.connectionDao(), db.whiteboardDao(), db.wikiArticleDao()
                 )
-                val added = r1.added + r2.added
-                val skipped = r1.skipped + r2.skipped
+                val r3 = InitialDataMath.seedAppend(
+                    db.entryDao(), db.entryThoughtDao(), db.entryDefinitionDao(), db.tagDao(),
+                    db.topicDao(), db.quizDao(), db.connectionDao(), db.whiteboardDao(), db.wikiArticleDao()
+                )
+                val added = r1.added + r2.added + r3.added
+                val skipped = r1.skipped + r2.skipped + r3.skipped
                 _seedState.value = if (added == 0) "初期データは投入済みです（${skipped}件は既存）"
-                    else "初期データ ${added}件を追加しました（既存${skipped}件はスキップ・接続${r2.connections}件）"
+                    else "初期データ ${added}件を追加しました（既存${skipped}件はスキップ・接続${r2.connections + r3.connections}件・数学クイズ${r3.quizzes}）"
                 // 検索文書を追記分だけ更新(差分なので既存はスキップされる)
                 try { searchRepo.rebuildAllIndices() } catch (_: Exception) {}
             } catch (e: Exception) {
