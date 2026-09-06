@@ -1,6 +1,7 @@
 package com.thuvstu.personalencyclopedia.ui.component
 
 import android.annotation.SuppressLint
+import android.net.Uri
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Box
@@ -52,7 +53,10 @@ fun RichContentView(
                         override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
                             url?.let {
                                 if (it.startsWith("wiki://")) {
-                                    try { onWikiLinkClick(it.removePrefix("wiki://")) } catch (_: Exception) {}
+                                    // ★wt46: href は buildHtml で Uri.encode 済み。WebView(Chromium)は非ASCIIを
+                                    // %エンコードして渡してくるため、復号しないと日本語タイトルが findByTitle に一致しない
+                                    val title = try { Uri.decode(it.removePrefix("wiki://")) } catch (_: Exception) { it.removePrefix("wiki://") }
+                                    try { onWikiLinkClick(title) } catch (_: Exception) {}
                                     return true
                                 }
                                 // http/httpsもWebView内で開かず、外部ブラウザに任せるなら true を返すが、
@@ -95,8 +99,9 @@ private fun buildHtml(markdown: String): String {
         markdown.replace(Regex("""\[\[([^\]|]+)(?:\|([^\]]+))?]]""")) { m ->
             val title = m.groupValues[1].trim().take(100)
             val display = m.groupValues[2].ifEmpty { title }.take(100)
-            // titleに " や < が含まれても崩れないようエスケープ
-            val escTitle = title.replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+            // ★wt46: タイトルはURLエンコードして埋め込む(空白・"・<・#・?・日本語を含んでも href が壊れない)。
+            // クリック側(shouldOverrideUrlLoading)が Uri.decode して元のタイトルに戻す
+            val escTitle = Uri.encode(title)
             val escDisplay = display.replace("<", "&lt;").replace(">", "&gt;")
             """<a href="wiki://$escTitle">$escDisplay</a>"""
         }
