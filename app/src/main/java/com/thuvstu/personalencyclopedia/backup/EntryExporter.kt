@@ -5,6 +5,7 @@ import android.net.Uri
 import com.thuvstu.personalencyclopedia.db.dao.EntryDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryDefinitionDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryExtensionDao
+import com.thuvstu.personalencyclopedia.db.dao.EntryThoughtDao
 import com.thuvstu.personalencyclopedia.db.dao.TagDao
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -33,7 +34,8 @@ class EntryExporter @Inject constructor(
     private val entryDao: EntryDao,
     private val extensionDao: EntryExtensionDao,
     private val definitionDao: EntryDefinitionDao,
-    private val tagDao: TagDao
+    private val tagDao: TagDao,
+    private val thoughtDao: EntryThoughtDao
 ) {
     /**
      * エクスポート本体。呼び出し元（DatabaseManagementViewModel）は suspend コンテキスト。
@@ -162,8 +164,11 @@ class EntryExporter @Inject constructor(
                 e.content?.let { put("content", it) }
                 e.summary?.let { put("summary", it) }
                 e.sourceUrl?.let { put("sourceUrl", it) }
+                e.lang?.let { put("lang", it) }
                 put("isFavorite", e.isFavorite)
                 put("isMuted", e.isMuted)
+                put("metadataJson", e.metadataJson)
+                e.accessedAt?.let { put("accessedAt", it) }
                 put("createdAt", e.createdAt)
                 put("updatedAt", e.updatedAt)
 
@@ -172,6 +177,8 @@ class EntryExporter @Inject constructor(
                     putJsonArray("tags") { tags.forEach { add(it.name) } }
                 }
 
+                // ★往復対称(mismatch §6-2): 11型すべての拡張を全カラム書き出す。
+                // ImportPipeline.importEntriesJson が同じキーで復元する。片側だけ増やさないこと。
                 val ext: JsonElement? = when (e.type) {
                     "definition" -> definitionDao.getByEntryId(e.id)?.let {
                         buildJsonObject {
@@ -179,39 +186,136 @@ class EntryExporter @Inject constructor(
                             put("definition", it.definition)
                             it.reading?.let { v -> put("reading", v) }
                             it.field?.let { v -> put("field", v) }
+                            put("examplesJson", it.examplesJson)
+                            put("relatedTermsJson", it.relatedTermsJson)
+                        }
+                    }
+                    "thought" -> thoughtDao.getByEntryId(e.id)?.let {
+                        buildJsonObject {
+                            it.mood?.let { v -> put("mood", v) }
+                            it.context?.let { v -> put("context", v) }
+                            put("isDraft", it.isDraft)
                         }
                     }
                     "webpage" -> extensionDao.getWebpage(e.id)?.let {
                         buildJsonObject {
                             put("url", it.url)
                             put("domain", it.domain)
+                            it.scrapedAt?.let { v -> put("scrapedAt", v) }
                             it.fullText?.let { v -> put("fullText", v) }
+                            it.readingTimeS?.let { v -> put("readingTimeS", v) }
+                            it.author?.let { v -> put("author", v) }
+                            it.publishedAt?.let { v -> put("publishedAt", v) }
+                            it.scraperUsed?.let { v -> put("scraperUsed", v) }
                         }
                     }
                     "book" -> extensionDao.getBook(e.id)?.let {
                         buildJsonObject {
-                            put("isbn", it.isbn)
-                            put("readStatus", it.readStatus)
+                            it.isbn?.let { v -> put("isbn", v) }
                             put("authorsJson", it.authorsJson)
+                            it.publisher?.let { v -> put("publisher", v) }
+                            it.publishedYear?.let { v -> put("publishedYear", v) }
+                            it.totalPages?.let { v -> put("totalPages", v) }
+                            put("readStatus", it.readStatus)
+                            it.readStartDate?.let { v -> put("readStartDate", v) }
+                            it.readEndDate?.let { v -> put("readEndDate", v) }
+                            it.rating?.let { v -> put("rating", v) }
+                        }
+                    }
+                    "video" -> extensionDao.getVideo(e.id)?.let {
+                        buildJsonObject {
+                            put("platform", it.platform)
+                            it.videoId?.let { v -> put("videoId", v) }
+                            it.channelName?.let { v -> put("channelName", v) }
+                            it.durationS?.let { v -> put("durationS", v) }
+                            it.thumbnailUrl?.let { v -> put("thumbnailUrl", v) }
+                            it.transcript?.let { v -> put("transcript", v) }
+                            it.watchedAt?.let { v -> put("watchedAt", v) }
+                            it.watchProgress?.let { v -> put("watchProgress", v) }
+                        }
+                    }
+                    "document" -> extensionDao.getDocument(e.id)?.let {
+                        buildJsonObject {
+                            put("docType", it.docType)
+                            put("mimeType", it.mimeType)
+                            it.fileSizeBytes?.let { v -> put("fileSizeBytes", v) }
+                            it.pageCount?.let { v -> put("pageCount", v) }
+                            it.extractedText?.let { v -> put("extractedText", v) }
+                            it.extractionMethod?.let { v -> put("extractionMethod", v) }
+                        }
+                    }
+                    "media" -> extensionDao.getMedia(e.id)?.let {
+                        buildJsonObject {
+                            put("mediaType", it.mediaType)
+                            put("blobPath", it.blobPath)
+                            put("mimeType", it.mimeType)
+                            it.widthPx?.let { v -> put("widthPx", v) }
+                            it.heightPx?.let { v -> put("heightPx", v) }
+                            it.durationS?.let { v -> put("durationS", v) }
+                            it.ocrText?.let { v -> put("ocrText", v) }
+                            it.caption?.let { v -> put("caption", v) }
                         }
                     }
                     "person" -> extensionDao.getPerson(e.id)?.let {
                         buildJsonObject {
                             put("fullName", it.fullName)
+                            put("aliasesJson", it.aliasesJson)
+                            it.birthYear?.let { v -> put("birthYear", v) }
+                            it.deathYear?.let { v -> put("deathYear", v) }
+                            it.nationality?.let { v -> put("nationality", v) }
                             put("occupationsJson", it.occupationsJson)
+                            it.biography?.let { v -> put("biography", v) }
+                        }
+                    }
+                    "org" -> extensionDao.getOrg(e.id)?.let {
+                        buildJsonObject {
+                            put("officialName", it.officialName)
+                            it.orgType?.let { v -> put("orgType", v) }
+                            it.foundedYear?.let { v -> put("foundedYear", v) }
+                            it.country?.let { v -> put("country", v) }
+                            it.websiteUrl?.let { v -> put("websiteUrl", v) }
+                            it.description?.let { v -> put("description", v) }
+                        }
+                    }
+                    "place" -> extensionDao.getPlace(e.id)?.let {
+                        buildJsonObject {
+                            put("placeName", it.placeName)
+                            it.placeType?.let { v -> put("placeType", v) }
+                            it.address?.let { v -> put("address", v) }
+                            it.latitude?.let { v -> put("latitude", v) }
+                            it.longitude?.let { v -> put("longitude", v) }
+                            put("visitedDatesJson", it.visitedDatesJson)
                         }
                     }
                     "event" -> extensionDao.getEvent(e.id)?.let {
                         buildJsonObject {
                             put("eventName", it.eventName)
                             put("startedAt", it.startedAt)
+                            it.endedAt?.let { v -> put("endedAt", v) }
+                            it.locationText?.let { v -> put("locationText", v) }
+                            it.placeEntryId?.let { v -> put("placeEntryId", v) }
+                            put("isPersonal", it.isPersonal)
+                            put("participantsJson", it.participantsJson)
                         }
                     }
-                    "place" -> extensionDao.getPlace(e.id)?.let {
+                    "liked" -> extensionDao.getLiked(e.id)?.let {
                         buildJsonObject {
-                            put("placeName", it.placeName)
-                            it.latitude?.let { v -> put("latitude", v) }
-                            it.longitude?.let { v -> put("longitude", v) }
+                            put("platform", it.platform)
+                            put("originalId", it.originalId)
+                            it.likedAt?.let { v -> put("likedAt", v) }
+                            put("contentType", it.contentType)
+                            it.authorName?.let { v -> put("authorName", v) }
+                            it.fullText?.let { v -> put("fullText", v) }
+                        }
+                    }
+                    "ai_conv" -> extensionDao.getAiConv(e.id)?.let {
+                        buildJsonObject {
+                            put("model", it.model)
+                            put("provider", it.provider)
+                            put("messagesJson", it.messagesJson)
+                            it.tokenCount?.let { v -> put("tokenCount", v) }
+                            it.topic?.let { v -> put("topic", v) }
+                            it.isUseful?.let { v -> put("isUseful", v) }
                         }
                     }
                     else -> null

@@ -15,6 +15,7 @@ import com.thuvstu.personalencyclopedia.db.MIGRATION_6_7
 import com.thuvstu.personalencyclopedia.db.MIGRATION_7_8
 import com.thuvstu.personalencyclopedia.db.MIGRATION_8_9
 import com.thuvstu.personalencyclopedia.db.MIGRATION_9_10
+import com.thuvstu.personalencyclopedia.db.MIGRATION_10_11
 import com.thuvstu.personalencyclopedia.db.dao.*
 import com.thuvstu.personalencyclopedia.integration.NoOpStudyPlusBridge
 import com.thuvstu.personalencyclopedia.integration.StudyPlusSdkBridge
@@ -39,7 +40,7 @@ object DatabaseModule {
     fun provideDatabase(@ApplicationContext ctx: Context): AppDatabase =
         Room.databaseBuilder(ctx, AppDatabase::class.java, "encyclopedia.db")
             .setDriver(BundledSQLiteDriver().withSqliteVec())
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
             .setQueryExecutor(queryExecutor)
             .setTransactionExecutor(transactionExecutor)

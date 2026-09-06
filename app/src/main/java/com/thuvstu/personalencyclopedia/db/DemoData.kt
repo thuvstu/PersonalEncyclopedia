@@ -141,10 +141,21 @@ object DemoData {
                 val sectionId = UUID.randomUUID().toString()
                 whiteboardDao.upsertSection(WhiteboardSectionEntity(id = sectionId, boardId = boardId, title = if (boardIdx == 0) "江戸〜明治" else "データ構造", x = 40f, y = 40f, width = 700f, height = 420f, colorHex = if (boardIdx == 0) "#FEF3C7" else "#DBEAFE"))
                 val entryTerms = if (boardIdx == 0) listOf("明治維新", "関ヶ原の戦い", "学習システムを7回作り直してわかったこと") else listOf("ハッシュテーブル", "再帰", "光合成")
+                val entryNodeIds = mutableListOf<String>()
                 for ((idx, term) in entryTerms.withIndex()) {
                     val eId = entryIdMap[term] ?: continue
                     val node = WhiteboardNodeEntity(boardId = boardId, entryId = eId, x = 60f + idx * 220f, y = 80f, width = 200f, height = 120f, sectionId = sectionId)
                     whiteboardDao.upsertNode(node)
+                    entryNodeIds += node.id
+                }
+                // ★P3-1: 先頭2枚を線で結ぶ（エッジ表示のデモ。connectionとは独立）
+                if (entryNodeIds.size >= 2) {
+                    whiteboardDao.upsertEdge(
+                        WhiteboardEdgeEntity(
+                            boardId = boardId, sourceNodeId = entryNodeIds[0], targetNodeId = entryNodeIds[1],
+                            label = if (boardIdx == 0) "転換点" else "終了条件", createdAt = now
+                        )
+                    )
                 }
                 val notes = if (boardIdx == 0) listOf("年表: 1600関ヶ原→1868明治維新\n転換点の共通点は「既存秩序の再編」", "問い: なぜ260年続いた幕藩体制は崩れたか？\n→ 外圧と内発的矛盾") else listOf("メモ: ハッシュの衝突は再帰の基底ケースと同じく「終了条件」が肝", "図: チェイン法 vs オープンアドレス\n長所短所を比較")
                 for ((idx, md) in notes.withIndex()) {

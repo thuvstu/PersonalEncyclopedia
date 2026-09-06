@@ -142,6 +142,24 @@ class ImportViewModel @Inject constructor(
         }
     }
 
+    /** ★wt43: PDF/DOCX 1ファイル取込(端末内保管＋テキスト抽出) */
+    fun importDocument(uri: Uri) {
+        viewModelScope.launch {
+            _state.value = ImportState.Importing
+            try {
+                val result = importPipeline.importDocumentFile(uri)
+                _state.value = if (result.errorCount > 0)
+                    ImportState.Error(result.errors.firstOrNull() ?: "取り込みに失敗しました")
+                else ImportState.Done(
+                    if (result.skipCount > 0) "同じ文書が既にあります（スキップ）"
+                    else "文書を取り込みました。本文テキストを抽出して検索対象にしました。"
+                )
+            } catch (e: Exception) {
+                _state.value = ImportState.Error(e.message ?: "Unknown error")
+            }
+        }
+    }
+
     fun importUrlList(uri: Uri) {
         viewModelScope.launch {
             _state.value = ImportState.Importing

@@ -3,6 +3,7 @@ package com.thuvstu.personalencyclopedia.importer
 
 import android.content.Context
 import android.net.Uri
+import dagger.hilt.android.qualifiers.ApplicationContext
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import org.jsoup.Jsoup
@@ -13,7 +14,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class DocumentExtractor @Inject constructor(private val context: Context) {
+class DocumentExtractor @Inject constructor(@ApplicationContext private val context: Context) {
+
+    /** ★wt43: PDF のページ数(pdfbox)。失敗時 null */
+    fun pageCount(file: File): Int? = try {
+        PDDocument.load(file).use { it.numberOfPages }
+    } catch (e: Exception) { null }
 
     fun extractText(uri: Uri, mimeType: String): String? {
         return try {

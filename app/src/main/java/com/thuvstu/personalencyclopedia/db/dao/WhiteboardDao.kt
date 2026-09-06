@@ -71,6 +71,27 @@ interface WhiteboardDao {
     @Query("DELETE FROM whiteboard_section WHERE id = :id")
     suspend fun deleteSection(id: String)
 
+    // ── ★P3-1: エッジ（接続線）──
+    @Query("SELECT * FROM whiteboard_edge WHERE boardId = :boardId ORDER BY createdAt")
+    fun observeEdges(boardId: String): Flow<List<WhiteboardEdgeEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertEdge(edge: WhiteboardEdgeEntity)
+
+    @Query("DELETE FROM whiteboard_edge WHERE id = :id")
+    suspend fun deleteEdge(id: String)
+
+    /** ノード削除時の孤児エッジ掃除（FK CASCADEは既存テーブル方針に合わせて使わない） */
+    @Query("DELETE FROM whiteboard_edge WHERE sourceNodeId = :nodeId OR targetNodeId = :nodeId")
+    suspend fun deleteEdgesForNode(nodeId: String)
+
+    /** 同じ2ノード間の重複判定（向きは区別しない） */
+    @Query(
+        """SELECT COUNT(*) FROM whiteboard_edge
+           WHERE (sourceNodeId = :a AND targetNodeId = :b) OR (sourceNodeId = :b AND targetNodeId = :a)"""
+    )
+    suspend fun countEdgeBetween(a: String, b: String): Int
+
     // ── 中身の一括解決（N+1回避）──
     @Query("SELECT * FROM entry WHERE id IN (:ids) AND deletedAt IS NULL")
     suspend fun getEntriesByIds(ids: List<String>): List<EntryEntity>

@@ -6,10 +6,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.thuvstu.personalencyclopedia.brain.TagSuggestionEngine
 import com.thuvstu.personalencyclopedia.db.dao.ConnectionWithEntry
-import com.thuvstu.personalencyclopedia.db.dao.EntryDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryHistoryDao
 import com.thuvstu.personalencyclopedia.db.entity.*
 import com.thuvstu.personalencyclopedia.importer.AutoLinker
+import com.thuvstu.personalencyclopedia.importer.AutoLinkerProvider
 import com.thuvstu.personalencyclopedia.repository.AttachmentRepository
 import com.thuvstu.personalencyclopedia.repository.ConnectionRepository
 import com.thuvstu.personalencyclopedia.repository.EntryRepository
@@ -30,7 +30,7 @@ class EntryDetailViewModel @Inject constructor(
     private val attachmentRepo: AttachmentRepository,
     private val quizRepo: QuizRepository,
     private val tagSuggestionEngine: TagSuggestionEngine,
-    private val entryDao: EntryDao,    // ★ AutoLinker 構築用
+    private val autoLinkerProvider: AutoLinkerProvider,    // ★wt44: 共有キャッシュ(指紋で自動更新)
     private val entryHistoryDao: EntryHistoryDao,   // ★§5.9.2/§11.13 編集履歴
     private val wikiArticleDao: WikiArticleDao,
     savedStateHandle: SavedStateHandle
@@ -126,10 +126,10 @@ class EntryDetailViewModel @Inject constructor(
         viewModelScope.launch {
             repo.touch(entryId)  // §7.5: accessedAt 更新（リサーフェシングの基盤）
         }
-        // AutoLinker 構築（バックグラウンド）
+        // ★wt44: AutoLinker は AutoLinkerProvider の共有キャッシュから取得
+        //（旧: 画面を開くたびに5000件読込→Trie再構築。Wiki画面と件数上限も不一致だった）
         viewModelScope.launch {
-            val allEntries = entryDao.observeAll(limit = 5000, offset = 0).first()
-            _autoLinker.value = AutoLinker.build(allEntries)
+            _autoLinker.value = try { autoLinkerProvider.get() } catch (_: Exception) { null }
         }
     }
 

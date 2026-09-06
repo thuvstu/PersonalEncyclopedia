@@ -75,6 +75,41 @@ interface EntryDao {
     @Query("SELECT COUNT(*) FROM entry WHERE deletedAt IS NULL")
     fun observeCount(): Flow<Int>
 
+    /** ★wt44: 自動リンク索引の鮮度判定用。件数と最終更新時刻が変わっていなければ再構築不要 */
+    @Query("SELECT COUNT(*) || '-' || IFNULL(MAX(updatedAt), 0) FROM entry WHERE deletedAt IS NULL")
+    suspend fun linkerFingerprint(): String
+
+    /** ★wt44: 自動リンク索引の構築用(タイトルは全件必要。本文は読まない) */
+    @Query("SELECT id, title FROM entry WHERE deletedAt IS NULL")
+    suspend fun getAllTitles(): List<EntryTitle>
+
+    /**
+     * ★wt46: 自動リンクの表記揺れ用に、タイトル以外の表層形を (id, 表層形) の射影で返す。
+     * 定義の読み・人物の正式名/別名JSON・組織の正式名称・場所名・出来事名。
+     * 人物の `aliasesJson` はJSON配列文字列のまま返し、`AutoLinkerProvider` 側で分解する。
+     * 空文字・タイトルと同一の値はここでは除外しない(Provider/AutoLinker側で捨てる)。
+     */
+    @Query("""
+        SELECT e.id AS id, d.reading AS title FROM entry e INNER JOIN entry_definition d ON d.entryId = e.id
+            WHERE e.deletedAt IS NULL AND d.reading IS NOT NULL AND d.reading != ''
+        UNION ALL
+        SELECT e.id, p.fullName FROM entry e INNER JOIN entry_person p ON p.entryId = e.id
+            WHERE e.deletedAt IS NULL AND p.fullName != ''
+        UNION ALL
+        SELECT e.id, p.aliasesJson FROM entry e INNER JOIN entry_person p ON p.entryId = e.id
+            WHERE e.deletedAt IS NULL AND p.aliasesJson != '[]'
+        UNION ALL
+        SELECT e.id, o.officialName FROM entry e INNER JOIN entry_org o ON o.entryId = e.id
+            WHERE e.deletedAt IS NULL AND o.officialName != ''
+        UNION ALL
+        SELECT e.id, pl.placeName FROM entry e INNER JOIN entry_place pl ON pl.entryId = e.id
+            WHERE e.deletedAt IS NULL AND pl.placeName != ''
+        UNION ALL
+        SELECT e.id, ev.eventName FROM entry e INNER JOIN entry_event ev ON ev.entryId = e.id
+            WHERE e.deletedAt IS NULL AND ev.eventName != ''
+    """)
+    suspend fun getAllAliasForms(): List<EntryTitle>
+
     @Query("SELECT COUNT(*) FROM entry WHERE deletedAt IS NULL AND type = :type")
     fun observeCountByType(type: String): Flow<Int>
 
@@ -119,3 +154,6 @@ WHERE deletedAt IS NULL GROUP BY type ORDER BY cnt DESC
 }
 
 data class TypeCount(val type: String, val cnt: Int)
+
+/** ★wt44: 自動リンク索引用の軽量射影 */
+data class EntryTitle(val id: String, val title: String)

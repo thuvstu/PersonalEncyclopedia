@@ -2,7 +2,6 @@ package com.thuvstu.personalencyclopedia.db
 
 import com.thuvstu.personalencyclopedia.db.dao.*
 import com.thuvstu.personalencyclopedia.db.entity.*
-import kotlinx.coroutines.flow.first
 import java.util.UUID
 
 /**
@@ -10,7 +9,7 @@ import java.util.UUID
  * 本番DemoDataとは別に、初回起動時の空DBに「使い始めやすい」核を作る。
  * 体系: 各定義は【定義→体系的位置→例】の3層で記述し、前提(prerequisite)/関連/対比の接続でカリキュラムを編む。Wikiがハブ、クイズが定着を担う。
  * - 合計 125件の定義 + 思考6 + クイズ30 + Wiki6 + 接続20（★#U1: 実測125件に訂正）
- * - 本投入は sqlite-vec 検証完了後に段階的に行うが、カリキュラム設計とデータは先に確定する
+ * - ★wt45: 投入は `seedAppend`(タイトル一致で冪等)。第2弾 `InitialData2` が13型・型付き接続を足す
  */
 object InitialData {
 
@@ -220,36 +219,57 @@ object InitialData {
         Triple("比較優位", "為替レート", "related"), Triple("外部性", "公共財", "related"),
     )
 
-    suspend fun seedIfEmpty(
+    data class Result(val added: Int, val skipped: Int)
+
+    /**
+     * ★wt45: 冪等な追記。旧 `seedIfEmpty` は entry が1件でもあると何もせず、Dashboard の
+     * 「追記（重複を避けて追加）」という文言と矛盾していた(mismatch §4.4)。
+     * 定義は term、思考はタイトル、クイズは設問文、Wiki はタイトルで存在確認し、無いものだけ足す。
+     * 接続は既存エントリー(第1弾投入済み・ユーザー作成)にも張る。
+     */
+    suspend fun seedAppend(
         entryDao: EntryDao, thoughtDao: EntryThoughtDao, definitionDao: EntryDefinitionDao,
         topicDao: TopicDao? = null, quizDao: QuizDao? = null, connectionDao: ConnectionDao? = null, wikiDao: WikiArticleDao? = null
-    ) {
-        val count = entryDao.observeCount().first()
-        if (count > 0) return
+    ): Result {
         val now = System.currentTimeMillis()
-        extraTopics.forEach { topicDao?.insert(it) }
+        var added = 0
+        var skipped = 0
+        (DemoData.topics + extraTopics).forEach { topicDao?.insert(it) }   // IGNORE 挿入。DemoData が走らなかったDBでも topic FK を満たす
         val idMap = mutableMapOf<String, String>()
         for (d in definitions) {
+            val existing = entryDao.findByTitle(d.term)
+            if (existing != null) { idMap[d.term] = existing.id; skipped++; continue }
             val id = UUID.randomUUID().toString()
             idMap[d.term] = id
             entryDao.insert(EntryEntity(id = id, type = "definition", title = d.term, createdAt = now, updatedAt = now, accessedAt = now))
             definitionDao.insert(EntryDefinitionEntity(entryId = id, term = d.term, reading = d.reading, definition = d.definition, field = d.field))
+            try { topicDao?.linkEntryTopic(EntryTopicEntity(entryId = id, topicId = d.topicId)) } catch (_: Exception) {}
+            added++
         }
         for (t in thoughts) {
+            val existing = entryDao.findByTitle(t.title)
+            if (existing != null) { idMap[t.title] = existing.id; skipped++; continue }
             val id = UUID.randomUUID().toString()
             idMap[t.title] = id
             entryDao.insert(EntryEntity(id = id, type = "thought", title = t.title, content = t.content, createdAt = now, updatedAt = now, accessedAt = now))
             thoughtDao.insert(EntryThoughtEntity(entryId = id))
+            added++
         }
-        for (q in quizzes) {
+        if (quizDao != null) for (q in quizzes) {
+            if (quizDao.countByQuestion(q.question) > 0) continue
             val choicesJson = "[" + q.choices.joinToString(",") { "\"$it\"" } + "]"
-            quizDao?.insertQuiz(QuizBankEntity(question = q.question, answer = q.answer, choicesJson = choicesJson, explanation = q.explanation, quizType = q.quizType, generationMethod = "initial"))
+            quizDao.insertQuiz(QuizBankEntity(question = q.question, answer = q.answer, choicesJson = choicesJson, explanation = q.explanation, quizType = q.quizType, generationMethod = "initial"))
         }
-        for (w in wikis) wikiDao?.upsert(w)
+        if (wikiDao != null) for (w in wikis) {
+            if (wikiDao.findByTitle(w.title) == null) wikiDao.upsert(w)
+        }
         for ((a, b, rel) in connections) {
             val aId = idMap[a] ?: continue; val bId = idMap[b] ?: continue
+            if (aId == bId) continue
             val ca = if (aId < bId) aId else bId; val cb = if (aId < bId) bId else aId
+            // 第1弾の種別(prerequisite/contrast)は connection_type_def に無い独自値。IGNORE 挿入＋一意索引で重複は弾かれる
             try { connectionDao?.insert(ConnectionEntity(entryAId = aId, entryBId = bId, relationType = rel, strength = 0.7f, isAuto = false, isDirected = false, canonicalA = ca, canonicalB = cb)) } catch (_: Exception) {}
         }
+        return Result(added, skipped)
     }
 }

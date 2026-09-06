@@ -52,6 +52,9 @@ fun ImportScreen(
     val bookmarkLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
         it?.let { viewModel.importBookmarkHtml(it) }
     }
+    val documentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
+        it?.let { viewModel.importDocument(it) }   // ★wt43
+    }
     var showObsidianDialog by remember { mutableStateOf(false) }
     var obsidianTitle by remember { mutableStateOf("") }
     var obsidianContent by remember { mutableStateOf("") }
@@ -92,16 +95,23 @@ fun ImportScreen(
             ImportRow("📝 Markdown（メモ）", "H1/H2 見出しごとに1エントリー") {
                 mdLauncher.launch(arrayOf("text/markdown", "text/plain", "*/*"))
             }
-            ImportRow("🧾 JSON（エクスポートと対称）", "DB管理の出力を再取り込み") {
+            ImportRow("🧾 JSON（エクスポートと完全対称）", "ID・時刻・タグ・全13型の拡張を復元。同IDはスキップ") {
                 jsonLauncher.launch(arrayOf("application/json", "*/*"))
             }
             ImportRow("🔗 URLリスト", "1行1URL。既存URLはスキップ") {
                 urlListLauncher.launch(arrayOf("text/plain", "text/csv", "*/*"))
             }
+            ImportRow("📄 PDF / DOCX", "端末内に保管し本文を抽出して検索対象に。PDFはアプリ内で閲覧") {
+                documentLauncher.launch(arrayOf(
+                    "application/pdf",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "*/*"
+                ))
+            }
             ImportRow("🔖 bookmark.html", "ブラウザのエクスポート。フォルダ・登録日時を復元（本文取得なし高速登録）") {
                 bookmarkLauncher.launch(arrayOf("text/html", "*/*"))
             }
-            ImportRow("📁 フォルダ一括（SAF）", "フォルダ内のmd/txt/csv/json/htmlを拡張子で振り分け（Drive API不使用）") {
+            ImportRow("📁 フォルダ一括（SAF）", "フォルダ内のmd/txt/csv/json/html/pdf/docxを拡張子で振り分け（Drive API不使用）") {
                 folderLauncher.launch(null)
             }
 

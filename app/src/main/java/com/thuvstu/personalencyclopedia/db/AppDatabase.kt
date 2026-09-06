@@ -50,6 +50,8 @@ import com.thuvstu.personalencyclopedia.db.entity.*
         WhiteboardNodeEntity::class,
         WhiteboardSectionEntity::class,
         WikiArticleEntity::class,
+        // v11 — ★P3-1: 白板エッジ（接続線）
+        WhiteboardEdgeEntity::class,
         // v7 — 和暦マスタ (GAP-5)
         EraMasterEntity::class,
         // v8 — カスタムフィールド (§5.8.3)
@@ -64,7 +66,7 @@ import com.thuvstu.personalencyclopedia.db.entity.*
         SrsCurrentView::class,
         QuizMasteryView::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

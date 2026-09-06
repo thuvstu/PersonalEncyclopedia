@@ -9,15 +9,16 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * G2 (GAP-2/6) + walkthrough4 Round1 + v15.0 + ★#D1: v1→v10 の全マイグレーションチェーンを検証する。
+ * G2 (GAP-2/6) + walkthrough4 Round1 + v15.0 + ★#D1 + ★P3-1: v1→v11 の全マイグレーションチェーンを検証する。
  * - Round C2で復帰させたスキーマJSON(app/schemas)を使って起点DBを作成
  * - Round Eで追加した MIGRATION_6_7 (era_master) が含まれる
  * - walkthrough4で追加した MIGRATION_7_8 (entry_custom_field / repetitionCount / answeredWithinMs) が含まれる
  * - v15.0で追加した MIGRATION_8_9 (task / task_time_log / entry_history / saved_query) が含まれる
  * - PERF-2で追加した MIGRATION_9_10 (index_progress_events_entityId) が含まれる（★#D1）
+ * - ★P3-1で追加した MIGRATION_10_11 (whiteboard_edge) が含まれる
  * - 注意: runMigrationsAndValidate の version は「終了バージョン」。
  * - 注意: app/schemas/ に 3,4,5.json が無いため中間バージョンの単段検証はできない。
- *   v1→v10フルチェーンとv9→v10単段で代替する。
+ *   v1→v11フルチェーンとv9→v10・v10→v11の単段で代替する。
  */
 @RunWith(AndroidJUnit4::class)
 class MigrationTest {
@@ -40,8 +41,39 @@ class MigrationTest {
         MIGRATION_6_7,
         MIGRATION_7_8,
         MIGRATION_8_9,
-        MIGRATION_9_10
+        MIGRATION_9_10,
+        MIGRATION_10_11
     )
+
+    @Test
+    fun migrate10To11_addsWhiteboardEdgeTable() {
+        // v10 スキーマ(10.json)でDBを作成し、ボード＋ノード2枚を投入
+        helper.createDatabase(testDb, 10).use { db ->
+            db.execSQL("INSERT INTO whiteboard (id, title, summary, createdAt, updatedAt) VALUES ('b1', 'v10ボード', null, 1, 1)")
+            db.execSQL("INSERT INTO whiteboard_node (id, boardId, entryId, noteId, sectionId, x, y, width, height, zIndex, createdAt) VALUES ('n1', 'b1', null, null, null, 0, 0, 240, 120, 0, 1)")
+            db.execSQL("INSERT INTO whiteboard_node (id, boardId, entryId, noteId, sectionId, x, y, width, height, zIndex, createdAt) VALUES ('n2', 'b1', null, null, null, 300, 0, 240, 120, 0, 1)")
+        }
+
+        // v10→v11 を適用し、11.json と構造が一致することを検証
+        helper.runMigrationsAndValidate(testDb, 11, true, MIGRATION_10_11).use { db ->
+            val nodeCount = db.query("SELECT COUNT(*) FROM whiteboard_node WHERE boardId = 'b1'").use { c ->
+                c.moveToFirst(); c.getInt(0)
+            }
+            assertEquals("v10のwhiteboard_nodeが保持されていること", 2, nodeCount)
+
+            // 新テーブルへ書込できること（索引付き）
+            db.execSQL("INSERT INTO whiteboard_edge (id, boardId, sourceNodeId, targetNodeId, label, colorHex, createdAt) VALUES ('e1', 'b1', 'n1', 'n2', '関連', null, 2)")
+            val edgeCount = db.query("SELECT COUNT(*) FROM whiteboard_edge WHERE boardId = 'b1'").use { c ->
+                c.moveToFirst(); c.getInt(0)
+            }
+            assertEquals("whiteboard_edgeに書込できること", 1, edgeCount)
+
+            val indexCount = db.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name IN ('index_whiteboard_edge_boardId','index_whiteboard_edge_sourceNodeId','index_whiteboard_edge_targetNodeId')"
+            ).use { c -> c.moveToFirst(); c.getInt(0) }
+            assertEquals("whiteboard_edgeの索引3本が存在すること", 3, indexCount)
+        }
+    }
 
     @Test
     fun migrate9To10_addsProgressEventsEntityIdIndex() {
@@ -70,7 +102,7 @@ class MigrationTest {
     }
 
     @Test
-    fun migrate1To10_fullChainPreservesData() {
+    fun migrate1To11_fullChainPreservesData() {
         // 1. v1 スキーマ(1.json)でDBを作成し、Phase-0データを投入
         helper.createDatabase(testDb, 1).use { db ->
             db.execSQL(
@@ -86,8 +118,8 @@ class MigrationTest {
             db.execSQL("INSERT INTO entry_tag (entryId, tagId) VALUES ('e1', 't1')")
         }
 
-        // 2. v1→v10 の全マイグレーションを適用し、v10スキーマ(10.json)と構造が一致することを検証
-        helper.runMigrationsAndValidate(testDb, 10, true, *allMigrations).use { db ->
+        // 2. v1→v11 の全マイグレーションを適用し、v11スキーマ(11.json)と構造が一致することを検証
+        helper.runMigrationsAndValidate(testDb, 11, true, *allMigrations).use { db ->
             // Phase-0データが保持されている
             val entryCount = db.query("SELECT COUNT(*) FROM entry WHERE id = 'e1'").use { c ->
                 c.moveToFirst(); c.getInt(0)

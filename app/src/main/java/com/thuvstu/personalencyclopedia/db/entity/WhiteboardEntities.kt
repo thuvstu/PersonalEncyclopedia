@@ -66,3 +66,23 @@ data class WhiteboardSectionEntity(
     val zIndex: Int = -1,
     val createdAt: Long = System.currentTimeMillis()
 )
+
+/**
+ * ★P3-1: ノード間の接続線（Heptabaseの"edge"）。v11で追加。
+ * ボード固有の「見た目の線」であり、承認制の `connection` テーブルとは独立
+ * （エッジを張っても connection には自動書込しない = AGENTS.md 骨格を維持）。
+ * 参考: GachiPKM `whiteboard_edges`(sourceNodeId/targetNodeId/label)。向きは持たない。
+ */
+@Entity(
+    tableName = "whiteboard_edge",
+    indices = [Index("boardId"), Index("sourceNodeId"), Index("targetNodeId")]
+)
+data class WhiteboardEdgeEntity(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val boardId: String,
+    val sourceNodeId: String,
+    val targetNodeId: String,
+    val label: String? = null,
+    val colorHex: String? = null,
+    val createdAt: Long = System.currentTimeMillis()
+)
