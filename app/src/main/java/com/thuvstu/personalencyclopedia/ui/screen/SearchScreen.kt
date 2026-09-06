@@ -9,12 +9,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.thuvstu.personalencyclopedia.brain.search.SearchMode
+import com.thuvstu.personalencyclopedia.brain.search.SearchRefiner
 import com.thuvstu.personalencyclopedia.ui.component.EmptyState
 import com.thuvstu.personalencyclopedia.ui.component.EntryCard
 import com.thuvstu.personalencyclopedia.viewmodel.SearchViewModel
@@ -32,6 +35,11 @@ fun SearchScreen(
     val typeFilter by viewModel.typeFilter.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
+    // ★mismatch §3.4: 並べ替え・期間・お気に入り・タグ条件
+    val criteria by viewModel.criteria.collectAsState()
+    val candidateCount by viewModel.candidateCount.collectAsState()
+    val allTags by viewModel.allTags.collectAsState()
+    var showRefine by remember { mutableStateOf(false) }
 
     // ★追加: タグ/分野タップからの初期クエリを反映
     LaunchedEffect(initialQuery) {
@@ -60,6 +68,16 @@ fun SearchScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+                    }
+                },
+                actions = {
+                    // 絞り込みパネルの開閉。条件が既定以外なら強調
+                    IconButton(onClick = { showRefine = !showRefine }) {
+                        Icon(
+                            Icons.Default.Tune, contentDescription = "並べ替え・絞り込み",
+                            tint = if (!criteria.isDefault || showRefine) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             )
@@ -110,12 +128,71 @@ fun SearchScreen(
                     )
                 }
             }
+            // ★mismatch §3.4: 並べ替え・期間・お気に入り・タグ(AND)。条件はメモリ上で即時反映(再検索なし)
+            if (showRefine) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    Text("並べ替え", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        SearchRefiner.SortKey.entries.forEach { key ->
+                            FilterChip(
+                                selected = criteria.sort == key,
+                                onClick = { viewModel.setSort(key) },
+                                label = { Text(key.label, style = MaterialTheme.typography.labelSmall) }
+                            )
+                        }
+                    }
+                    Text("期間(更新日)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        SearchRefiner.Period.entries.forEach { p ->
+                            FilterChip(
+                                selected = criteria.period == p,
+                                onClick = { viewModel.setPeriod(p) },
+                                label = { Text(p.label, style = MaterialTheme.typography.labelSmall) }
+                            )
+                        }
+                        FilterChip(
+                            selected = criteria.favoritesOnly,
+                            onClick = { viewModel.setFavoritesOnly(!criteria.favoritesOnly) },
+                            leadingIcon = { Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(14.dp)) },
+                            label = { Text("お気に入りのみ", style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                    if (allTags.isNotEmpty()) {
+                        Text("タグ(すべて含む)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            allTags.forEach { t ->
+                                FilterChip(
+                                    selected = t.name in criteria.tags,
+                                    onClick = { viewModel.toggleTag(t.name) },
+                                    label = { Text("#${t.name}", style = MaterialTheme.typography.labelSmall) }
+                                )
+                            }
+                        }
+                    }
+                    if (!criteria.isDefault) {
+                        TextButton(onClick = { viewModel.clearCriteria() }, contentPadding = PaddingValues(horizontal = 4.dp)) {
+                            Text("条件をクリア", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+            }
             if (isSearching) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
-            if (results.isNotEmpty() && !isSearching) {
+            if (candidateCount > 0 && !isSearching) {
+                // 候補は関連度上位100件。条件で絞られた場合は「候補N件中M件」と正直に出す
                 Text(
-                    "${results.size}件ヒット",
+                    if (results.size == candidateCount) "${results.size}件ヒット"
+                    else "候補${candidateCount}件中 ${results.size}件（条件適用）",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
@@ -130,8 +207,10 @@ fun SearchScreen(
                         EmptyState(
                             emoji = "🔍",
                             title = if (query.isBlank()) "キーワードを入力してください"
+                            else if (candidateCount > 0) "条件に一致する結果がありません"
                             else "「$query」に一致する結果がありません",
-                            subtitle = if (searchMode == SearchMode.SEMANTIC)
+                            subtitle = if (candidateCount > 0) "候補${candidateCount}件が条件で除外されました。条件をクリアしてください"
+                            else if (searchMode == SearchMode.SEMANTIC)
                                 "意味検索にはGemini APIキーの設定が必要です（設定画面）"
                             else null
                         )
@@ -141,7 +220,7 @@ fun SearchScreen(
                     EntryCard(
                         entry = entry,
                         onClick = { onNavigateToEntry(entry.id) },
-                        onFavoriteClick = {}
+                        onFavoriteClick = { viewModel.toggleFavorite(entry.id) }   // 従来は空クロージャだった
                     )
                 }
             }
