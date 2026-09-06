@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">Personal-Encyclopedia</string>
+    <string name="share_to_encyclopedia">百科事典に保存</string>
+    <string name="process_text_label">百科事典に保存</string>
+    <string name="shortcut_new_memo">新規メモ</string>
+    <string name="shortcut_new_memo_long">新規メモを作成</string>
+    <string name="shortcut_search">検索</string>
+    <string name="shortcut_search_long">百科事典を検索</string>
+    <string name="shortcut_review">今日の復習</string>
+    <string name="shortcut_review_long">今日の復習を始める</string>
 </resources>

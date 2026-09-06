@@ -168,9 +168,7 @@ fun EntryDetailScreen(
                                     id?.let { previewEntryId = it }
                                 }
                             },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 60.dp, max = 400.dp)
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }

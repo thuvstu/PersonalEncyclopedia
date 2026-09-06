@@ -1,8 +1,10 @@
 package com.thuvstu.personalencyclopedia
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
-import android.widget.Toast
+import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -20,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.thuvstu.personalencyclopedia.importer.ImportPipeline
 import com.thuvstu.personalencyclopedia.importer.WebScraper
 import com.thuvstu.personalencyclopedia.repository.EntryRepository
 import com.thuvstu.personalencyclopedia.repository.ThoughtDraft
@@ -29,6 +32,8 @@ import com.thuvstu.personalencyclopedia.ui.theme.EncyclopediaTheme
 import com.thuvstu.personalencyclopedia.util.timed
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import java.io.File
+import java.util.UUID
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -36,40 +41,145 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var webScraper: WebScraper
     @Inject lateinit var entryRepo: EntryRepository
     @Inject lateinit var incomingNavigation: IncomingNavigation
+    @Inject lateinit var importPipeline: ImportPipeline
+
+    companion object {
+        const val EXTRA_SHORTCUT = "shortcut"
+        const val SHORTCUT_NEW_MEMO = "new_memo"
+        const val SHORTCUT_SEARCH = "search"
+        const val SHORTCUT_REVIEW = "review"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent { EncyclopediaTheme { MainContent(incomingNavigation) } }
-        handleIncomingIntent(intent)
+        if (savedInstanceState == null) handleIncomingIntent(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         handleIncomingIntent(intent)
     }
 
     private fun handleIncomingIntent(intent: Intent?) {
-        if (intent?.action != Intent.ACTION_SEND) return
-        val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
-        lifecycleScope.launch {
-            val url = Regex("""https?://\S+""").find(text)?.value
-            Toast.makeText(
-                this@MainActivity,
-                if (url != null) "Webページを取り込み中…" else "メモとして保存中…",
-                Toast.LENGTH_SHORT
-            ).show()
-            val scrapedId = url?.let {
-                webScraper.scrapeAndSave(it).entryId.takeIf { id -> id.isNotEmpty() }
-            }
-            // ★修正1: 同名メモの重複排除
-            val fallbackTitle = text.take(80).ifBlank { "共有メモ" }
-            val id = scrapedId
-                ?: entryRepo.findByTitle(fallbackTitle)?.id
-                ?: entryRepo.createThought(ThoughtDraft(title = fallbackTitle, content = text))
-            // ★修正2: val再代入エラー → メソッド呼び出しに変更
-            incomingNavigation.setPendingEntry(id)
+        if (intent == null) return
+        when (intent.getStringExtra(EXTRA_SHORTCUT)) {
+            SHORTCUT_NEW_MEMO -> { incomingNavigation.setPendingRoute(Routes.THOUGHT_NEW); return }
+            SHORTCUT_SEARCH -> { incomingNavigation.setPendingRoute(Routes.SEARCH); return }
+            SHORTCUT_REVIEW -> { incomingNavigation.setPendingRoute(Routes.SRS_REVIEW); return }
         }
+        when (intent.action) {
+            Intent.ACTION_PROCESS_TEXT -> {
+                val text = intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()?.trim()
+                if (text.isNullOrBlank()) return
+                lifecycleScope.launch { saveSharedText(text) }
+            }
+            Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE -> {
+                lifecycleScope.launch { handleShare(intent) }
+            }
+        }
+    }
+
+    private suspend fun handleShare(intent: Intent) {
+        val type = intent.type ?: ""
+        val uris = streamUris(intent)
+        val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+        val saved = mutableListOf<String>()
+        if (uris.isNotEmpty()) {
+            for (uri in uris) {
+                val mime = contentResolver.getType(uri) ?: type
+                val id = when {
+                    mime.startsWith("image/") -> importSharedImage(uri)
+                    mime == "application/pdf" || mime.contains("pdf") -> importSharedPdf(uri)
+                    else -> null
+                }
+                if (id != null) saved += id
+            }
+        }
+        if (saved.isEmpty() && !text.isNullOrBlank()) {
+            saveSharedText(text)?.let { saved += it }
+            incomingNavigation.setNotice(
+                if (saved.isEmpty()) "保存できませんでした" else "保存しました",
+                saved.lastOrNull()
+            )
+            return
+        }
+        val message = when {
+            saved.isEmpty() -> "保存できませんでした"
+            saved.size == 1 -> "保存しました"
+            else -> "${saved.size}件保存しました"
+        }
+        incomingNavigation.setNotice(message, saved.lastOrNull())
+    }
+
+    /** URL ならスクレイプ、そうでなければメモ。成功時は entryId。 */
+    private suspend fun saveSharedText(text: String): String? {
+        val url = Regex("""https?://\S+""").find(text)?.value
+        val scrapedId = url?.let {
+            webScraper.scrapeAndSave(it).entryId.takeIf { id -> id.isNotEmpty() }
+        }
+        val fallbackTitle = text.take(80).ifBlank { "共有メモ" }
+        return scrapedId
+            ?: entryRepo.findByTitle(fallbackTitle)?.id
+            ?: entryRepo.createThought(ThoughtDraft(title = fallbackTitle, content = text))
+    }
+
+    private suspend fun importSharedImage(uri: Uri): String? {
+        return try {
+            val mime = contentResolver.getType(uri) ?: "image/jpeg"
+            val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime) ?: "jpg"
+            val name = queryDisplayName(uri)
+                ?.substringBeforeLast('.')
+                ?.ifBlank { null }
+                ?: "共有画像"
+            val dirId = UUID.randomUUID().toString()
+            val dir = File(filesDir, "blobs/media/$dirId").apply { mkdirs() }
+            val file = File(dir, "shared.$ext")
+            contentResolver.openInputStream(uri)?.use { input ->
+                file.outputStream().use { input.copyTo(it) }
+            } ?: run { dir.deleteRecursively(); return null }
+            entryRepo.createMedia(
+                title = name.take(80),
+                content = null,
+                mediaType = "image",
+                blobPath = file.absolutePath,
+                mimeType = mime
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private suspend fun importSharedPdf(uri: Uri): String? {
+        val name = queryDisplayName(uri) ?: "document.pdf"
+        val result = importPipeline.importDocumentFile(uri, name)
+        if (result.successCount == 0 && result.skipCount == 0) return null
+        val title = name.substringBeforeLast('.').ifBlank { name }
+        return entryRepo.findByTitle(title)?.id
+    }
+
+    private fun queryDisplayName(uri: Uri): String? = try {
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        } ?: uri.lastPathSegment?.substringAfterLast('/')
+    } catch (_: Exception) {
+        uri.lastPathSegment
+    }
+
+    @Suppress("DEPRECATION")
+    private fun streamUris(intent: Intent): List<Uri> {
+        intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+            ?.filterNotNull()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { return it }
+        intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)?.let { return listOf(it) }
+        val cd = intent.clipData
+        if (cd != null && cd.itemCount > 0) {
+            return (0 until cd.itemCount).mapNotNull { cd.getItemAt(it).uri }
+        }
+        return emptyList()
     }
 }
 
@@ -78,14 +188,36 @@ private fun MainContent(incomingNavigation: IncomingNavigation) {
     val navController = rememberNavController()
     val currentEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentEntry?.destination?.route
+    val snackbarHostState = remember { SnackbarHostState() }
 
     val pending by incomingNavigation.pendingEntryId.collectAsState()
     LaunchedEffect(pending) {
         pending?.let { id ->
             timed("Nav", "entry:$id") { navController.navigate("entry/$id") }
-            // ★修正2: val再代入エラー → clear() に変更
             incomingNavigation.clear()
         }
+    }
+
+    val pendingRoute by incomingNavigation.pendingRoute.collectAsState()
+    LaunchedEffect(pendingRoute) {
+        pendingRoute?.let { route ->
+            timed("Nav", "shortcut:$route") { navController.navigate(route) }
+            incomingNavigation.clearRoute()
+        }
+    }
+
+    val notice by incomingNavigation.pendingNotice.collectAsState()
+    LaunchedEffect(notice) {
+        val n = notice ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = n.message,
+            actionLabel = if (n.entryId != null) "開く" else null,
+            duration = SnackbarDuration.Long
+        )
+        if (result == SnackbarResult.ActionPerformed) {
+            n.entryId?.let { incomingNavigation.setPendingEntry(it) }
+        }
+        incomingNavigation.clearNotice()
     }
 
     val topLevelRoutes = listOf(
@@ -95,6 +227,7 @@ private fun MainContent(incomingNavigation: IncomingNavigation) {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
