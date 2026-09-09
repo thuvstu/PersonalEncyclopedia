@@ -8,6 +8,7 @@ import com.thuvstu.personalencyclopedia.db.dao.EmbeddingDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryDefinitionDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryExtensionDao
+import com.thuvstu.personalencyclopedia.db.dao.EntryStickyNoteDao
 import com.thuvstu.personalencyclopedia.db.dao.SearchDocumentDao
 import com.thuvstu.personalencyclopedia.db.entity.EmbeddingEntity
 import com.thuvstu.personalencyclopedia.db.entity.EmbeddingJobEntity
@@ -31,6 +32,7 @@ class EmbeddingQueue @Inject constructor(
     private val extensionDao: EntryExtensionDao,
     private val definitionDao: EntryDefinitionDao,
     private val searchDocumentDao: SearchDocumentDao,
+    private val stickyNoteDao: EntryStickyNoteDao,   // ★wt56: 付箋本文を検索文書に連結
     private val geminiClient: GeminiClient,
     private val vectorIndex: InMemoryVectorIndex
 ) {
@@ -99,7 +101,8 @@ class EmbeddingQueue @Inject constructor(
             else -> null
         }
 
-        val combinedText = EmbeddingTextBuilder.build(entry, extension)
+        val stickyTexts = stickyNoteDao.getByEntryId(entryId).map { it.text }
+        val combinedText = EmbeddingTextBuilder.build(entry, extension, stickyTexts)
         if (combinedText.isBlank()) return
 
         // ★FTS差分: 内容不変ならFTSの delete+insert をスキップする（enqueue経路の冪等化）
@@ -243,6 +246,9 @@ class EmbeddingQueue @Inject constructor(
         if (entry.deletedAt != null) return false
         val doc = searchDocumentDao.getByEntryId(entry.id) ?: return false
         if (doc.combinedText.isBlank()) return false
-        return entry.updatedAt <= doc.updatedAt
+        if (entry.updatedAt > doc.updatedAt) return false
+        // ★wt56: 付箋の追加/編集/削除後も鮮度切れとみなす（通常は即時enqueueされるが、再構築の保険）
+        val latestSticky = stickyNoteDao.latestUpdatedAt(entry.id) ?: return true
+        return latestSticky <= doc.updatedAt
     }
 }

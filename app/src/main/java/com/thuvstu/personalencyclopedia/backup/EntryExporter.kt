@@ -6,6 +6,7 @@ import com.thuvstu.personalencyclopedia.db.dao.EntryDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryDefinitionDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryExtensionDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryThoughtDao
+import com.thuvstu.personalencyclopedia.db.dao.EntryStickyNoteDao
 import com.thuvstu.personalencyclopedia.db.dao.TagDao
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -35,7 +36,8 @@ class EntryExporter @Inject constructor(
     private val extensionDao: EntryExtensionDao,
     private val definitionDao: EntryDefinitionDao,
     private val tagDao: TagDao,
-    private val thoughtDao: EntryThoughtDao
+    private val thoughtDao: EntryThoughtDao,
+    private val stickyNoteDao: EntryStickyNoteDao   // ★wt56: 付箋も可搬exportに含める
 ) {
     /**
      * エクスポート本体。呼び出し元（DatabaseManagementViewModel）は suspend コンテキスト。
@@ -81,6 +83,17 @@ class EntryExporter @Inject constructor(
                 sb.appendLine(e.content)
             }
             appendTypeDetails(sb, e)
+            // ★wt56 付箋
+            val notes = stickyNoteDao.getByEntryId(e.id)
+            if (notes.isNotEmpty()) {
+                sb.appendLine()
+                sb.appendLine("### 📝 付箋")
+                for (n in notes) {
+                    val mark = if (n.isResolved) "[x]" else "[ ]"
+                    val pin = if (n.isPinned) " 📌" else ""
+                    sb.appendLine("- $mark$pin ${n.text.replace("\n", "  \n  ")}")
+                }
+            }
             sb.appendLine()
         }
         return sb.toString()
@@ -321,6 +334,31 @@ class EntryExporter @Inject constructor(
                     else -> null
                 }
                 ext?.let { put("extension", it) }
+
+                // ★wt56 付箋（往復対称: EntryJsonCodec.decode が同じキーで復元する）
+                val notes = stickyNoteDao.getByEntryId(e.id)
+                if (notes.isNotEmpty()) {
+                    putJsonArray("stickyNotes") {
+                        notes.forEach { n ->
+                            add(buildJsonObject {
+                                put("id", n.id)
+                                put("text", n.text)
+                                put("color", n.color)
+                                put("source", n.source)
+                                n.contextId?.let { put("contextId", it) }
+                                put("isPinned", n.isPinned)
+                                put("isResolved", n.isResolved)
+                                n.resolvedAt?.let { put("resolvedAt", it) }
+                                put("sortOrder", n.sortOrder)
+                                n.promotedEntryId?.let { put("promotedEntryId", it) }
+                                n.promotedTaskId?.let { put("promotedTaskId", it) }
+                                n.promotedCandidateId?.let { put("promotedCandidateId", it) }
+                                put("createdAt", n.createdAt)
+                                put("updatedAt", n.updatedAt)
+                            })
+                        }
+                    }
+                }
             }
         })
         return Json { prettyPrint = true }

@@ -61,12 +61,14 @@ import com.thuvstu.personalencyclopedia.db.entity.*
         TaskTimeLogEntity::class,
         EntryHistoryEntity::class,
         SavedQueryEntity::class,
+        // v12 — wt56: 付箋
+        EntryStickyNoteEntity::class,
     ],
     views = [
         SrsCurrentView::class,
         QuizMasteryView::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -102,4 +104,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun taskTimeLogDao(): TaskTimeLogDao
     abstract fun entryHistoryDao(): EntryHistoryDao
     abstract fun savedQueryDao(): SavedQueryDao
+    // v12 — wt56: 付箋
+    abstract fun entryStickyNoteDao(): EntryStickyNoteDao
 }

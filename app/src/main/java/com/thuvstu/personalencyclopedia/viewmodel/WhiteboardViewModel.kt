@@ -12,6 +12,8 @@ import com.thuvstu.personalencyclopedia.db.entity.WhiteboardNodeEntity
 import com.thuvstu.personalencyclopedia.db.entity.WhiteboardNoteEntity
 import com.thuvstu.personalencyclopedia.db.entity.WhiteboardSectionEntity
 import com.thuvstu.personalencyclopedia.repository.WhiteboardRepository
+import com.thuvstu.personalencyclopedia.repository.StickyNoteRepository
+import com.thuvstu.personalencyclopedia.db.entity.EntryStickyNoteEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -23,10 +25,26 @@ class WhiteboardViewModel @Inject constructor(
     private val repo: WhiteboardRepository,
     private val whiteboardDao: WhiteboardDao,
     private val entryDao: EntryDao,
+    private val stickyRepo: StickyNoteRepository,   // ★wt56: 白板上のカードにも付箋
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val boardId: String? = savedStateHandle["boardId"]
+
+    // ── ★wt56 付箋 ──
+    val sticky = StickyNoteController(stickyRepo, viewModelScope, StickyNoteRepository.SOURCE_WHITEBOARD)
+
+    /** entryId → 付箋（ノードのバッジ＆シート表示用。1本の購読で全ノードをまかなう） */
+    val stickyNotesByEntry: StateFlow<Map<String, List<EntryStickyNoteEntity>>> =
+        stickyRepo.observeAllGrouped()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    /** 付箋シートを開いているentryId */
+    private val _stickySheetEntryId = MutableStateFlow<String?>(null)
+    val stickySheetEntryId: StateFlow<String?> = _stickySheetEntryId
+    fun openStickySheet(entryId: String) { _stickySheetEntryId.value = entryId }
+    fun closeStickySheet() { _stickySheetEntryId.value = null }
+    fun currentBoardId(): String? = boardId
 
     val boards: StateFlow<List<WhiteboardEntity>> = repo.observeBoards()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

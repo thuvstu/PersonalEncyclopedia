@@ -196,7 +196,7 @@
 
 - **ファイル**: `encyclopedia.db` / **バージョン 11** / `exportSchema = true`
 - **44エンティティ(実表43 + FTS4仮想表1) + 2ビュー** (`AppDatabase.kt:9-68`、`10.json` で tableName 44・viewName 2を確認)。旧記述の「40表」は walkthrough14時点の古い値。
-- **マイグレーション**: 10本 (`MIGRATION_1_2`〜`MIGRATION_10_11`)、**破壊的変更ゼロ**の「新規テーブル追加 + ビュー再作成 + カラム追加 + 索引追加」のみ。`DROP TABLE/DELETE/列削除` は全10本にゼロ。`fallbackToDestructiveMigration()` は**未設定**(データ破壊フォールバックなし)。
+- **マイグレーション**: 11本 (`MIGRATION_1_2`〜`MIGRATION_11_12`)、**破壊的変更ゼロ**の「新規テーブル追加 + ビュー再作成 + カラム追加 + 索引追加」のみ。`DROP TABLE/DELETE/列削除` は全10本にゼロ。`fallbackToDestructiveMigration()` は**未設定**(データ破壊フォールバックなし)。
 - **ドライバ**: `BundledSQLiteDriver().withSqliteVec()` (sqlite-bundled 2.5.2 + room-vec-common 0.1.0-alpha01, walkthrough13/14)で `vec_distance_cosine` をロード。`EmbeddingDao.vecSearch()` がDB側近傍検索を担い、`HybridSearchEngine` はDB優先→InMemoryフォールバック。**walkthrough47で全Migrationと `RoomDatabase.Callback.onOpen` を `SQLiteConnection` 形式へ変換** (`setDriver` 併用時は旧 `SupportSQLiteDatabase` 形式が `NotImplementedError` で実機起動死するため)。**wt49で残っていた `openHelper.writable/readableDatabase` 8箇所（Backup / SQL Explorer）を `useWriterConnection` / `useReaderConnection` へ置換。**
 - **DAOは24本** (`AppDatabase.kt` の abstract fun 24件、`DatabaseModule.kt:55-82` の @Provides 24件が1:1対応)。旧記述の「20個」は誤り。
 - **スキーマ欠落**: `app/schemas/` は `1,2,6,7,8,9,10.json` のみ。**`3,4,5.json` が無い**ため中間状態をJSONで裏付けできず、`MigrationTest` は v1→v9チェーン+単段4種のみで **v10(`index_progress_events_entityId`)未検証**(§13 #2)。
@@ -252,6 +252,7 @@
 |---|---|
 | `era_master` | **和暦マスタ** (天文1532〜令和2019+、56件シード)。和暦→西暦変換に使用。投入元は `Migration6to7.kt:23-84` |
 | `entry_custom_field` | カスタムフィールド (v8, §5.8.3) |
+| `entry_sticky_note` | **付箋** (v12, walkthrough56)。任意のentryに貼る一言メモ(1:N)。`text/color/source(どこで貼ったか)/contextId/isPinned/isResolved/sortOrder/promotedEntryId・TaskId・CandidateId`。`entry_thought`(思考型の1:1拡張)とは別物。本文は `search_document` に連結されFTS/意味検索対象。一覧カード=折りたたみタブ、詳細=常時展開、SRS/クイズ/白板/Wiki=貼付UI。昇格(思考/タスク/接続候補)は `StickyNoteRepository` に一元化。**wt58 増殖**: 付箋→定義カード化(+extends直接接続)、本文の `[[未作成タイトル]]` からスタブ定義カード作成+related接続、`[[リンク]]`チップで既存カードへ遷移、カード検索ピッカーで直接接続/複製、エディタ `[[` 補完。ユーザー明示操作なので `connection` へ直接書く(自動候補の承認制は不変)。詳細 `docs/walkthrough58.md` |
 
 #### v9 (walkthrough7・v15拡張)
 | テーブル | 役割 |
@@ -302,6 +303,7 @@
 - `InitialData2.seedAppend()` (wt45): 第2弾。**13型すべて**のサンプル(人物12・組織6・場所6・出来事7・書籍9・Web7・動画4・文書3・メディア3・いいね3・AI会話2・定義15・思考3)＋型付き接続67本(authored_by/located_at/occurred_at/exemplifies/extends/references/related)＋タグ16＋Wiki5＋クイズ16(fill_blank含む)＋白板「人物ハブ」(エッジラベル=接続種別)。タイトル/設問文/Wikiタイトル/ボード名で冪等。
 - **wt50 自動投入**: Phase A で DemoData の直後、`entry ≤ 20` かつセンチネル「枕草子」未存在なら両弾を自動実行。Demo 規模の初回/既存デモDBに基本データが入る。自作が多いDBは触らず、Dashboard の「追記」ボタンが残る(冪等)。検索文書は続く Phase B の `rebuildAllSearchDocuments` が拾う。
 - `InitialDataMath.seedAppend()` (wt51): **高校数学・新課程の全単元**。定義215（数I 57 / A 37 / II 47 / B 21 / III 31 / C 22）+ クイズ60(mcq) + Wiki6科目マップ + 接続192 + 白板「高校数学 — 新課程」。トピックは `数学` の子に I/A/II/B/III/C。既存ハブ20件（二次関数等）はタイトル再利用。センチネル「正弦定理」、**件数ゲートなし**（基本データ済みDBにも次起動で一度だけ足す）。行列は新課程必履修外のため既存ハブ以外は増やさない。
+- `InitialDataHighSchool.seedAppend()` (wt57): **高校全教科14科目**（古文/漢文/英語/化学/物理/生物/地理/歴史/政治/経済/倫理/情報/法/ノンジャンル）。データは教科別 `db/Hs*.kt` の `SubjectSeed`、投入は共通エンジン。定義約912 + クイズ250 + 接続856 + 教科別Wiki14 + 白板14。既存タイトル（InitialData の古典/英語/地歴/法/経済ハブ等）は再利用し Conn のみ。センチネル「係り結びの法則」、件数ゲートなし。詳細 `docs/walkthrough57.md`。**wt58 強化**: `db/HsStickies.kt` の種付箋157枚（`source=seed`・[[リンク]]付き・4色）＋科目横断ブリッジ接続106本＋本文言及の自動 `references`（`seedAutoReferences`, 1カード≤6）。本体投入済みDBには `seedEnrichmentOnly` が seed 付箋ゼロのとき一度だけ追記。`linkQuizzesToCards` が initial クイズを設問文の最長一致タイトルで `sourceEntryId` に紐づけ（毎起動・差分）。詳細画面の接続セクションは前提/次/対比/関連/参照の5群・向き付き（`ConnectionWithEntry.isSource`）。
 - **wt52 `seedFormatQuizzes`**: 穴埋め8・並べ替え6・複数穴埋め6・記述4（計24）。設問文で冪等。Phase A が数学シード済みDBにも毎回追記を試みる。
 - **wt53 `flexibleQuizzes`**: 正誤6・複数選択4・対応づけ4（計14）を同じ冪等ループに追加。形式の単一ソースは `QuizFormats`。
 
@@ -469,7 +471,7 @@ RubricJudge (LLM judge or heuristic)
 
 | エンジン | 役割・アルゴリズム |
 |---|---|
-| `ConnectionEngine` | 9種の関係タイプ定義シード。自動候補: コサイン ≥0.88・top10・`related`固定で提案。既定は無効(`autoConnectEnabled=false`)。手動接続は正準形で重複回避、`approveCandidate` で正式化 |
+| `ConnectionEngine` | 11種の関係タイプ定義シード（wt58で `prerequisite`(前提/次に進む,有向)・`contrast`(対比) を追加。シードが多用していたのに未登録だった）。自動候補: コサイン ≥0.88・top10・`related`固定で提案。既定は無効(`autoConnectEnabled=false`)。手動接続は正準形で重複回避、`approveCandidate` で正式化 |
 | `ResurfacingEngine` | **再浮上**: 30〜180日未訪問×半減期(webpage 60日/liked 45/ai_conv 30/thought 120/definition・person・org・place 365/book・event 180/video・document・media 90…)×指数減衰+リニア減衰の合成スコア(`decay*0.6+recency*0.4`)。**整理提案**: 180日以上未訪問のwebpage/liked/ai_conv。削除・muteはしない |
 | `CoachingEngine` | `explainMistake`(誤答解説・200字以内) / `analyzeWeakPoints`(トピック別に誤答20件から弱点分析, 150字以内)。全件 `ai_explanations` キャッシュ。AI不可時は固定文案4種 |
 | `TagSuggestionEngine` | Levenshtein 正規化類似度 ≥0.75 の既存タグを提案(表記揺れ統合) |
@@ -532,11 +534,16 @@ v15 (§8.10) で追加。`brain/task/TaskEngine.kt` のみ。**Repository層な�
 | GET | `/api/graph?entryId&depth` | **再帰CTEのBFSグラフ探索** | Bearer |
 | GET | `/api/progress/heatmap?days` | 日別アクティビティ | Bearer |
 | GET | `/api/plugins` | プラグイン一覧 | Bearer |
+| GET/POST | `/api/entries/{id}/sticky-notes` | **付箋**一覧/追加 (wt56) | Bearer |
+| PATCH/DELETE | `/api/sticky-notes/{noteId}` | 付箋の本文/色/ピン/解決の部分更新・削除 | Bearer |
+| GET | `/api/sticky-notes/recent?limit` | 未解決付箋の新着 | Bearer |
+| GET | `/api/sticky-notes/{noteId}/links` | 付箋内 [[リンク]] の解決 (wt58) | Bearer |
+| POST | `/api/sticky-notes/{noteId}/promote/definition` · `/create-from-link` · `/connect` | 付箋→定義カード化 / リンクからスタブ作成 / 直接接続 (wt58) | Bearer |
 
 DTO は `ApiDtos.kt` に14種。`QuizAttemptRequest.answeredWithinMs` が速度ボーナスに対応(`ApiDtos.kt:67-71`)。
 
 ### 7.4 ServerDependencies — 「依存の束」パターン
-DAO 8個 + `QuizGraderService` を束ねて各ルートへ渡す (`ServerDependencies.kt:18-29`)。**★最適化R6** により採点ロジックがアプリと完全共通。旧記述の「9つのDAO」は誤り(8DAO+1サービスが正)。
+DAO 8個 + `QuizGraderService` + `StickyNoteRepository`(wt56) を束ねて各ルートへ渡す (`ServerDependencies.kt:18-29`)。**★最適化R6** により採点ロジックがアプリと完全共通。旧記述の「9つのDAO」は誤り(8DAO+1サービスが正)。
 
 ---
 
@@ -646,7 +653,7 @@ Android設定画面: トークン表示 → PC ConnectionBar: ホスト/ポー�
 ### 10.1 起動フロー
 ```
 AndroidManifest: Application=PersonalEncyclopediaApp, MainActivity=singleTop
-PersonalEncyclopediaApp.onCreate ─┬─ Phase A: APIキー暗号化移行 / seedTypeDefs / ビルトインプラグイン / DemoData(自動・空時のみ) / SeedData / InitialData+InitialData2(wt50: entry≤20 かつ「枕草子」未存在) / InitialDataMath(wt51: 「正弦定理」未存在なら件数無制限) / seedFormatQuizzes(wt52: 設問冪等)
+PersonalEncyclopediaApp.onCreate ─┬─ Phase A: APIキー暗号化移行 / seedTypeDefs / ビルトインプラグイン / DemoData(自動・空時のみ) / SeedData / InitialData+InitialData2(wt50: entry≤20 かつ「枕草子」未存在) / InitialDataMath(wt51: 「正弦定理」未存在なら件数無制限) / InitialDataHighSchool(wt57: 「係り結びの法則」未存在なら14教科一括) / seedFormatQuizzes(wt52: 設問冪等)
                                   ├─ Phase B: vectorIndex.load / recoverJobs / startWorker / rebuildAllSearchDocuments
                                   └─ Phase C: BackupWorker / PortableExportWorker スケジュール
 MainActivity.onCreate → handleIncomingIntent (共有 / PROCESS_TEXT / ショートカット)
@@ -974,3 +981,7 @@ PersonalEncyclopedia/
 ---
 
 *本ドキュメントは `DESIGN.md` として、コミット `7abdd27` (walkthrough24) 時点の全ソースコード・ビルド定義・ドキュメントを実コード検証により改訂しました。旧版の数値(40表/7本マイグ/20DAO/28ルート/21VM/9テスト等)は本改訂で訂正済み。未解決の一次リストは§13、着手順は§15を参照。*
+
+
+## wt59 深掘り講義規格（DEEP SPEC）
+シード本文の到達水準を「大学講義〜ゼミ」に引き上げる書式規格。定義カードは【定義】【数値】【体系】【論争】【最新】【誤解】【接続】の 7 節固定、Wiki は講義本文、クイズ 5 種（典型/間違えやすい/難問/目新しい/おもしろ）、種付箋は「調べ直す問い」。正本は `db/HsDeepAncient.kt` 冒頭 KDoc、経緯は `docs/walkthrough59.md`。第1弾は文明前夜〜メソポタミア 36 カード。以後の全教科の書き直しはこの規格に従う。

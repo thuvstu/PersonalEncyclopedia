@@ -121,6 +121,16 @@ interface QuizDao {
     @Query("SELECT COUNT(*) FROM quiz_bank WHERE question = :question")
     suspend fun countByQuestion(question: String): Int
 
+    // ★wt58: シードクイズをカードに紐づける（カード詳細から「このカードのクイズ」を辿れるように）
+    @Query("SELECT * FROM quiz_bank WHERE sourceEntryId IS NULL AND generationMethod = 'initial'")
+    suspend fun getUnlinkedInitial(): List<QuizBankEntity>
+
+    @Query("UPDATE quiz_bank SET sourceEntryId = :entryId WHERE id = :id")
+    suspend fun setSourceEntry(id: String, entryId: String)
+
+    @Query("SELECT * FROM quiz_bank WHERE sourceEntryId = :entryId AND isActive = 1 ORDER BY createdAt ASC")
+    fun observeBySourceEntry(entryId: String): Flow<List<QuizBankEntity>>
+
     @Query("""
         SELECT COUNT(*) FROM quiz_attempts
         WHERE attemptedAt >= :startOfDay

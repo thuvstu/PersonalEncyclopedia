@@ -6,9 +6,11 @@ import com.thuvstu.personalencyclopedia.brain.search.SearchMode
 import com.thuvstu.personalencyclopedia.brain.search.SearchRefiner
 import com.thuvstu.personalencyclopedia.db.dao.TagDao
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
+import com.thuvstu.personalencyclopedia.db.entity.EntryStickyNoteEntity
 import com.thuvstu.personalencyclopedia.db.entity.TagEntity
 import com.thuvstu.personalencyclopedia.repository.EntryRepository
 import com.thuvstu.personalencyclopedia.repository.SearchRepository
+import com.thuvstu.personalencyclopedia.repository.StickyNoteRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -28,7 +30,8 @@ import javax.inject.Inject
 class SearchViewModel @Inject constructor(
     private val searchRepo: SearchRepository,
     private val entryRepo: EntryRepository,
-    private val tagDao: TagDao
+    private val tagDao: TagDao,
+    private val stickyRepo: StickyNoteRepository    // ★wt56: 付箋
 ) : ViewModel() {
 
     companion object {
@@ -74,6 +77,15 @@ class SearchViewModel @Inject constructor(
 
     private var searchJob: Job? = null
 
+    // ★wt56: init より前に宣言（performSearch から触るため）
+    /** 「付箋ありのみ」絞り込み */
+    private val _onlyWithStickyNotes = MutableStateFlow(false)
+    /**
+     * 付箋本文にヒットしたエントリ（FTSに載る前の即時経路）。
+     * エンジン結果と重複しないものだけを results の末尾に足す。
+     */
+    private val _stickyHits = MutableStateFlow<List<EntryEntity>>(emptyList())
+
     init {
         viewModelScope.launch {
             _query
@@ -82,6 +94,7 @@ class SearchViewModel @Inject constructor(
                     if (q.isBlank()) {
                         _candidates.value = emptyList()
                         _tagsByEntry.value = emptyMap()
+                        _stickyHits.value = emptyList()
                         return@collectLatest
                     }
                     performSearch(q)
@@ -94,6 +107,7 @@ class SearchViewModel @Inject constructor(
         try {
             val entries = searchRepo.search(q, _searchMode.value, limit = CANDIDATE_LIMIT)
             _candidates.value = entries
+            refreshStickyHits(q)   // ★wt56: 付箋本文ヒット
             _tagsByEntry.value = if (entries.isEmpty()) emptyMap() else
                 tagDao.getTagsForEntries(entries.map { it.id })
                     .groupBy({ it.entryId }, { it.tagName })
@@ -137,5 +151,27 @@ class SearchViewModel @Inject constructor(
             entryRepo.toggleFavorite(id)
             _candidates.update { list -> list.map { if (it.id == id) it.copy(isFavorite = !it.isFavorite) else it } }
         }
+    }
+
+    // ── ★wt56 付箋 ──
+    val sticky = StickyNoteController(stickyRepo, viewModelScope, StickyNoteRepository.SOURCE_LIST)
+
+    val stickyNotesByEntry: StateFlow<Map<String, List<EntryStickyNoteEntity>>> =
+        stickyRepo.observeAllGrouped()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    val onlyWithStickyNotes: StateFlow<Boolean> = _onlyWithStickyNotes
+    fun toggleOnlyWithStickyNotes() { _onlyWithStickyNotes.update { !it } }
+
+    val resultsWithSticky: StateFlow<List<EntryEntity>> =
+        combine(results, _stickyHits, _onlyWithStickyNotes, stickyNotesByEntry) { base, hits, only, byEntry ->
+            val merged = base + hits.filter { h -> base.none { it.id == h.id } }
+            if (only) merged.filter { byEntry.containsKey(it.id) } else merged
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private suspend fun refreshStickyHits(q: String) {
+        _stickyHits.value = if (q.isBlank()) emptyList()
+        else stickyRepo.searchNotes(q, limit = 30).map { it.second }.distinctBy { it.id }
+    }
     }
 }

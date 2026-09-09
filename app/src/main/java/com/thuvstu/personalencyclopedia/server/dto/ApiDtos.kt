@@ -1,6 +1,7 @@
 package com.thuvstu.personalencyclopedia.server.dto
 
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
+import com.thuvstu.personalencyclopedia.db.entity.EntryStickyNoteEntity
 import com.thuvstu.personalencyclopedia.db.entity.QuizBankEntity
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -91,7 +92,8 @@ data class ConnectionResponse(
     val isDirected: Boolean,
     val otherEntryId: String,
     val otherEntryTitle: String,
-    val otherEntryType: String
+    val otherEntryType: String,
+    val isSource: Boolean = true
 )
 
 // ── /api/entries POST ──
@@ -147,6 +149,51 @@ data class PluginResponse(
     val isActive: Boolean
 )
 
+// ── /api/entries/{id}/sticky-notes  (★wt56 付箋) ──
+
+@Serializable
+data class StickyNoteResponse(
+    val id: String,
+    val entryId: String,
+    val text: String,
+    val color: String,
+    val source: String,
+    val isPinned: Boolean,
+    val isResolved: Boolean,
+    val promotedEntryId: String?,
+    val promotedTaskId: String?,
+    val promotedCandidateId: String?,
+    val createdAt: Long,
+    val updatedAt: Long
+)
+
+@Serializable
+data class CreateStickyNoteRequest(
+    val text: String,
+    val color: String = "yellow"
+)
+
+@Serializable
+data class UpdateStickyNoteRequest(
+    val text: String? = null,
+    val color: String? = null,
+    val isPinned: Boolean? = null,
+    val isResolved: Boolean? = null
+)
+
+// ★wt58 付箋 増殖
+@Serializable
+data class StickyLinkResponse(val title: String, val entryId: String?)
+
+@Serializable
+data class StickyLinkRequest(val title: String, val relationType: String? = null)
+
+@Serializable
+data class StickyConnectRequest(val targetEntryId: String? = null, val relationType: String? = null)
+
+@Serializable
+data class StickyGrowResponse(val entryId: String? = null, val connectionId: String? = null)
+
 // ── Mappers ──
 
 private val json = Json { ignoreUnknownKeys = true }
@@ -162,6 +209,13 @@ fun EntryEntity.toResponse() = EntryResponse(
     isMuted = isMuted,
     createdAt = createdAt,
     updatedAt = updatedAt
+)
+
+fun EntryStickyNoteEntity.toResponse() = StickyNoteResponse(
+    id = id, entryId = entryId, text = text, color = color, source = source,
+    isPinned = isPinned, isResolved = isResolved,
+    promotedEntryId = promotedEntryId, promotedTaskId = promotedTaskId, promotedCandidateId = promotedCandidateId,
+    createdAt = createdAt, updatedAt = updatedAt
 )
 
 fun QuizBankEntity.toQuizResponse(): QuizResponse {

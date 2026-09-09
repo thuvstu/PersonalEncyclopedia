@@ -268,7 +268,8 @@ fun AppNavGraph(navController: NavHostController) {
                     }
                 },
                 onNavigateToEntry = { id -> timed("Nav", "entry:$id") { navController.navigate("entry/$id") } },
-                onNavigateToWiki = { id -> timed("Nav", "wiki:$id") { navController.navigate("wiki/$id") } }
+                onNavigateToWiki = { id -> timed("Nav", "wiki:$id") { navController.navigate("wiki/$id") } },
+                onNavigateToQuiz = { navController.navigate(Routes.QUIZ) }
             )
         }
     }

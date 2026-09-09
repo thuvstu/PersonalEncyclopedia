@@ -9,6 +9,7 @@ import com.thuvstu.personalencyclopedia.db.dao.PluginDao
 import com.thuvstu.personalencyclopedia.db.dao.ProgressEventDao
 import com.thuvstu.personalencyclopedia.db.dao.QuizDao
 import com.thuvstu.personalencyclopedia.db.dao.SrsReviewDao
+import com.thuvstu.personalencyclopedia.repository.StickyNoteRepository
 import javax.inject.Inject
 
 /**
@@ -25,5 +26,7 @@ class ServerDependencies @Inject constructor(
     val progressEventDao: ProgressEventDao,
     val pluginDao: PluginDao,
     // ★最適化R6: 採点はアプリと共通のQuizGraderServiceに統一
-    val quizGraderService: QuizGraderService
+    val quizGraderService: QuizGraderService,
+    // ★wt56: 付箋（PCからも貼る/解決する）
+    val stickyNoteRepo: StickyNoteRepository
 )

@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.thuvstu.personalencyclopedia.ui.component.StickyNoteQuickAdd
 import com.thuvstu.personalencyclopedia.ui.theme.entryTypeColor
 import com.thuvstu.personalencyclopedia.viewmodel.SrsViewModel
 import androidx.compose.ui.graphics.Color
@@ -24,6 +25,7 @@ fun SrsReviewScreen(
     viewModel: SrsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val currentStickyNotes by viewModel.currentStickyNotes.collectAsState()   // ★wt56
 
     Scaffold(
         topBar = {
@@ -147,7 +149,14 @@ fun SrsReviewScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        // ★wt56: 復習中に浮かんだことをそのカードへ付箋（採点の流れを止めない最小UI）
+                        StickyNoteQuickAdd(
+                            onAdd = { text, color -> viewModel.sticky.add(card.entryId, text, color) },
+                            existingCount = currentStickyNotes.size,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         // Action buttons
                         if (!state.isAnswerRevealed) {

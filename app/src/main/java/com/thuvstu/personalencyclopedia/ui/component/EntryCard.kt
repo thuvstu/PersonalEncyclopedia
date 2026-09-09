@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
+import com.thuvstu.personalencyclopedia.db.entity.EntryStickyNoteEntity
 import com.thuvstu.personalencyclopedia.ui.theme.entryTypeColor
 import com.thuvstu.personalencyclopedia.ui.theme.entryTypeIcon
 import com.thuvstu.personalencyclopedia.ui.theme.entryTypeLabelJa
@@ -26,12 +27,13 @@ fun EntryCard(
     entry: EntryEntity,
     onClick: () -> Unit,
     onFavoriteClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // wt56: 付箋。null の場合は付箋タブ自体を表示しない（既存呼び出しの互換維持）
+    stickyNotes: List<EntryStickyNoteEntity>? = null,
+    stickyNoteActions: StickyNoteActions? = null
 ) {
     Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -39,7 +41,10 @@ fun EntryCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(12.dp),
             verticalAlignment = Alignment.Top
         ) {
             // Type badge
@@ -102,6 +107,14 @@ fun EntryCard(
                     modifier = Modifier.size(20.dp)
                 )
             }
+        }
+        // wt56: 付箋タブ（タップで展開）。カード本体のタップ(onClick)とは独立
+        if (stickyNotes != null && stickyNoteActions != null) {
+            StickyNoteTab(
+                notes = stickyNotes,
+                actions = stickyNoteActions,
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
+            )
         }
     }
 }

@@ -107,4 +107,61 @@ class EntryJsonCodecTest {
         assertEquals(999L, d.entry.createdAt)
         assertTrue(d.tags.isEmpty())
     }
+
+    // ── ★wt56 付箋 ──
+
+    @Test
+    fun stickyNotes_roundtrip_keepIdPreservesEverything() {
+        val d = decode(
+            """
+            {"id":"e1","type":"thought","title":"t","stickyNotes":[
+              {"id":"s1","text":"あとで確認","color":"pink","source":"quiz","contextId":"q1",
+               "isPinned":true,"isResolved":true,"resolvedAt":50,"sortOrder":2,
+               "promotedEntryId":"pe","promotedTaskId":"pt","promotedCandidateId":"pc",
+               "createdAt":10,"updatedAt":20},
+              {"text":"色なし"}
+            ]}
+            """.trimIndent()
+        )!!
+        assertEquals(2, d.stickyNotes.size)
+        val a = d.stickyNotes[0]
+        assertEquals("s1", a.id)
+        assertEquals("e1", a.entryId)
+        assertEquals("pink", a.color)
+        assertEquals("quiz", a.source)
+        assertEquals("q1", a.contextId)
+        assertTrue(a.isPinned); assertTrue(a.isResolved)
+        assertEquals(50L, a.resolvedAt)
+        assertEquals(2, a.sortOrder)
+        assertEquals("pe", a.promotedEntryId); assertEquals("pt", a.promotedTaskId); assertEquals("pc", a.promotedCandidateId)
+        assertEquals(10L, a.createdAt); assertEquals(20L, a.updatedAt)
+        val b = d.stickyNotes[1]
+        assertEquals("yellow", b.color)
+        assertEquals("detail", b.source)
+        assertEquals(999L, b.createdAt)
+    }
+
+    @Test
+    fun stickyNotes_newId_reassignsEntryIdAndDropsPromotions() {
+        val d = decode(
+            """{"id":"e1","type":"thought","title":"t","stickyNotes":[{"id":"s1","text":"x","promotedEntryId":"pe"}]}""",
+            keepId = false
+        )!!
+        val n = d.stickyNotes.single()
+        assertEquals("NEW", n.entryId)
+        assertTrue(n.id != "s1")
+        assertNull(n.promotedEntryId)
+    }
+
+    @Test
+    fun stickyNotes_blankOrBrokenItemsAreSkipped_notFatal() {
+        val d = decode("""{"type":"thought","title":"t","stickyNotes":[{"text":"  "},"garbage",{"text":"ok"}]}""")!!
+        assertEquals(listOf("ok"), d.stickyNotes.map { it.text })
+    }
+
+    @Test
+    fun legacyExportWithoutStickyNotesKey_yieldsEmptyList() {
+        val d = decode("""{"type":"thought","title":"t"}""")!!
+        assertTrue(d.stickyNotes.isEmpty())
+    }
 }

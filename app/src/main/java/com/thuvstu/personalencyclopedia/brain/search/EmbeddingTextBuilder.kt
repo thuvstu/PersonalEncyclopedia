@@ -8,7 +8,11 @@ import com.thuvstu.personalencyclopedia.db.entity.*
  */
 object EmbeddingTextBuilder {
 
-    fun build(entry: EntryEntity, extension: Any?): String {
+    /**
+     * @param stickyNotes ★wt56: 付箋本文。末尾に連結して FTS/意味検索の対象にする。
+     *   2000字上限は本文が優先されるよう、付箋は合計400字までに切り詰める。
+     */
+    fun build(entry: EntryEntity, extension: Any?, stickyNotes: List<String> = emptyList()): String {
         val parts = mutableListOf<String>()
         parts.add(entry.title)
         entry.content?.let { if (it.isNotBlank()) parts.add(it) }
@@ -61,6 +65,10 @@ object EmbeddingTextBuilder {
             }
         }
 
-        return parts.filter { it.isNotBlank() }.joinToString("\n").take(2000)
+        val body = parts.filter { it.isNotBlank() }.joinToString("\n").take(1600)
+        val notes = stickyNotes.map { it.trim() }.filter { it.isNotEmpty() }
+        if (notes.isEmpty()) return body.take(2000)
+        val noteText = notes.joinToString("\n").take(400)
+        return (body + "\n" + noteText).take(2000)
     }
 }

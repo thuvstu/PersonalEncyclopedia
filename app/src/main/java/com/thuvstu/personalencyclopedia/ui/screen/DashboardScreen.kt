@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -21,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -30,6 +32,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.thuvstu.personalencyclopedia.ui.component.EmptyState
 import com.thuvstu.personalencyclopedia.ui.component.EntryCard
+import com.thuvstu.personalencyclopedia.ui.component.rememberStickyNoteBinding
+import com.thuvstu.personalencyclopedia.ui.component.stickyNoteColor
 import com.thuvstu.personalencyclopedia.ui.theme.entryTypeColor
 import com.thuvstu.personalencyclopedia.ui.theme.entryTypeIcon
 import com.thuvstu.personalencyclopedia.ui.theme.entryTypeLabelJa
@@ -61,6 +65,12 @@ fun DashboardScreen(
     var urlInput by remember { mutableStateOf("") }
     val context = LocalContext.current
     val recentEntries by viewModel.recentEntries.collectAsState()
+    val stickyNotesByEntry by viewModel.stickyNotesByEntry.collectAsState()   // ★wt56
+    val recentStickyNotes by viewModel.recentStickyNotes.collectAsState()
+    val unresolvedStickyCount by viewModel.unresolvedStickyCount.collectAsState()
+    val stickyEntryTitles by viewModel.stickyEntryTitles.collectAsState()
+    val stickySnackbar = remember { SnackbarHostState() }
+    val stickyBinding = rememberStickyNoteBinding(viewModel.sticky, stickySnackbar, onOpenEntry = onNavigateToEntry)
     val totalCount by viewModel.totalCount.collectAsState()
     val dueCount by viewModel.dueCount.collectAsState()
     val quizCount by viewModel.quizCount.collectAsState()
@@ -96,6 +106,7 @@ fun DashboardScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(stickySnackbar) },
         topBar = {
             TopAppBar(
                 title = {
@@ -405,6 +416,64 @@ fun DashboardScreen(
                 }
             }
 
+            // ── ★wt56: 最近の付箋（未解決） ──
+            if (recentStickyNotes.isNotEmpty()) {
+                item(key = "section-sticky") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 20.dp, end = 16.dp, top = 20.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "📝 最近の付箋",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            "未解決 ${unresolvedStickyCount}枚",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+                item(key = "sticky-feed") {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(recentStickyNotes, key = { it.id }) { note ->
+                            Column(
+                                modifier = Modifier
+                                    .width(180.dp)
+                                    .clip(RoundedCornerShape(topStart = 2.dp, topEnd = 10.dp, bottomStart = 10.dp, bottomEnd = 2.dp))
+                                    .background(stickyNoteColor(note.color))
+                                    .clickable { onNavigateToEntry(note.entryId) }
+                                    .padding(10.dp)
+                            ) {
+                                Text(
+                                    note.text,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFF3A3A2A),
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    "→ " + (stickyEntryTitles[note.entryId] ?: "…"),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFF3A3A2A).copy(alpha = 0.65f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // ── セクションヘッダー: 最近追加 ──
             item(key = "section-recent") {
                 Row(
@@ -443,7 +512,9 @@ fun DashboardScreen(
                         entry = entry,
                         onClick = { onNavigateToEntry(entry.id) },
                         onFavoriteClick = { viewModel.toggleFavorite(entry.id) },
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        stickyNotes = stickyNotesByEntry[entry.id].orEmpty(),
+                        stickyNoteActions = stickyBinding.forEntry(entry.id)
                     )
                 }
             }

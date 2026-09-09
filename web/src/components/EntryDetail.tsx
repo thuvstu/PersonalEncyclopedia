@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { api, type Entry } from "../api/client";
 import { Markdown } from "../lib/markdown";
 import { typeInfo } from "../lib/entryTypes";
+import { StickyNotes } from "./StickyNotes";
+import { ConnectionGroups } from "./ConnectionGroups";
 
 interface Props {
   entryId: string | null;
@@ -68,6 +70,8 @@ export function EntryDetail({ entryId, onNavigate }: Props) {
         </div>
       )}
       <Markdown source={entry.content ?? ""} onNavigate={onNavigate} />
+      <ConnectionGroups entryId={entry.id} onNavigate={onNavigate} />
+      <StickyNotes entryId={entry.id} onNavigate={onNavigate} />
     </div>
   );
 }

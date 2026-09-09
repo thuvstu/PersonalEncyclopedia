@@ -9,13 +9,14 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * G2 (GAP-2/6) + walkthrough4 Round1 + v15.0 + ★#D1 + ★P3-1: v1→v11 の全マイグレーションチェーンを検証する。
+ * G2 (GAP-2/6) + walkthrough4 Round1 + v15.0 + ★#D1 + ★P3-1: v1→v12 の全マイグレーションチェーンを検証する。
  * - Round C2で復帰させたスキーマJSON(app/schemas)を使って起点DBを作成
  * - Round Eで追加した MIGRATION_6_7 (era_master) が含まれる
  * - walkthrough4で追加した MIGRATION_7_8 (entry_custom_field / repetitionCount / answeredWithinMs) が含まれる
  * - v15.0で追加した MIGRATION_8_9 (task / task_time_log / entry_history / saved_query) が含まれる
  * - PERF-2で追加した MIGRATION_9_10 (index_progress_events_entityId) が含まれる（★#D1）
  * - ★P3-1で追加した MIGRATION_10_11 (whiteboard_edge) が含まれる
+ * - wt56で追加した MIGRATION_11_12 (entry_sticky_note 付箋) が含まれる
  * - 注意: runMigrationsAndValidate の version は「終了バージョン」。
  * - 注意: app/schemas/ に 3,4,5.json が無いため中間バージョンの単段検証はできない。
  *   v1→v11フルチェーンとv9→v10・v10→v11の単段で代替する。
@@ -42,8 +43,36 @@ class MigrationTest {
         MIGRATION_7_8,
         MIGRATION_8_9,
         MIGRATION_9_10,
-        MIGRATION_10_11
+        MIGRATION_10_11,
+        MIGRATION_11_12
     )
+
+    @Test
+    fun migrate11To12_addsStickyNoteTable() {
+        // v11 スキーマ(11.json)でDBを作成し、entryを1件投入
+        helper.createDatabase(testDb, 11).use { db ->
+            db.execSQL("INSERT INTO entry (id, type, title, content, summary, sourceUrl, lang, isFavorite, isMuted, accessedAt, deletedAt, metadataJson, createdAt, updatedAt) VALUES ('e1', 'thought', 'v11エントリ', null, null, null, 'ja', 0, 0, null, null, '{}', 1, 1)")
+        }
+
+        // v11→v12 を適用し、12.json と構造が一致することを検証
+        helper.runMigrationsAndValidate(testDb, 12, true, MIGRATION_11_12).use { db ->
+            val entryCount = db.query("SELECT COUNT(*) FROM entry WHERE id = 'e1'").use { c ->
+                c.moveToFirst(); c.getInt(0)
+            }
+            assertEquals("v11のentryが保持されていること", 1, entryCount)
+
+            db.execSQL("INSERT INTO entry_sticky_note (id, entryId, text, color, source, contextId, isPinned, isResolved, resolvedAt, sortOrder, promotedEntryId, promotedTaskId, promotedCandidateId, createdAt, updatedAt) VALUES ('s1', 'e1', 'あとで確認', 'yellow', 'detail', null, 0, 0, null, 0, null, null, null, 2, 2)")
+            val noteCount = db.query("SELECT COUNT(*) FROM entry_sticky_note WHERE entryId = 'e1'").use { c ->
+                c.moveToFirst(); c.getInt(0)
+            }
+            assertEquals("entry_sticky_noteに書込できること", 1, noteCount)
+
+            val indexCount = db.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name IN ('index_entry_sticky_note_entryId','index_entry_sticky_note_createdAt','index_entry_sticky_note_isResolved')"
+            ).use { c -> c.moveToFirst(); c.getInt(0) }
+            assertEquals("entry_sticky_noteの索引3本が存在すること", 3, indexCount)
+        }
+    }
 
     @Test
     fun migrate10To11_addsWhiteboardEdgeTable() {
@@ -102,7 +131,7 @@ class MigrationTest {
     }
 
     @Test
-    fun migrate1To11_fullChainPreservesData() {
+    fun migrate1To12_fullChainPreservesData() {
         // 1. v1 スキーマ(1.json)でDBを作成し、Phase-0データを投入
         helper.createDatabase(testDb, 1).use { db ->
             db.execSQL(
@@ -118,8 +147,8 @@ class MigrationTest {
             db.execSQL("INSERT INTO entry_tag (entryId, tagId) VALUES ('e1', 't1')")
         }
 
-        // 2. v1→v11 の全マイグレーションを適用し、v11スキーマ(11.json)と構造が一致することを検証
-        helper.runMigrationsAndValidate(testDb, 11, true, *allMigrations).use { db ->
+        // 2. v1→v12 の全マイグレーションを適用し、v12スキーマ(12.json)と構造が一致することを検証
+        helper.runMigrationsAndValidate(testDb, 12, true, *allMigrations).use { db ->
             // Phase-0データが保持されている
             val entryCount = db.query("SELECT COUNT(*) FROM entry WHERE id = 'e1'").use { c ->
                 c.moveToFirst(); c.getInt(0)

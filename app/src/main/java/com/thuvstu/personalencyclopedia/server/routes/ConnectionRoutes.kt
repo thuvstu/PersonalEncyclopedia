@@ -31,7 +31,8 @@ fun Route.connectionRoutes(deps: ServerDependencies) {
                     isDirected = c.isDirected,
                     otherEntryId = c.otherEntryId,
                     otherEntryTitle = c.otherEntryTitle,
-                    otherEntryType = c.otherEntryType
+                    otherEntryType = c.otherEntryType,
+                    isSource = c.isSource
                 )
             })
         }

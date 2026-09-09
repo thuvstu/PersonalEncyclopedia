@@ -35,6 +35,9 @@ class ConnectionEngine @Inject constructor(
                 ConnectionTypeDefEntity("published_by", "発行者", isDirected = true, inverseLabelJa = "発行物"),
                 ConnectionTypeDefEntity("located_at", "所在地", isDirected = true, inverseLabelJa = "所在先"),
                 ConnectionTypeDefEntity("occurred_at", "発生地", isDirected = true, inverseLabelJa = "発生元"),
+                // ★wt58: 学習順序と対比。シード(数学/高校全教科)が大量に使っているのに未登録で生ラベル表示だった
+                ConnectionTypeDefEntity("prerequisite", "前提", isDirected = true, inverseLabelJa = "次に進む"),
+                ConnectionTypeDefEntity("contrast", "対比", isDirected = false),
             )
         )
     }
