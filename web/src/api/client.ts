@@ -105,9 +105,13 @@ export interface Connection {
   connectionId: string;
   relationType: string;
   strength: number;
+  note?: string | null;
+  isDirected?: boolean;
   otherEntryId: string;
   otherEntryTitle: string;
   otherEntryType: string;
+  /** ★wt58: 自分が始点か（有向接続の向き表示） */
+  isSource?: boolean;
 }
 
 export interface GraphNode {
@@ -125,6 +129,21 @@ export interface Candidate {
   similarity: number;
   suggestedType: string;
   status: string;
+}
+
+export interface StickyNote {
+  id: string;
+  entryId: string;
+  text: string;
+  color: "yellow" | "pink" | "blue" | "green" | string;
+  source: string;
+  isPinned: boolean;
+  isResolved: boolean;
+  promotedEntryId: string | null;
+  promotedTaskId: string | null;
+  promotedCandidateId: string | null;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export const api = {
@@ -180,4 +199,48 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ userAnswer, answeredWithinMs, hintsRevealed }),
     }),
+  // ★wt56 付箋
+  getStickyNotes: (entryId: string) =>
+    request<StickyNote[]>(`/api/entries/${entryId}/sticky-notes`),
+  createStickyNote: (entryId: string, text: string, color = "yellow") =>
+    request<StickyNote>(`/api/entries/${entryId}/sticky-notes`, {
+      method: "POST",
+      body: JSON.stringify({ text, color }),
+    }),
+  updateStickyNote: (
+    noteId: string,
+    patch: Partial<Pick<StickyNote, "text" | "color" | "isPinned" | "isResolved">>,
+  ) =>
+    request<StickyNote>(`/api/sticky-notes/${noteId}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  deleteStickyNote: (noteId: string) =>
+    request(`/api/sticky-notes/${noteId}`, { method: "DELETE" }),
+  getRecentStickyNotes: (limit = 20) =>
+    request<StickyNote[]>(`/api/sticky-notes/recent?limit=${limit}`),
+  // ★wt58 付箋 増殖
+  getStickyLinks: (noteId: string) =>
+    request<StickyLink[]>(`/api/sticky-notes/${noteId}/links`),
+  promoteStickyToDefinition: (noteId: string) =>
+    request<StickyGrow>(`/api/sticky-notes/${noteId}/promote/definition`, { method: "POST", body: "{}" }),
+  createCardFromStickyLink: (noteId: string, title: string) =>
+    request<StickyGrow>(`/api/sticky-notes/${noteId}/create-from-link`, {
+      method: "POST",
+      body: JSON.stringify({ title }),
+    }),
+  connectSticky: (noteId: string, targetEntryId?: string) =>
+    request<StickyGrow>(`/api/sticky-notes/${noteId}/connect`, {
+      method: "POST",
+      body: JSON.stringify({ targetEntryId: targetEntryId ?? null }),
+    }),
 };
+
+export interface StickyLink {
+  title: string;
+  entryId: string | null;
+}
+export interface StickyGrow {
+  entryId: string | null;
+  connectionId: string | null;
+}

@@ -19,10 +19,14 @@ class WikiViewModel @Inject constructor(
     private val wikiRepo: WikiRepository,
     private val entryRepo: EntryRepository,
     private val autoLinkerProvider: AutoLinkerProvider,
+    private val stickyRepo: com.thuvstu.personalencyclopedia.repository.StickyNoteRepository,   // ★wt56
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     val articleId: String? = savedStateHandle["articleId"]
     val isNew: Boolean = articleId == null || articleId == "new"
+
+    // ── ★wt56 付箋: Wiki記事はentryではないので「記事と同名のentry」に貼る ──
+    val sticky = StickyNoteController(stickyRepo, viewModelScope, com.thuvstu.personalencyclopedia.repository.StickyNoteRepository.SOURCE_WIKI)
 
     val articles: StateFlow<List<WikiArticleEntity>> =
         wikiRepo.observeAll()
@@ -33,6 +37,39 @@ class WikiViewModel @Inject constructor(
     } else {
         wikiRepo.observeById(articleId!!)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }
+
+    /** 記事タイトルと同名のentry（付箋の貼り先）。無ければnull */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val linkedEntryId: StateFlow<String?> = article
+        .map { it?.title }
+        .distinctUntilChanged()
+        .mapLatest { t -> if (t.isNullOrBlank()) null else try { entryRepo.findByTitle(t)?.id } catch (_: Exception) { null } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val stickyNotes: StateFlow<List<com.thuvstu.personalencyclopedia.db.entity.EntryStickyNoteEntity>> =
+        linkedEntryId.flatMapLatest { id -> if (id == null) flowOf(emptyList()) else stickyRepo.observeForEntry(id) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * 同名entryが無い記事に付箋を貼る場合: 記事と同名の思考エントリを作ってから貼る。
+     * （記事を知識グラフに接続する入口にもなる）
+     */
+    fun addStickyCreatingEntryIfNeeded(text: String, color: String) {
+        val a = article.value ?: return
+        viewModelScope.launch {
+            val id = linkedEntryId.value
+                ?: entryRepo.findByTitle(a.title)?.id
+                ?: entryRepo.createThought(
+                    com.thuvstu.personalencyclopedia.repository.ThoughtDraft(
+                        title = a.title,
+                        content = a.summary ?: "Wiki記事「${a.title}」の付箋置き場",
+                        context = "wiki:${a.id}"
+                    )
+                )
+            stickyRepo.add(id, text, color, com.thuvstu.personalencyclopedia.repository.StickyNoteRepository.SOURCE_WIKI, contextId = a.id)
+        }
     }
 
     fun save(title: String, content: String) {

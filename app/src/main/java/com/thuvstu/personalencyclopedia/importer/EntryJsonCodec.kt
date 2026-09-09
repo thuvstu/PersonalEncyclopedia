@@ -31,7 +31,9 @@ object EntryJsonCodec {
         val place: EntryPlaceEntity? = null,
         val event: EntryEventEntity? = null,
         val liked: EntryLikedEntity? = null,
-        val aiConv: EntryAiConvEntity? = null
+        val aiConv: EntryAiConvEntity? = null,
+        /** ★wt56 付箋。entryId は復元後の id に付け替え済み */
+        val stickyNotes: List<EntryStickyNoteEntity> = emptyList()
     )
 
     /** タイトルが無い要素は復元不能として null を返す */
@@ -61,8 +63,32 @@ object EntryJsonCodec {
             (el as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { t -> t.isNotEmpty() } }
         } ?: emptyList()
 
+        // ★wt56 付箋: 旧export(キー無し)は空。1枚の破損で全体を止めない
+        val stickyNotes = (obj["stickyNotes"] as? JsonArray)?.mapNotNull { el ->
+            val o = el as? JsonObject ?: return@mapNotNull null
+            val text = o.str("text")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            EntryStickyNoteEntity(
+                id = if (keepId) (o.str("id") ?: java.util.UUID.randomUUID().toString()) else java.util.UUID.randomUUID().toString(),
+                entryId = id,
+                text = text,
+                color = o.str("color") ?: "yellow",
+                source = o.str("source") ?: "detail",
+                contextId = o.str("contextId"),
+                isPinned = o.bool("isPinned") ?: false,
+                isResolved = o.bool("isResolved") ?: false,
+                resolvedAt = o.long("resolvedAt"),
+                sortOrder = o.int("sortOrder") ?: 0,
+                // 昇格先IDは別端末では意味を持たないため keepId のときだけ引き継ぐ
+                promotedEntryId = if (keepId) o.str("promotedEntryId") else null,
+                promotedTaskId = if (keepId) o.str("promotedTaskId") else null,
+                promotedCandidateId = if (keepId) o.str("promotedCandidateId") else null,
+                createdAt = o.long("createdAt") ?: now,
+                updatedAt = o.long("updatedAt") ?: (o.long("createdAt") ?: now)
+            )
+        } ?: emptyList()
+
         val ext = obj["extension"] as? JsonObject
-        var d = Decoded(entry = entry, tags = tags)
+        var d = Decoded(entry = entry, tags = tags, stickyNotes = stickyNotes)
         when (type) {
             "thought" -> d = d.copy(
                 thought = EntryThoughtEntity(

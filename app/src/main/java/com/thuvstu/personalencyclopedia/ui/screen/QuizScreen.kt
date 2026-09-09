@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.thuvstu.personalencyclopedia.ui.component.StickyNoteQuickAdd
 import com.thuvstu.personalencyclopedia.brain.quiz.QuizFormatSupport
 import com.thuvstu.personalencyclopedia.brain.quiz.QuizFormats
 import com.thuvstu.personalencyclopedia.brain.quiz.QuizPlayKind
@@ -56,6 +57,7 @@ fun QuizScreen(
     viewModel: QuizViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val currentStickyNotes by viewModel.currentStickyNotes.collectAsState()   // ★wt56
     var answerInput by remember { mutableStateOf("") }
     var enumerateInput by remember { mutableStateOf("") }
     var showExitConfirm by remember { mutableStateOf(false) }
@@ -477,6 +479,17 @@ fun QuizScreen(
                                     )
                                 }
                             }
+                        }
+
+                        // ★wt56: 回答直後の「なぜ間違えた/次はこう覚える」を出典カードへ付箋
+                        state.quiz.sourceEntryId?.let { srcId ->
+                            Spacer(modifier = Modifier.height(12.dp))
+                            StickyNoteQuickAdd(
+                                onAdd = { text, color -> viewModel.sticky.add(srcId, text, color, contextId = state.quiz.id) },
+                                existingCount = currentStickyNotes.size,
+                                label = if (state.isCorrect == false) "💭 間違えた理由を付箋に" else "💭 思ったことを付箋に",
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(24.dp))

@@ -8,6 +8,7 @@ import com.thuvstu.personalencyclopedia.server.routes.progressRoutes
 import com.thuvstu.personalencyclopedia.server.routes.quizRoutes
 import com.thuvstu.personalencyclopedia.server.routes.searchRoutes
 import com.thuvstu.personalencyclopedia.server.routes.srsRoutes
+import com.thuvstu.personalencyclopedia.server.routes.stickyNoteRoutes
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -95,6 +96,7 @@ class LocalServer @Inject constructor(
                         graphRoutes(deps)
                         progressRoutes(deps)
                         pluginRoutes(deps)
+                        stickyNoteRoutes(deps)   // ★wt56
                     }
                 }
             }

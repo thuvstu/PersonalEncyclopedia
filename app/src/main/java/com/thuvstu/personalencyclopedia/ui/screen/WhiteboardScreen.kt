@@ -21,6 +21,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.StickyNote2
+import com.thuvstu.personalencyclopedia.ui.component.StickyNoteSection
+import com.thuvstu.personalencyclopedia.ui.component.rememberStickyNoteBinding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -156,6 +159,11 @@ fun WhiteboardBoardScreen(
     val currentBoard by viewModel.currentBoard.collectAsState()
     val entryResults by viewModel.entryResults.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
+    // ★wt56: 付箋
+    val stickyNotesByEntry by viewModel.stickyNotesByEntry.collectAsState()
+    val stickySheetEntryId by viewModel.stickySheetEntryId.collectAsState()
+    val stickySnackbar = remember { SnackbarHostState() }
+    val stickyBinding = rememberStickyNoteBinding(viewModel.sticky, stickySnackbar, onOpenEntry = onNavigateToEntry)
     // ★P3-1: エッジのラベル編集/削除ダイアログ
     var editEdge by remember { mutableStateOf<WhiteboardEdgeEntity?>(null) }
     var editEdgeLabel by remember { mutableStateOf("") }
@@ -177,6 +185,7 @@ fun WhiteboardBoardScreen(
     val livePositions = remember { mutableStateMapOf<String, Offset>() }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(stickySnackbar) },
         topBar = {
             TopAppBar(
                 title = { Text(currentBoard?.title ?: "ボード詳細") },
@@ -423,6 +432,33 @@ fun WhiteboardBoardScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 maxLines = 3
                             )
+                            // ★wt56: 付箋の先頭1枚をカード内にちら見せ（未解決優先）
+                            val nodeNotes = node.entryId?.let { stickyNotesByEntry[it] }.orEmpty()
+                            nodeNotes.firstOrNull { !it.isResolved }?.let { n ->
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "📝 " + n.text.lineSequence().first(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                        // ★wt56: 付箋バッジ（タップでシート）。entryノードのみ
+                        node.entryId?.let { eid ->
+                            val cnt = stickyNotesByEntry[eid]?.count { !it.isResolved } ?: 0
+                            IconButton(
+                                onClick = { viewModel.openStickySheet(eid) },
+                                modifier = Modifier.align(Alignment.BottomStart).size(24.dp)
+                            ) {
+                                BadgedBox(badge = { if (cnt > 0) Badge { Text("$cnt") } }) {
+                                    Icon(
+                                        Icons.Default.StickyNote2, contentDescription = "付箋",
+                                        modifier = Modifier.size(14.dp),
+                                        tint = if (cnt > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                         IconButton(
                             onClick = { viewModel.deleteNode(node.id) },
@@ -516,6 +552,26 @@ fun WhiteboardBoardScreen(
                 }
             }
         )
+    }
+
+    // ★wt56: 付箋シート（白板から離れずに読み書き）
+    stickySheetEntryId?.let { eid ->
+        ModalBottomSheet(onDismissRequest = { viewModel.closeStickySheet() }) {
+            Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+                Text(
+                    nodes.firstOrNull { it.entryId == eid }?.let { resolvedTitles[it.id] } ?: "付箋",
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2
+                )
+                Spacer(Modifier.height(8.dp))
+                StickyNoteSection(
+                    notes = stickyNotesByEntry[eid].orEmpty(),
+                    actions = stickyBinding.forEntry(eid, contextId = viewModel.currentBoardId())
+                )
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = { viewModel.closeStickySheet(); onNavigateToEntry(eid) }) { Text("カードを開く →") }
+            }
+        }
     }
 
     if (showAddDialog) {

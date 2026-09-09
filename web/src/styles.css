@@ -570,3 +570,131 @@ th {
   border-radius: 0;
   text-align: center;
 }
+
+/* ── ★wt56 付箋 ── */
+.sticky-section {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+.sticky-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.sticky-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 6px 8px 10px;
+  margin-bottom: 6px;
+  border-radius: 2px 10px 10px 2px;
+  color: #3a3a2a;
+  font-size: 13px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.sticky-note.resolved {
+  opacity: 0.55;
+}
+.sticky-note.resolved .sticky-text {
+  text-decoration: line-through;
+}
+.sticky-text {
+  flex: 1;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+.sticky-pin {
+  margin-right: 4px;
+}
+.sticky-badges {
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.7;
+  display: flex;
+  gap: 8px;
+}
+.sticky-actions {
+  display: flex;
+  gap: 2px;
+}
+.sticky-actions button,
+.sticky-color,
+.sticky-toggle,
+.sticky-save {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.7;
+}
+.sticky-actions button:hover {
+  opacity: 1;
+}
+.sticky-edit,
+.sticky-add textarea {
+  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.6);
+  color: #3a3a2a;
+  resize: vertical;
+}
+.sticky-toggle {
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+.sticky-add {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 2px 10px 10px 2px;
+}
+.sticky-add-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.sticky-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.2) !important;
+  opacity: 1;
+}
+.sticky-color.selected {
+  border: 2px solid #3a3a2a !important;
+}
+.sticky-save {
+  background: #3a3a2a;
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 4px;
+  opacity: 1;
+}
+.sticky-save:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ★wt58 付箋 増殖 */
+.sticky-links { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.sticky-link { font-size: 11px; padding: 1px 8px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.2); background: rgba(255,255,255,0.6); cursor: pointer; }
+.sticky-link.new { border-style: dashed; color: #2563eb; }
+
+/* ★wt58 接続グループ（PC） */
+.conn-section { margin-top: 16px; }
+.conn-group { margin-top: 8px; }
+.conn-group-label { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+.conn-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.conn-chip { display: inline-flex; flex-direction: column; align-items: flex-start; font-size: 12px; padding: 3px 10px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.15); background: rgba(0,0,0,0.04); cursor: pointer; max-width: 100%; }
+.conn-chip.strong { background: rgba(37,99,235,0.12); border-color: rgba(37,99,235,0.35); }
+.conn-chip.more { border-style: dashed; }
+.conn-note { font-size: 10px; opacity: 0.65; }

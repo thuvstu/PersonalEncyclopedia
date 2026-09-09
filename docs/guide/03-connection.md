@@ -56,3 +56,22 @@ PC 側では `/api/graph` を React Flow で描画する(web/src/components/Grap
 - 別名で一致したリンクは `[[正式タイトル|本文の表記]]` として描画され、表示は本文のまま・タップ先は正式タイトルの entry
 - 誤検出を減らすため、英単語の途中(`Go` in `Google`)・カタカナ語の途中(`アイ` in `アイデア`)・ひらがなの並びに埋もれた読み(`そのていしもんだいが`)では発火しない
 - 索引は entry の件数か最終更新時刻が変わったときだけ作り直す(wt44)。別名や読みを編集しても entry の `updatedAt` が動くので反映される
+
+---
+
+## 接続の読み方（wt58 再設計）
+
+詳細画面の接続セクションは関係の意味で5群に分かれる。向きは `ConnectionWithEntry.isSource` で判定する。
+
+| 群 | 関係型 | 意味 |
+|---|---|---|
+| ⬅ 前提（先に） | `prerequisite` / `extends` で自分が**終点** | これを先に理解する |
+| ➡ 次に進む | `prerequisite` / `extends` で自分が**始点** | 終わったら次へ |
+| ↔ 対比・混同注意 | `contrast` / `contradicts` | 並べて違いを確認 |
+| 🔗 関連 | `related` | 無向 |
+| 📎 参照・例示・その他 | `references` / `exemplifies` / `authored_by` … | 有向。終点側では `inverseLabelJa`（被参照 等）を表示 |
+
+各群6件まで表示し「＋N」で展開。強度は数字ではなく色（≥0.9 を強調）。接続 `note`（「本文が言及」「同一法則」）を2行目に出す。
+`prerequisite`（前提／次に進む）と `contrast`（対比）は wt58 で `connection_type_def` に正式登録された。
+
+シード由来の接続は3層: (1) 各教科ファイル内の `Conn`（科目内の前提・派生・対比）、(2) `HsStickies.bridges`（科目横断）、(3) `seedAutoReferences`（本文がタイトルに言及→`references`、1カード≤6）。

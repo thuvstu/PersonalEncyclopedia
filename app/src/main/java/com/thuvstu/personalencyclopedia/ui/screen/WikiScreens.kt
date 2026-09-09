@@ -13,6 +13,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.thuvstu.personalencyclopedia.ui.component.StickyNoteQuickAdd
+import com.thuvstu.personalencyclopedia.ui.component.StickyNoteSection
+import com.thuvstu.personalencyclopedia.ui.component.rememberStickyNoteBinding
 import com.thuvstu.personalencyclopedia.ui.component.RichContentView
 import com.thuvstu.personalencyclopedia.viewmodel.WikiViewModel
 import java.text.SimpleDateFormat
@@ -98,8 +101,14 @@ fun WikiArticleScreen(
     // ★P2-B: 自動リンク埋め込み済み本文（linker未構築時はnull→原文フォールバック）
     val linkedMd by viewModel.autoLinkedContentMd.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
+    // ★wt56 付箋
+    val linkedEntryId by viewModel.linkedEntryId.collectAsState()
+    val stickyNotes by viewModel.stickyNotes.collectAsState()
+    val stickySnackbar = remember { SnackbarHostState() }
+    val stickyBinding = rememberStickyNoteBinding(viewModel.sticky, stickySnackbar, onOpenEntry = onNavigateToEntry)
 
     Scaffold(
+        snackbarHost = { SnackbarHost(stickySnackbar) },
         topBar = {
             TopAppBar(
                 title = { Text(article?.title ?: "記事") },
@@ -131,22 +140,40 @@ fun WikiArticleScreen(
             }
             article != null -> {
                 val a = article!!
-                RichContentView(
-                    content = linkedMd ?: a.contentMd,
-                    onWikiLinkClick = { title ->
-                        // ★P2-B: wiki記事→なければentryへ遷移（自動リンク対応）
-                        viewModel.resolveLink(
-                            title,
-                            onWiki = { onOpenArticle(it) },
-                            onEntry = { onNavigateToEntry(it) },
-                            onMissing = {
-                                android.widget.Toast.makeText(context, "「$title」は見つかりません", android.widget.Toast.LENGTH_SHORT).show()
-                            }
+                Column(Modifier.fillMaxSize().padding(padding)) {
+                    RichContentView(
+                        content = linkedMd ?: a.contentMd,
+                        onWikiLinkClick = { title ->
+                            // ★P2-B: wiki記事→なければentryへ遷移（自動リンク対応）
+                            viewModel.resolveLink(
+                                title,
+                                onWiki = { onOpenArticle(it) },
+                                onEntry = { onNavigateToEntry(it) },
+                                onMissing = {
+                                    android.widget.Toast.makeText(context, "「$title」は見つかりません", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth().weight(1f).padding(16.dp),
+                        autoHeight = false
+                    )
+                    // ★wt56: 記事下部の付箋。同名entryがあれば通常セクション、無ければ「作って貼る」最小UI
+                    val eid = linkedEntryId
+                    if (eid != null) {
+                        StickyNoteSection(
+                            notes = stickyNotes,
+                            actions = stickyBinding.forEntry(eid, contextId = a.id),
+                            title = "📝 この記事への付箋",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         )
-                    },
-                    modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
-                    autoHeight = false
-                )
+                    } else {
+                        StickyNoteQuickAdd(
+                            onAdd = { t, c -> viewModel.addStickyCreatingEntryIfNeeded(t, c) },
+                            label = "💭 この記事に付箋を貼る（同名カードを作成）",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                    }
+                }
             }
             else -> {
                 Box(Modifier.fillMaxSize().padding(padding), contentAlignment = androidx.compose.ui.Alignment.Center) {

@@ -17,6 +17,7 @@ import com.thuvstu.personalencyclopedia.db.MIGRATION_7_8
 import com.thuvstu.personalencyclopedia.db.MIGRATION_8_9
 import com.thuvstu.personalencyclopedia.db.MIGRATION_9_10
 import com.thuvstu.personalencyclopedia.db.MIGRATION_10_11
+import com.thuvstu.personalencyclopedia.db.MIGRATION_11_12
 import com.thuvstu.personalencyclopedia.db.dao.*
 import com.thuvstu.personalencyclopedia.integration.NoOpStudyPlusBridge
 import com.thuvstu.personalencyclopedia.integration.StudyPlusSdkBridge
@@ -41,7 +42,7 @@ object DatabaseModule {
     fun provideDatabase(@ApplicationContext ctx: Context): AppDatabase =
         Room.databaseBuilder(ctx, AppDatabase::class.java, "encyclopedia.db")
             .setDriver(BundledSQLiteDriver().withSqliteVec())
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
             .setQueryExecutor(queryExecutor)
             .setTransactionExecutor(transactionExecutor)
@@ -82,6 +83,8 @@ object DatabaseModule {
     @Provides fun provideTaskTimeLogDao(db: AppDatabase): TaskTimeLogDao = db.taskTimeLogDao()
     @Provides fun provideEntryHistoryDao(db: AppDatabase): EntryHistoryDao = db.entryHistoryDao()
     @Provides fun provideSavedQueryDao(db: AppDatabase): SavedQueryDao = db.savedQueryDao()
+    // v12 — wt56: 付箋
+    @Provides fun provideEntryStickyNoteDao(db: AppDatabase): EntryStickyNoteDao = db.entryStickyNoteDao()
     // §11.12 SQL Explorer（読み取り専用）
     @Provides fun provideReadOnlySqlExecutor(db: AppDatabase): ReadOnlySqlExecutor = ReadOnlySqlExecutor(db)
     // §7.8 StudyPlus SDKブリッジ（SDK未導入時はNoOp。JitPack到達可能環境でSdkStudyPlusBridgeへ差し替え）

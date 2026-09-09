@@ -20,6 +20,7 @@ import com.thuvstu.personalencyclopedia.brain.search.SearchMode
 import com.thuvstu.personalencyclopedia.brain.search.SearchRefiner
 import com.thuvstu.personalencyclopedia.ui.component.EmptyState
 import com.thuvstu.personalencyclopedia.ui.component.EntryCard
+import com.thuvstu.personalencyclopedia.ui.component.rememberStickyNoteBinding
 import com.thuvstu.personalencyclopedia.viewmodel.SearchViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,7 +32,11 @@ fun SearchScreen(
     viewModel: SearchViewModel = hiltViewModel()
 ) {
     val query by viewModel.query.collectAsState()
-    val results by viewModel.results.collectAsState()
+    val stickyNotesByEntry by viewModel.stickyNotesByEntry.collectAsState()   // ★wt56
+    val stickySnackbar = remember { SnackbarHostState() }
+    val stickyBinding = rememberStickyNoteBinding(viewModel.sticky, stickySnackbar, onOpenEntry = onNavigateToEntry)
+    val results by viewModel.resultsWithSticky.collectAsState()   // ★wt56: 付箋ヒット込み
+    val onlyWithStickyNotes by viewModel.onlyWithStickyNotes.collectAsState()
     val typeFilter by viewModel.typeFilter.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
@@ -62,6 +67,7 @@ fun SearchScreen(
     )
 
     Scaffold(
+        snackbarHost = { SnackbarHost(stickySnackbar) },
         topBar = {
             TopAppBar(
                 title = { Text("検索", style = MaterialTheme.typography.titleLarge) },
@@ -127,6 +133,12 @@ fun SearchScreen(
                         label = { Text(label, style = MaterialTheme.typography.labelSmall) }
                     )
                 }
+                // ★wt56: 付箋ありのみ
+                FilterChip(
+                    selected = onlyWithStickyNotes,
+                    onClick = { viewModel.toggleOnlyWithStickyNotes() },
+                    label = { Text("📝 付箋あり", style = MaterialTheme.typography.labelSmall) }
+                )
             }
             // ★mismatch §3.4: 並べ替え・期間・お気に入り・タグ(AND)。条件はメモリ上で即時反映(再検索なし)
             if (showRefine) {
@@ -220,7 +232,9 @@ fun SearchScreen(
                     EntryCard(
                         entry = entry,
                         onClick = { onNavigateToEntry(entry.id) },
-                        onFavoriteClick = { viewModel.toggleFavorite(entry.id) }   // 従来は空クロージャだった
+                        onFavoriteClick = { viewModel.toggleFavorite(entry.id) },   // 従来は空クロージャだった
+                        stickyNotes = stickyNotesByEntry[entry.id].orEmpty(),
+                        stickyNoteActions = stickyBinding.forEntry(entry.id)
                     )
                 }
             }

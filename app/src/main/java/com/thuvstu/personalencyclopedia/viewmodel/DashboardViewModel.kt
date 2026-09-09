@@ -7,16 +7,19 @@ import com.thuvstu.personalencyclopedia.brain.task.EstimationBias
 import com.thuvstu.personalencyclopedia.brain.task.TaskEngine
 import com.thuvstu.personalencyclopedia.db.InitialData
 import com.thuvstu.personalencyclopedia.db.InitialData2
+import com.thuvstu.personalencyclopedia.db.InitialDataHighSchool
 import com.thuvstu.personalencyclopedia.db.InitialDataMath
 import com.thuvstu.personalencyclopedia.db.AppDatabase
 import com.thuvstu.personalencyclopedia.db.dao.TaskDao
 import com.thuvstu.personalencyclopedia.db.entity.EntryEntity
+import com.thuvstu.personalencyclopedia.db.entity.EntryStickyNoteEntity
 import com.thuvstu.personalencyclopedia.importer.WebScraper
 import com.thuvstu.personalencyclopedia.repository.ConnectionRepository
 import com.thuvstu.personalencyclopedia.repository.EntryRepository
 import com.thuvstu.personalencyclopedia.repository.QuizRepository
 import com.thuvstu.personalencyclopedia.repository.SearchRepository
 import com.thuvstu.personalencyclopedia.repository.SrsRepository
+import com.thuvstu.personalencyclopedia.repository.StickyNoteRepository
 import com.thuvstu.personalencyclopedia.repository.ThoughtDraft
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -34,7 +37,8 @@ class DashboardViewModel @Inject constructor(
     private val taskEngine: TaskEngine,                   // ★§8.10/§11.11 タスク
     private val taskDao: TaskDao,
     private val db: AppDatabase,
-    private val searchRepo: SearchRepository                // ★wt45: 投入後の検索文書更新
+    private val searchRepo: SearchRepository,               // ★wt45: 投入後の検索文書更新
+    private val stickyRepo: StickyNoteRepository            // ★wt56: 付箋
 ) : ViewModel() {
 
     val recentEntries: StateFlow<List<EntryEntity>> =
@@ -116,6 +120,30 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch { repo.toggleFavorite(id) }
     }
 
+    // ── ★wt56 付箋 ──
+    val sticky = StickyNoteController(stickyRepo, viewModelScope, StickyNoteRepository.SOURCE_LIST)
+
+    /** 一覧カード用: entryId → 付箋リスト */
+    val stickyNotesByEntry: StateFlow<Map<String, List<EntryStickyNoteEntity>>> =
+        stickyRepo.observeAllGrouped()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    /** ダッシュボード「最近の付箋」フィード（未解決・新しい順） */
+    val recentStickyNotes: StateFlow<List<EntryStickyNoteEntity>> =
+        stickyRepo.observeRecentUnresolved(8)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val unresolvedStickyCount: StateFlow<Int> =
+        stickyRepo.observeUnresolvedCount()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    /** フィード表示用: 付箋のentryIdからタイトルを引く（recentStickyNotes に追従） */
+    val stickyEntryTitles: StateFlow<Map<String, String>> =
+        recentStickyNotes.map { notes ->
+            notes.map { it.entryId }.distinct().mapNotNull { id -> repo.getEntry(id)?.let { id to it.title } }.toMap()
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    }
+
     fun softDelete(id: String) {
         viewModelScope.launch { repo.softDelete(id) }
     }
@@ -181,10 +209,16 @@ class DashboardViewModel @Inject constructor(
                     db.entryDao(), db.entryThoughtDao(), db.entryDefinitionDao(), db.tagDao(),
                     db.topicDao(), db.quizDao(), db.connectionDao(), db.whiteboardDao(), db.wikiArticleDao()
                 )
-                val added = r1.added + r2.added + r3.added
-                val skipped = r1.skipped + r2.skipped + r3.skipped
+                // ★wt57: 高校全教科
+                val r4 = InitialDataHighSchool.seedAppend(
+                    db.entryDao(), db.entryThoughtDao(), db.entryDefinitionDao(), db.tagDao(),
+                    db.topicDao(), db.quizDao(), db.connectionDao(), db.whiteboardDao(), db.wikiArticleDao(),
+                    stickyDao = db.entryStickyNoteDao()
+                )
+                val added = r1.added + r2.added + r3.added + r4.added
+                val skipped = r1.skipped + r2.skipped + r3.skipped + r4.skipped
                 _seedState.value = if (added == 0) "初期データは投入済みです（${skipped}件は既存）"
-                    else "初期データ ${added}件を追加しました（既存${skipped}件はスキップ・接続${r2.connections + r3.connections}件・数学クイズ${r3.quizzes}）"
+                    else "初期データ ${added}件を追加しました（既存${skipped}件はスキップ・接続${r2.connections + r3.connections + r4.connections}件・クイズ${r3.quizzes + r4.quizzes}・種付箋${r4.stickies}）"
                 // 検索文書を追記分だけ更新(差分なので既存はスキップされる)
                 try { searchRepo.rebuildAllIndices() } catch (_: Exception) {}
             } catch (e: Exception) {

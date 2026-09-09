@@ -15,6 +15,7 @@ import com.thuvstu.personalencyclopedia.db.AppDatabase
 import com.thuvstu.personalencyclopedia.db.DemoData
 import com.thuvstu.personalencyclopedia.db.InitialData
 import com.thuvstu.personalencyclopedia.db.InitialData2
+import com.thuvstu.personalencyclopedia.db.InitialDataHighSchool
 import com.thuvstu.personalencyclopedia.db.InitialDataMath
 import com.thuvstu.personalencyclopedia.db.SeedData
 import com.thuvstu.personalencyclopedia.plugins.PluginEngine
@@ -102,6 +103,7 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
         database.entryTypeDao().insertAll(SeedData.entryTypes)
         seedBasicDataIfSparse()
         seedHighSchoolMathIfNeeded()
+        seedHighSchoolIfNeeded()
         seedQuizFormatsIfNeeded()
     }
 
@@ -139,6 +141,31 @@ class PersonalEncyclopediaApp : Application(), Configuration.Provider {
             entryDao, database.entryThoughtDao(), database.entryDefinitionDao(),
             database.tagDao(), database.topicDao(), database.quizDao(),
             database.connectionDao(), database.whiteboardDao(), database.wikiArticleDao()
+        )
+    }
+
+    /**
+     * ★wt57: 高校全教科（古文/漢文/英語/化学/物理/生物/地理/歴史/政治/経済/倫理/情報/法/ノンジャンル）。
+     * 件数ゲートなし。センチネルは InitialDataHighSchool.SENTINEL（係り結びの法則）。
+     */
+    private suspend fun seedHighSchoolIfNeeded() {
+        val entryDao = database.entryDao()
+        if (entryDao.findByTitle(InitialDataHighSchool.SENTINEL) != null) {
+            // ★wt58: 本体シード済みでも、種付箋/ブリッジ未投入なら一度だけ足す
+            val stickyDao = database.entryStickyNoteDao()
+            if (stickyDao.getAll().none { it.source == "seed" }) {
+                InitialDataHighSchool.seedEnrichmentOnly(entryDao, database.entryThoughtDao(), database.entryDefinitionDao(), database.connectionDao(), stickyDao, quizDao = database.quizDao())
+            } else {
+                // 未紐づけシードクイズ→カード（未紐づけが無ければ即return）
+                InitialDataHighSchool.linkQuizzesToCards(InitialDataHighSchool.allSubjects, entryDao, database.quizDao())
+            }
+            return
+        }
+        InitialDataHighSchool.seedAppend(
+            entryDao, database.entryThoughtDao(), database.entryDefinitionDao(),
+            database.tagDao(), database.topicDao(), database.quizDao(),
+            database.connectionDao(), database.whiteboardDao(), database.wikiArticleDao(),
+            stickyDao = database.entryStickyNoteDao()
         )
     }
 

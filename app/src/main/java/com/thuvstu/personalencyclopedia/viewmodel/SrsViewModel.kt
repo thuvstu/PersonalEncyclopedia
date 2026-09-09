@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.thuvstu.personalencyclopedia.db.dao.ProgressEventDao
 import com.thuvstu.personalencyclopedia.db.entity.ProgressEventEntity
 import com.thuvstu.personalencyclopedia.repository.SrsRepository
+import com.thuvstu.personalencyclopedia.repository.StickyNoteRepository
+import com.thuvstu.personalencyclopedia.db.entity.EntryStickyNoteEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -13,8 +15,10 @@ import javax.inject.Inject
 @HiltViewModel
 class SrsViewModel @Inject constructor(
     private val srsRepo: SrsRepository,
-    private val progressEventDao: ProgressEventDao   // ← Phase 3で追加
+    private val progressEventDao: ProgressEventDao,  // ← Phase 3で追加
+    private val stickyRepo: StickyNoteRepository     // ★wt56: 復習中に付箋
 ) : ViewModel() {
+
 
     sealed class SrsUiState {
         object Loading : SrsUiState()
@@ -32,6 +36,17 @@ class SrsViewModel @Inject constructor(
 
     val dueCount: StateFlow<Int> = srsRepo.observeDueCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    // ── ★wt56 付箋（復習中の「思ったこと」）──
+    val sticky = StickyNoteController(stickyRepo, viewModelScope, StickyNoteRepository.SOURCE_SRS)
+
+    /** 現在カードの付箋（entryIdの変化に追従） */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val currentStickyNotes: StateFlow<List<EntryStickyNoteEntity>> =
+        _uiState.map { (it as? SrsUiState.Reviewing)?.let { r -> r.cards[r.currentIndex].entryId } }
+            .distinctUntilChanged()
+            .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else stickyRepo.observeForEntry(id) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private var reviewedCount = 0
 

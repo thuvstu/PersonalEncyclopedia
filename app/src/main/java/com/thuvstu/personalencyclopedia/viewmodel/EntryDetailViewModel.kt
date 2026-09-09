@@ -14,6 +14,7 @@ import com.thuvstu.personalencyclopedia.repository.AttachmentRepository
 import com.thuvstu.personalencyclopedia.repository.ConnectionRepository
 import com.thuvstu.personalencyclopedia.repository.EntryRepository
 import com.thuvstu.personalencyclopedia.repository.QuizRepository
+import com.thuvstu.personalencyclopedia.repository.StickyNoteRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -33,6 +34,7 @@ class EntryDetailViewModel @Inject constructor(
     private val autoLinkerProvider: AutoLinkerProvider,    // ★wt44: 共有キャッシュ(指紋で自動更新)
     private val entryHistoryDao: EntryHistoryDao,   // ★§5.9.2/§11.13 編集履歴
     private val wikiArticleDao: WikiArticleDao,
+    private val stickyRepo: StickyNoteRepository,    // ★wt56 付箋
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -189,6 +191,19 @@ class EntryDetailViewModel @Inject constructor(
     fun removeAttachment(attachment: EntryAttachmentEntity) {
         viewModelScope.launch { attachmentRepo.remove(attachment) }
     }
+
+    // ── ★wt56 付箋 ──
+    val sticky = StickyNoteController(stickyRepo, viewModelScope, StickyNoteRepository.SOURCE_DETAIL)
+
+    val stickyNotes: StateFlow<List<EntryStickyNoteEntity>> =
+        stickyRepo.observeForEntry(entryId)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }
+
+    /** ★wt58: このカードを出典とするクイズ（シードは linkQuizzesToCards で紐づく） */
+    val entryQuizzes: StateFlow<List<QuizBankEntity>> =
+        quizRepo.observeQuizzesForEntry(entryId)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun generateQuizzesFromThisEntry() {
         viewModelScope.launch {

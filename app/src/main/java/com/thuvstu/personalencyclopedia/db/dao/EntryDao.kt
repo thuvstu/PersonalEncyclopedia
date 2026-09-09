@@ -65,6 +65,18 @@ interface EntryDao {
     """)
     fun search(q: String, limit: Int = 50): Flow<List<EntryEntity>>
 
+    /** ★wt58: [[リンク]]補完・接続先ピッカー用。タイトル前方一致を優先し、次に部分一致 */
+    @Query("""
+        SELECT * FROM entry
+        WHERE deletedAt IS NULL AND title LIKE '%' || :q || '%'
+        ORDER BY
+          CASE WHEN title LIKE :q || '%' THEN 0 ELSE 1 END,
+          LENGTH(title) ASC,
+          accessedAt DESC
+        LIMIT :limit
+    """)
+    suspend fun suggestByTitle(q: String, limit: Int = 10): List<EntryEntity>
+
     @Query("""
         SELECT * FROM entry
         WHERE deletedAt IS NULL AND isFavorite = 1

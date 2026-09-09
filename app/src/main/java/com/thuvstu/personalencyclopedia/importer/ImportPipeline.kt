@@ -6,6 +6,7 @@ import com.thuvstu.personalencyclopedia.db.dao.EntryDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryDefinitionDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryExtensionDao
 import com.thuvstu.personalencyclopedia.db.dao.EntryThoughtDao
+import com.thuvstu.personalencyclopedia.db.dao.EntryStickyNoteDao
 import com.thuvstu.personalencyclopedia.db.dao.TagDao
 import com.thuvstu.personalencyclopedia.db.entity.EntryDefinitionEntity
 import com.thuvstu.personalencyclopedia.db.entity.EntryDocumentEntity
@@ -38,7 +39,8 @@ class ImportPipeline @Inject constructor(
     private val urlDuplicateDetector: UrlDuplicateDetector,                   // §12.7
     private val tagDao: TagDao,                                               // ★往復対称: タグ復元
     private val embeddingQueue: EmbeddingQueue,                               // ★往復対称: 検索文書即時更新
-    private val documentExtractor: DocumentExtractor                          // ★wt43: PDF/DOCX 取込
+    private val documentExtractor: DocumentExtractor,                         // ★wt43: PDF/DOCX 取込
+    private val stickyNoteDao: EntryStickyNoteDao                             // ★wt56: 付箋の往復
 ) {
     data class ImportResult(
         val successCount: Int,
@@ -284,6 +286,7 @@ class ImportPipeline @Inject constructor(
             val tagId = existing?.id ?: TagEntity(name = name).also { tagDao.insert(it) }.id
             tagDao.linkTag(EntryTagEntity(entryId = d.entry.id, tagId = tagId))
         }
+        if (d.stickyNotes.isNotEmpty()) stickyNoteDao.insertAll(d.stickyNotes)   // ★wt56
         try { embeddingQueue.enqueue(d.entry.id) } catch (_: Exception) { /* 検索文書は起動時差分で追いつく */ }
     }
 

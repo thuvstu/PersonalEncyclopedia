@@ -14,7 +14,9 @@ data class ConnectionWithEntry(
     val isDirected: Boolean,
     val otherEntryId: String,
     val otherEntryTitle: String,
-    val otherEntryType: String
+    val otherEntryType: String,
+    /** ★wt58: この接続で自分が entryA(始点)か。有向接続の向き表示（前提←／→次）に使う */
+    val isSource: Boolean = true
 )
 
 data class GraphNode(
@@ -55,14 +57,16 @@ interface ConnectionDao {
     @Query("""
         SELECT c.id AS connectionId, c.relationType AS relationType, c.strength AS strength,
                c.note AS note, c.isDirected AS isDirected,
-               e.id AS otherEntryId, e.title AS otherEntryTitle, e.type AS otherEntryType
+               e.id AS otherEntryId, e.title AS otherEntryTitle, e.type AS otherEntryType,
+               1 AS isSource
         FROM connection c
         INNER JOIN entry e ON e.id = c.entryBId
         WHERE c.entryAId = :entryId AND e.deletedAt IS NULL
         UNION ALL
         SELECT c.id AS connectionId, c.relationType AS relationType, c.strength AS strength,
                c.note AS note, c.isDirected AS isDirected,
-               e.id AS otherEntryId, e.title AS otherEntryTitle, e.type AS otherEntryType
+               e.id AS otherEntryId, e.title AS otherEntryTitle, e.type AS otherEntryType,
+               0 AS isSource
         FROM connection c
         INNER JOIN entry e ON e.id = c.entryAId
         WHERE c.entryBId = :entryId AND e.deletedAt IS NULL

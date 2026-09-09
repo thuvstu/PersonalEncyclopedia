@@ -29,6 +29,8 @@ import com.thuvstu.personalencyclopedia.ui.component.ConnectionSection
 import com.thuvstu.personalencyclopedia.ui.component.EntryPreviewPopup
 import com.thuvstu.personalencyclopedia.ui.component.EntryTypeSection
 import com.thuvstu.personalencyclopedia.ui.component.RichContentView
+import com.thuvstu.personalencyclopedia.ui.component.StickyNoteSection
+import com.thuvstu.personalencyclopedia.ui.component.rememberStickyNoteBinding
 import com.thuvstu.personalencyclopedia.ui.theme.entryTypeColor
 import com.thuvstu.personalencyclopedia.ui.theme.entryTypeIcon
 import com.thuvstu.personalencyclopedia.ui.theme.entryTypeLabelJa
@@ -44,6 +46,7 @@ fun EntryDetailScreen(
     onEdit: (type: String, entryId: String) -> Unit,
     onNavigateToEntry: (String) -> Unit,
     onNavigateToWiki: (String) -> Unit,          // ★追加
+    onNavigateToQuiz: () -> Unit = {},           // ★wt58: このカードのクイズ→クイズ画面
     viewModel: EntryDetailViewModel = hiltViewModel()
 ) {
     val entry by viewModel.entry.collectAsState()
@@ -56,6 +59,10 @@ fun EntryDetailScreen(
     val relatedEntries by viewModel.relatedEntries.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
     val attachments by viewModel.attachments.collectAsState()
+    val stickyNotes by viewModel.stickyNotes.collectAsState()   // ★wt56
+    val entryQuizzes by viewModel.entryQuizzes.collectAsState()   // ★wt58
+    val stickySnackbar = remember { SnackbarHostState() }
+    val stickyBinding = rememberStickyNoteBinding(viewModel.sticky, stickySnackbar, onOpenEntry = onNavigateToEntry)
     val tagSuggestions by viewModel.tagSuggestions.collectAsState()
     val history by viewModel.history.collectAsState()
     // ★P2-A: 自動リンク埋め込み済みの表示用文字列（linker構築前はnull→原文フォールバック）
@@ -97,6 +104,7 @@ fun EntryDetailScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(stickySnackbar) },
         topBar = {
             TopAppBar(
                 title = { Text(entryTypeLabelJa(e.type)) },
@@ -197,6 +205,17 @@ fun EntryDetailScreen(
                 onPickImage = { imagePicker.launch("image/*") },
                 onRemove = { viewModel.removeAttachment(it) }
             )
+
+            // ★wt56 付箋（思ったことを一言メモ）
+            StickyNoteSection(
+                notes = stickyNotes,
+                actions = stickyBinding.forEntry(e.id)
+            )
+
+            // ★wt58: このカードのクイズ（答えは伏せて、タップで開閉）
+            if (entryQuizzes.isNotEmpty()) {
+                EntryQuizPeekSection(quizzes = entryQuizzes, onOpenQuiz = onNavigateToQuiz)
+            }
 
             // クイズ生成
             OutlinedButton(
@@ -569,5 +588,51 @@ fun EntryDetailScreen(
                 }) { Text("キャンセル") }
             }
         )
+    }
+}
+
+/**
+ * ★wt58: カード詳細内の「このカードのクイズ」。
+ * 設問だけ並べ、タップで答えを開く（能動想起）。「クイズで解く」でクイズ画面へ。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EntryQuizPeekSection(
+    quizzes: List<com.thuvstu.personalencyclopedia.db.entity.QuizBankEntity>,
+    onOpenQuiz: () -> Unit
+) {
+    var revealed by remember { mutableStateOf(setOf<String>()) }
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("❓ このカードのクイズ（${quizzes.size}）", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                TextButton(onClick = onOpenQuiz) { Text("解く") }
+            }
+            Text("設問をタップすると答えが開きます。先に自分で答えてから。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(6.dp))
+            quizzes.take(8).forEach { q ->
+                val open = q.id in revealed
+                Surface(
+                    onClick = { revealed = if (open) revealed - q.id else revealed + q.id },
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
+                ) {
+                    Column(Modifier.padding(10.dp)) {
+                        Text("Q. ${q.question}", style = MaterialTheme.typography.bodySmall)
+                        if (open) {
+                            Spacer(Modifier.height(4.dp))
+                            Text("A. ${q.answer}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                            if (!q.explanation.isNullOrBlank()) {
+                                Text(q.explanation, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            }
+            if (quizzes.size > 8) {
+                Text("他 ${quizzes.size - 8} 問はクイズ画面で", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
     }
 }

@@ -19,7 +19,8 @@ import javax.inject.Inject
 class QuizViewModel @Inject constructor(
     private val quizRepo: QuizRepository,
     private val progressEventDao: ProgressEventDao,   // ← Phase 3で追加
-    private val settingsRepo: SettingsRepository      // ★最適化R2: クイズ演習設定
+    private val settingsRepo: SettingsRepository,     // ★最適化R2: クイズ演習設定
+    private val stickyRepo: com.thuvstu.personalencyclopedia.repository.StickyNoteRepository   // ★wt56
 ) : ViewModel() {
 
     enum class SessionMode { NORMAL, SURVIVAL }
@@ -73,6 +74,22 @@ class QuizViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<QuizUiState>(QuizUiState.SelectMode)
     val uiState: StateFlow<QuizUiState> = _uiState
+
+    // ── ★wt56 付箋（回答直後の「思ったこと」を出典entryへ貼る）──
+    val sticky = StickyNoteController(stickyRepo, viewModelScope, com.thuvstu.personalencyclopedia.repository.StickyNoteRepository.SOURCE_QUIZ)
+
+    /** 現在問題の出典entryの付箋（sourceEntryId が無い問題は空） */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val currentStickyNotes: StateFlow<List<com.thuvstu.personalencyclopedia.db.entity.EntryStickyNoteEntity>> =
+        _uiState.map {
+            when (it) {
+                is QuizUiState.Question -> it.quiz.sourceEntryId
+                is QuizUiState.Answered -> it.quiz.sourceEntryId
+                else -> null
+            }
+        }.distinctUntilChanged()
+            .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else stickyRepo.observeForEntry(id) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private var quizzes: List<QuizBankEntity> = emptyList()
     private var currentIndex = 0

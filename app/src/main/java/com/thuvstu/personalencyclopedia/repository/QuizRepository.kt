@@ -192,6 +192,8 @@ class QuizRepository @Inject constructor(
     } catch (_: Exception) { emptyList() }
 
     fun observeQuizCount(): Flow<Int> = quizDao.observeQuizCount()
+    /** ★wt58: カード詳細「このカードのクイズ」 */
+    fun observeQuizzesForEntry(entryId: String): Flow<List<QuizBankEntity>> = quizDao.observeBySourceEntry(entryId)
 
     fun observeAttemptsToday(): Flow<Int> = quizDao.observeAttemptsTodayCount(getStartOfDay())
     fun observeCorrectToday(): Flow<Int> = quizDao.observeCorrectTodayCount(getStartOfDay())
