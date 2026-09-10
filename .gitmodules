@@ -1,3 +1,6 @@
 [submodule "related/FablePKMENCY"]
 	path = related/FablePKMENCY
 	url = https://github.com/thuvstu/-FablePKMENCY-
+[submodule "related/reconstructing-autonomous-world-map"]
+	path = related/reconstructing-autonomous-world-map
+	url = https://github.com/thuvstu/reconstructing-autonomous-world-map
