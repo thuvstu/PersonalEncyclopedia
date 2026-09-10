@@ -5,10 +5,11 @@ import { ENTRY_TYPES, typeInfo, formatDate } from "../lib/entryTypes";
 interface Props {
   selectedId: string | null;
   onSelect: (id: string) => void;
+  initialQuery?: string;
 }
 
-export function EntryList({ selectedId, onSelect }: Props) {
-  const [query, setQuery] = useState("");
+export function EntryList({ selectedId, onSelect, initialQuery = "" }: Props) {
+  const [query, setQuery] = useState(initialQuery);
   const [type, setType] = useState<string>("");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -32,8 +33,8 @@ export function EntryList({ selectedId, onSelect }: Props) {
   };
 
   useEffect(() => {
-    void load("", "");
-  }, []);
+    void load(initialQuery, "");
+  }, [initialQuery]);
 
   const typeNames = Object.keys(ENTRY_TYPES);
 
