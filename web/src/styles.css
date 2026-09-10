@@ -117,6 +117,12 @@ kbd { padding: 2px 5px; border: 1px solid var(--line-strong); border-radius: 4px
 
 /* ── Dashboard ── */
 .dashboard { width: 100%; max-width: 1420px; margin: 0 auto; padding: 38px 46px 56px; overflow-y: auto; }
+.preview-notice { display: flex; align-items: center; gap: 9px; margin: -15px 0 24px; padding: 9px 11px; border: 1px solid #eadccf; border-radius: 9px; background: #fffaf4; color: #8a725d; font-size: 10px; }
+.preview-badge { padding: 2px 6px; border-radius: 4px; background: #e9c2a5; color: #704e39; font-size: 8px; font-weight: 800; letter-spacing: .08em; }
+.preview-notice button { margin-left: auto; border: 0; padding: 0; background: transparent; color: var(--coral); cursor: pointer; font-size: 10px; font-weight: 650; }
+.preview-item { cursor: default; }
+.preview-item:hover { background: transparent; }
+.preview-item .recent-arrow { display: none; }
 .dashboard-hero { display: grid; grid-template-columns: minmax(0, 1fr) 338px; gap: 32px; align-items: stretch; }
 .hero-copy { padding: 10px 0 6px; }
 .eyebrow, .section-kicker { color: var(--coral); font-size: 10px; font-weight: 800; letter-spacing: .13em; }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type Entry, type StickyNote } from "../api/client";
+import { DEMO_ACTIVITY, DEMO_DUE_COUNT, DEMO_ENTRIES, DEMO_NOTES } from "../lib/demoData";
 import { formatDate, typeInfo } from "../lib/entryTypes";
 
 interface Props {
@@ -39,6 +40,7 @@ export function Dashboard({ onSelectTab, onNavigate, onDueCountChange }: Props) 
   const [notes, setNotes] = useState<StickyNote[]>([]);
   const [dueCount, setDueCount] = useState<number | null>(null);
   const [connected, setConnected] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -54,17 +56,26 @@ export function Dashboard({ onSelectTab, onNavigate, onDueCountChange }: Props) 
       ]);
       if (cancelled) return;
 
-      setConnected(health.status === "fulfilled");
+      const isConnected = health.status === "fulfilled";
+      const isPreview = !isConnected && entryResult.status === "rejected";
+      setConnected(isConnected);
+      setPreviewMode(isPreview);
       if (entryResult.status === "fulfilled") setEntries(entryResult.value);
+      else if (isPreview) setEntries(DEMO_ENTRIES);
       if (dueResult.status === "fulfilled") {
         setDueCount(dueResult.value.dueCount);
         onDueCountChange(dueResult.value.dueCount);
+      } else if (isPreview) {
+        setDueCount(DEMO_DUE_COUNT);
+        onDueCountChange(DEMO_DUE_COUNT);
       } else {
         setDueCount(null);
         onDueCountChange(null);
       }
       if (heatmapResult.status === "fulfilled") setActivity(heatmapResult.value);
+      else if (isPreview) setActivity(DEMO_ACTIVITY);
       if (notesResult.status === "fulfilled") setNotes(notesResult.value);
+      else if (isPreview) setNotes(DEMO_NOTES);
       setLoading(false);
     };
     void load();
@@ -86,6 +97,13 @@ export function Dashboard({ onSelectTab, onNavigate, onDueCountChange }: Props) 
 
   return (
     <div className="dashboard">
+      {previewMode && (
+        <div className="preview-notice">
+          <span className="preview-badge">PREVIEW</span>
+          <span>サンプルデータで表示中。Androidに接続すると、あなたの実データへ切り替わります。</span>
+          <button onClick={() => onSelectTab("connect")} type="button">接続設定 →</button>
+        </div>
+      )}
       <section className="dashboard-hero">
         <div className="hero-copy">
           <div className="eyebrow"><span className="eyebrow-line" /> {todayLabel()}</div>
@@ -167,7 +185,7 @@ export function Dashboard({ onSelectTab, onNavigate, onDueCountChange }: Props) 
               {recentEntries.map((entry) => {
                 const info = typeInfo(entry.type);
                 return (
-                  <button className="recent-item" key={entry.id} onClick={() => onNavigate(entry.title)} type="button">
+                  <button className={`recent-item ${previewMode ? "preview-item" : ""}`} key={entry.id} onClick={() => { if (!previewMode) onNavigate(entry.title); }} type="button">
                     <span className="recent-type-mark" style={{ backgroundColor: info.colorHex }} />
                     <span className="recent-item-main">
                       <strong>{entry.title}</strong>
