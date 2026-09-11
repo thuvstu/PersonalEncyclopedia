@@ -203,7 +203,7 @@ object HsStickies {
 
     /**
      * 科目横断ブリッジ接続。各 Hs*.kt 内の接続は科目内が中心なので、ここで科目間を「太い線」で結ぶ。
-     * 既存カード（InitialData*/DemoData）も相手にできる。未存在タイトルはスキップされる。
+     * 既存カード（InitialData・DemoData）も相手にできる。未存在タイトルはスキップされる。
      */
     val bridges: List<Conn> = listOf(
         // 古典 × 歴史 × 倫理 × 芸術

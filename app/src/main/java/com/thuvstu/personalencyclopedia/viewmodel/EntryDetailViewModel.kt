@@ -198,7 +198,6 @@ class EntryDetailViewModel @Inject constructor(
     val stickyNotes: StateFlow<List<EntryStickyNoteEntity>> =
         stickyRepo.observeForEntry(entryId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    }
 
     /** ★wt58: このカードを出典とするクイズ（シードは linkQuizzesToCards で紐づく） */
     val entryQuizzes: StateFlow<List<QuizBankEntity>> =

@@ -173,5 +173,4 @@ class SearchViewModel @Inject constructor(
         _stickyHits.value = if (q.isBlank()) emptyList()
         else stickyRepo.searchNotes(q, limit = 30).map { it.second }.distinctBy { it.id }
     }
-    }
 }

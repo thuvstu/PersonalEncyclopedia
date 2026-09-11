@@ -14,7 +14,7 @@ object HsDeepEgypt {
     private const val TE = "topic-deep-egypt"
     private fun e(t: String, r: String?, d: String) = Def(t, r, d, "古代エジプト史", TE)
 
-    val seed = SubjectSeed(
+    val seed by lazy { SubjectSeed(
         key = "deep-egypt", name = "深掘り講義: エジプト文明", rootTopicId = T,
         topics = listOf(
             TopicEntity(id = TE, name = "エジプト文明", parentId = T, colorHex = "#B45309", description = "先王朝〜プトレマイオス朝・独立性論争・ピラミッド労働・アマルナ・解読史"),
@@ -141,7 +141,7 @@ object HsDeepEgypt {
             Sticky("エジプト文明の独立性論争", "「刺激伝播」の定義を確認（クローバー 1940）。文字以外で刺激伝播とされる例（チェロキー文字）を [[文字コード]] 側に追記", "blue"),
             Sticky("末期王朝と外来支配", "[[クシュ王国とヌビア]] を独立カードに: ケルマ→ナパタ→メロエ、ピラミッド255基、メロエ文字（未解読）", "green"),
         )
-    )
+    ) }
 
     private val LECTURE_2 = """
 # 講義2: エジプト文明 — ナイル・王権・文字・来世

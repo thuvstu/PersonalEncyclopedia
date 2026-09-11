@@ -36,7 +36,7 @@ object HsDeepAncient {
     private fun c(t: String, r: String?, d: String) = Def(t, r, d, "文明論・史学史", TC)
     private fun m(t: String, r: String?, d: String) = Def(t, r, d, "古代オリエント史", TM)
 
-    val seed = SubjectSeed(
+    val seed by lazy { SubjectSeed(
         key = "deep-ancient", name = "深掘り講義: 文明前夜〜メソポタミア", rootTopicId = T,
         topics = listOf(
             TopicEntity(id = T, name = "深掘り講義", colorHex = "#7C2D12", description = "大学講義〜ゼミ水準。史学史・論争・最新研究まで含む"),
@@ -218,7 +218,7 @@ object HsDeepAncient {
             Sticky("紀元前2200年イベント（4.2kaイベント）", "「気候が帝国を滅ぼした」と言うために必要な証拠の条件を3つ挙げる（時間的一致・機構・反事実）。[[相関と回帰]]", "pink"),
             Sticky("ギルガメシュ叙事詩", "第11書板の洪水と創世記6〜9章を並べて、共通点と相違点（神の動機・箱舟の形・鳥の種類）を表にする", "yellow"),
         )
-    )
+    ) }
 
     // ─────────────────────────────────────────────────────────────
     // 講義本文（Wiki）

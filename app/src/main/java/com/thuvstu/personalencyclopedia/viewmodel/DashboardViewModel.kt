@@ -142,7 +142,6 @@ class DashboardViewModel @Inject constructor(
         recentStickyNotes.map { notes ->
             notes.map { it.entryId }.distinct().mapNotNull { id -> repo.getEntry(id)?.let { id to it.title } }.toMap()
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
-    }
 
     fun softDelete(id: String) {
         viewModelScope.launch { repo.softDelete(id) }
