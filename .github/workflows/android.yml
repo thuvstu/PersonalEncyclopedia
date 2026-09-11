@@ -3,7 +3,7 @@ name: Android CI
 # ★Fable統合: PE(Android/Room) ⇄ Fable(Codex) の同期は「決定論の純粋ロジック +
 # 通信アダプタ」の二層に分かっている。通信は実機でしか確認できないが、純粋ロジック
 # (codex-sync/1 の写像・LWW・tombstone) はJVM単体テストで毎回機械確認する。
-# サンドボックスにAndroid SDKが無い環境でも、このワークフローが唯一のビルド確認手段。
+# ローカルにAndroid SDKが無い環境でも、このワークフローがビルド確認の唯一の手段になる。
 
 on:
   push:
@@ -28,7 +28,24 @@ jobs:
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
       - name: Run JVM unit tests
-        run: ./gradlew :app:testDebugUnitTest --stacktrace
+        id: test
+        run: |
+          ./gradlew :app:testDebugUnitTest --stacktrace > gradle-test.log 2>&1
+          code=$?
+          tail -n 200 gradle-test.log
+          exit $code
+      - name: Upload gradle log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-test-log
+          path: gradle-test.log
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: app/build/reports/tests
 
   build:
     name: assembleDebug
@@ -43,4 +60,14 @@ jobs:
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
       - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --stacktrace
+        run: |
+          ./gradlew :app:assembleDebug --stacktrace > gradle-build.log 2>&1
+          code=$?
+          tail -n 200 gradle-build.log
+          exit $code
+      - name: Upload gradle log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: gradle-build.log
