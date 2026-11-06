@@ -113,7 +113,7 @@
 │  ┌───────────────────┐  ┌───────────────────────────────────────────────┐   │
 │  │  server/ (Ktor)   │  │  ui/ + viewmodel/ (Compose MVVM)               │   │
 │  │  LocalServer      │  │  NavGraph(27ルート) → Screen(20ファイル23関数)  │   │
-│  │  routes/ (8登録・全22EP) │  │  → ViewModel(20個)                        │   │
+│  │  routes/ (9登録・全31EP) │  │  → ViewModel(20個)                        │   │
 │  └─────────┬─────────┘  └─────────────────────┬─────────────────────────┘   │
 │            │    Bearer 認証 (TokenManager・平文DataStore) │                              │
 │            ▼                                  ▼                              │
@@ -505,8 +505,8 @@ v15 (§8.10) で追加。`brain/task/TaskEngine.kt` のみ。**Repository層な�
 - **寿命はアプリ生存期間（★寿命分離 / wt63）**。稼働状態は `LocalServer.isRunning: StateFlow<Boolean>` が唯一のソースで、`ServerViewModel.isRunning` はこれを公開するだけ。停止は設定画面の Switch を OFF にしたときのみ。
   - 旧実装は `ServerViewModel.onCleared()` で `localServer.stop()` を呼んでいた。同 ViewModel は `SettingsScreen` の NavBackStackEntry にスコープされるため、**設定画面を離れるだけでサーバーが停止**していた。加えて `_isRunning` が ViewModel 独自の `MutableStateFlow(false)` だったため、画面を開き直すと起動中でも「停止中」と表示されていた。
   - Foreground Service 化は**していない**。常時稼働は前提とせず、「起動したら画面遷移では死なない」だけを保証する(設計判断の経緯は `docs/walkthrough63.md`)。
-- プラグイン構成: `ContentNegotiation`(JSON, `ignoreUnknownKeys=true`, `encodeDefaults=true`) + `Authentication`(Bearer "token-auth")。**`CORSプラグイン未導入**(依存・install共になし)。ブラウザ→8080の `Authorization` 付き要求はプリフライトで失敗し得る(§13 #1)。
-- **`/health` のみ認証なし**、他は `/api` 配下に8登録・全22エンドポイント (`LocalServer.kt:62-85`)。
+- プラグイン構成: `ContentNegotiation`(JSON, `ignoreUnknownKeys=true`, `encodeDefaults=true`) + `Authentication`(Bearer "token-auth") + **`CORS`(★#S2 導入済み)**。`anyHost()`、`Authorization`/`ContentType` ヘッダ許可、Options/Get/Post/Patch/Delete 許可(`LocalServer.kt:55-64`)。依存 `ktor-server-cors` は `app/build.gradle.kts:97`。※旧記述「CORSプラグイン未導入」は誤りだった(★wt64 実測)。
+- **`/health` のみ認証なし**、他は `/api` 配下に**9登録・全31エンドポイント**(`LocalServer.kt:99-108`、★wt64 実測)。内訳: entries 5 / search 1 / srs 3 / quiz 4 / connections+candidates 6 / graph 1 / progress 1 / plugins 1 / sticky-notes 9。
 - 設計書 §10.1「ルーティング分割アーキテクチャ」: エンドポイント実装は `server/routes/`、DTO は `server/dto/` に集約。新ルート追加は「登録行を1行足すだけ」。
 
 ### 7.2 認証 — TokenManager
@@ -558,15 +558,19 @@ DAO 8個 + `QuizGraderService` + `StickyNoteRepository`(wt56) を束ねて各ル
 - 型マスタ `lib/entryTypes.ts` は13型のラベル・色を Web側に重複定義(APIに型一覧エンドポイントが無いため)。
 - `vite.config.ts` にKtorへのproxy設定なし。
 
-### 8.2 画面構成 (App.tsx の4タブ)
+### 8.2 画面構成 (App.tsx の6タブ)
 | タブ | コンポーネント | 機能 | 備考 |
 |---|---|---|---|
-| エントリ | `EntryList` + `EntryDetail` + `GraphView` | 3ペイン分割。検索+型チップ絞り込み、Markdown描画、グラフ表示 | 型チップはクライアント側フィルタ |
+| エントリ | `EntryList` + `EntryDetail` + `GraphView` | 3ペイン分割。検索+型チップ絞り込み、Markdown描画、グラフ表示。**760px以下では master-detail に切替**(★wt64) | 型チップはクライアント側フィルタ |
+| つながり | `ConnectPanel` | 接続CRUD・候補approve/reject・ヒートマップ(90日)・SRS残件数 | `client.ts` の該当関数はすべて呼出済み |
+| 作成 | `EditorPanel` | Tiptapで新規エントリ作成(`api.createEntry`) | **更新はできない**(更新API自体が未実装。§13 G3) |
 | 単語帳 | `SrsPanel` | 復習カード → 答え表示 → grade 0-5 → 次カード | |
 | クイズ | `QuizPanel` | 形式チップはカタログ8種。MCQ/正誤ボタン、複数選択トグル、対応づけ左右タップ、並べ替えタップ、穴埋め欄、記述。**経過時間計測**、`__UNLEARNED__` 対応、正解+解説 | |
 | Ollama | `OllamaPanel` | LAN内Ollamaへ**直接** `/v1/chat/completions`。設定はlocalStorage。Android起動不要で補助AI使用可能(§7.7) | Ktorを経由しない |
 
-**サーバ実装済みだがWeb導線なし** (次実装の余地。§15 #W1): `getConnections`/`createConnection`(接続CRUD)・候補approve/reject・`getHeatmap`(進捗)・`getSrsDueCount`・`DELETE entries`・`PATCH favorite`・`GET quiz/{id}`・`GET quiz/count`・`GET plugins`。`client.ts` に関数はあるが呼出0件のものを含む。
+**Web導線の実測(★wt64)**: `client.ts` の27メソッドのうち**呼出0件は `getRecentStickyNotes` のみ**。接続CRUD・候補approve/reject・ヒートマップ(90日)・SRS残件数は**すべて `ConnectPanel` で配線済み**(旧記述「Web導線なし」は誤り)。
+
+**サーバにあるが `client.ts` に関数自体がない** (次実装の余地。§15 #W1): `DELETE /api/entries/{id}`・`PATCH /api/entries/{id}/favorite`・`GET /api/quiz/{id}`・`GET /api/quiz/count`・`GET /api/plugins`。なお**エントリ更新はサーバ側にも存在しない**(§13 G3)。
 
 ### 8.3 GraphView — React Flow による知識グラフ
 1. `/api/graph` でエッジ取得 → **N+1 で各ノードを `/api/entries/{id}` で並列フェッチ**(失敗時はID表示でフォールバック)。50k件規模では悪化するため、将来はサーバ側でノード同梱のAPI拡張が候補(§15 #W2)。
@@ -789,14 +793,14 @@ MainActivity.onCreate → handleIncomingIntent (共有 / PROCESS_TEXT / ショ�
 #### A. 到達不能・誤動作 (バグ級)
 | # | 深刻度 | 対象 | 内容 | 着手点 |
 |---|---|---|---|---|
-| A1 | ◎ | `QuizRoutes.kt:28,77` | **`GET /api/quiz/count` が `/{id}` に吸収され404**。定義順の問題で1行入替で直る | → §15 #S1 |
+| A1 | ✅解決 | `QuizRoutes.kt:31,36` | 旧指摘「`/count` が `/{id}` に吸収され404」は**解消済み**(★wt64 実測)。`/count`(31行) が `/{id}`(36行) より前に定義されている | 実機での200確認は未実施 |
 | A2 | ○ | `ObsidianImporter.kt:46` | **`getById(note.title)` にタイトルを渡す誤用**で重複検査が常にnull。直接呼出時は複製される | → §15 #I1 |
 | A3 | ○ | `LlmQuizGenerator.kt:74-75` | 選択肢・ヒントJSONを**手文字列結合**で生成。`"`・改行混じりで壊れる余地 | → §15 #Q1 |
 
 #### B. セキュリティ・データ保全
 | # | 深刻度 | 対象 | 内容 | 着手点 |
 |---|---|---|---|---|
-| B1 | ○ | `LocalServer.kt:40-60` + `app/build.gradle.kts:93-97` | **CORS未設定**。`ktor-server-cors` 未導入。ブラウザ→8080の `Authorization` 付き要求はプリフライトで失敗し得る | → §15 #S2 |
+| B1 | ✅解決 | `LocalServer.kt:55-64` + `app/build.gradle.kts:97` | 旧指摘「CORS未設定」は**解消済み**(★wt64 実測)。`install(CORS)` と `ktor-server-cors` 依存が共に存在 | — |
 | B2 | ○ | `TokenManager.kt:12-24` + `web/src/api/client.ts:17-31` | **トークン平文保管(両端)**。Android平文DataStore + PC localStorage平文 + `http` 平文転送。Gemini/StudyPlus鍵だけ暗号化という不一致 | → §15 #S3 |
 | B3 | ○ | `PluginEngine.kt:130-136,165-169` | **JSソースへの文字列直接補間**で注入余地 + ClassShutter/タイムアウトなし。「サンドボックス」は構成上の制約のみ | → §15 #P1 |
 | B4 | △ | `BackupEncryptor.kt:54` | ファイル全体を一括メモリ読込。大規模DBでOOMの留意 | → §15 #K1 |
@@ -810,7 +814,7 @@ MainActivity.onCreate → handleIncomingIntent (共有 / PROCESS_TEXT / ショ�
 | C2 | △ | `UiSchemaRenderer.kt:13` | 定義のみ・参照ゼロ。プラグイン `renderSchema` 将来用 | 温存 |
 | C3 | △ | `RichText.kt:31 MarkdownText` | 定義のみ・参照ゼロ。WebView版に敗北 | 温存 |
 | C4 | △ | `EntryTypeSections.kt` | `EntryDetailScreen` から使用。wt49で死んでいた definition 分岐を RichContentView 版に一本化 | 済(wt49) |
-| C5 | ◎ | `web/src` 未配線群 | 接続CRUD・候補承認・ヒートマップ・SRS件数・プラグイン一覧・お気に入り・削除は**サーバ実装済みだがWeb導線なし** | → §15 #W1 |
+| C5 | △ | `web/src` 未配線群 | ★wt64 実測: 呼出0件は `getRecentStickyNotes` のみ。接続CRUD・候補承認・ヒートマップ・SRS件数は**配線済み**。未定義はお気に入り/削除/プラグイン一覧/quiz単体・件数 | → §15 #W1 |
 
 #### D. 乖離・陳腐化 (ドキュメントと実装の差)
 | # | 深刻度 | 対象 | 内容 | 着手点 |
@@ -901,14 +905,14 @@ Macrobenchmarkは個人開発1人で回すには複雑すぎる(Gradle Managed D
 
 ## 15. 次の実装への接続 (分析・着手用)
 
-> **AGENTS.mdの五原則に従い、1セッション1機能**で進めるための比較表。並びは推奨順(小・効果大→将来)。各候補は独立しているため、どれから着手してもよい。迷ったら #S1→#D1→#W1 の順。
+> **AGENTS.mdの五原則に従い、1セッション1機能**で進めるための比較表。並びは推奨順(小・効果大→将来)。各候補は独立しているため、どれから着手してもよい。迷ったら #D1→#W1 の順(★wt64: #S1/#S2 は解決済みを確認)。
 
 | ID | 候補 (§13対応) | 効果 | 工数目安 | 着手ファイル | 依存・注意 | 完了条件 |
 |---|---|---|---|---|---|---|
-| #S1 | `quiz/count` 到達不能の修正 (§13 A1) | Web/APIの件数取得が動く | 小(1行+実機確認) | `server/routes/QuizRoutes.kt:28,77` | 順序入替のみ。他ルート無影響 | `/api/quiz/count` が200を返す |
+| ~~#S1~~ | ✅解決済み(★wt64): `quiz/count` は既に `/{id}` より前に定義 | — | — | `server/routes/QuizRoutes.kt:31,36` | 実機での200確認のみ残る | `/api/quiz/count` が200を返す |
 | #D1 | schemas再生成 + 9→10テスト (§13 D1) | マイグレーション保証の回復 | 小〜中 | `app/schemas/`、`androidTest/.../MigrationTest.kt` | `exportSchema` 再ビルドで3/4/5.json生成→`migrate9To10`/`migrate1To10`追加 | `./gradlew connectedAndroidTest` 緑 |
-| #W1 | Web未配線の導線追加 (§13 C5) | PC閲覧の実用化 | 中(1タブずつ) | `web/src/api/client.ts`、`web/src/components/*` | 1機能ずつ(CORS#B1と連動)。最初は接続一覧かヒートマップ | 追加タブが実機APIで動く |
-| #S2 | CORS導入 (§13 B1) | ブラウザ実運用の安定 | 小〜中 | `app/build.gradle.kts`、`server/LocalServer.kt` | `ktor-server-cors` 追加+host許可設定。LAN警告UIと整合 | Vite(5173)→Ktor(8080)のPOSTが通る |
+| #W1 | Web未配線の導線追加 (§13 C5) | PC閲覧の実用化 | 中(1機能ずつ) | `web/src/api/client.ts`、`web/src/components/*` | ★wt64: CORSは導入済み。残るは お気に入り/削除/プラグイン一覧/quiz件数 の関数追加 | 追加機能が実機APIで動く |
+| ~~#S2~~ | ✅解決済み(★wt64): `install(CORS)` + 依存が共に存在 | — | — | `server/LocalServer.kt:55-64` | `anyHost()` のまま。実機でのPOST確認は未実施 | Vite(5173)→Ktor(8080)のPOSTが通る |
 | #S3 | トークン暗号化 (§13 B2) | 両端の平文保管を解消 | 中 | `server/TokenManager.kt`、`SettingsRepository` | EncryptedSharedPreferences移行+既存平文のワンタイム移行。PC側は運用注意喚起 | 再発行後も接続が維持される |
 | #I1 | Obsidian重複検査の修正 (§13 A2) | 再インポート複製の防止 | 小 | `importer/ObsidianImporter.kt:46` | title→ID解決クエリの追加。`DuplicateDetector` と重複しない範囲で | 同一Vault二重投入で件数不変 |
 | #Q1 | LLM生成JSONの堅牢化 (§13 A3) | 壊れ問の撲滅 | 小 | `brain/quiz/LlmQuizGenerator.kt:74-75` | kotlinx.serializationで構築。既存問の再生成不要 | `"`混じり回答でも保存が壊れない |

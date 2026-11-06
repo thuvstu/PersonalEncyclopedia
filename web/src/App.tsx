@@ -77,13 +77,17 @@ export default function App() {
       </nav>
       {navError && <div className="error banner">{navError}</div>}
       {tab === "entries" && (
-        <div className="main-split">
+        <div className={selectedId ? "main-split has-selection" : "main-split"}>
           <EntryList
             key={reloadKey}
             selectedId={selectedId}
             onSelect={setSelectedId}
           />
           <div className="right-column">
+            {/* ★wt64: スマホ幅でのみ表示(styles.css の .back-to-list)。PCでは display:none */}
+            <button className="back-to-list" onClick={() => setSelectedId(null)}>
+              ← 一覧に戻る
+            </button>
             <EntryDetail entryId={selectedId} onNavigate={(t) => void navigateToTitle(t)} />
             <GraphView entryId={selectedId} />
           </div>
