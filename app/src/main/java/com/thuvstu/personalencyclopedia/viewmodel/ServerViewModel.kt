@@ -34,8 +34,12 @@ class ServerViewModel @Inject constructor(
     private val studyPlusClient: StudyPlusClient   // ★§7.8
 ) : ViewModel() {
 
-    private val _isRunning = MutableStateFlow(false)
-    val isRunning: StateFlow<Boolean> = _isRunning
+    /**
+     * ★寿命分離: 稼働状態は LocalServer(@Singleton) が唯一のソース。
+     * 旧実装は ViewModel 独自の MutableStateFlow(false) だったため、設定画面を読み直すたびに
+     * 実サーバが起動中でも「停止中」と表示されていた。
+     */
+    val isRunning: StateFlow<Boolean> = localServer.isRunning
 
     val token: StateFlow<String?> = tokenManager.tokenFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -129,11 +133,11 @@ class ServerViewModel @Inject constructor(
 
     fun toggleServer() {
         viewModelScope.launch {
-            if (_isRunning.value) {
-                localServer.stop(); _isRunning.value = false
+            // ★寿命分離: 状態は LocalServer が保持するので、ここでは読み取るだけ。
+            if (localServer.isRunning.value) {
+                localServer.stop()
             } else {
                 localServer.start(port = settingsRepo.serverPort.first())
-                _isRunning.value = true
             }
         }
     }
@@ -294,8 +298,9 @@ class ServerViewModel @Inject constructor(
         viewModelScope.launch { _actionMessage.emit("可搬エクスポートを開始しました") }
     }
 
-    override fun onCleared() {
-        super.onCleared()
-        localServer.stop()
-    }
+    // ★寿命分離: 旧実装は onCleared() で localServer.stop() を呼んでいた。
+    // ServerViewModel は SettingsScreen の NavBackStackEntry にスコープされるため、
+    // 設定画面を離れるだけでサーバーが停止していた(PCから使えなくなる)。
+    // サーバーは @Singleton でありアプリ生存中は維持されるべきなので、ここでは止めない。
+    // 停止はユーザーが設定画面のSwitchをOFFにしたときだけ(toggleServer)。
 }

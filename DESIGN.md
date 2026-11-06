@@ -502,6 +502,9 @@ v15 (§8.10) で追加。`brain/task/TaskEngine.kt` のみ。**Repository層な�
 
 ### 7.1 LocalServer — 薄いエントリポイント
 - `@Singleton`。Netty 埋め込みサーバー、既定ポート 8080 (設定で変更可)。
+- **寿命はアプリ生存期間（★寿命分離 / wt63）**。稼働状態は `LocalServer.isRunning: StateFlow<Boolean>` が唯一のソースで、`ServerViewModel.isRunning` はこれを公開するだけ。停止は設定画面の Switch を OFF にしたときのみ。
+  - 旧実装は `ServerViewModel.onCleared()` で `localServer.stop()` を呼んでいた。同 ViewModel は `SettingsScreen` の NavBackStackEntry にスコープされるため、**設定画面を離れるだけでサーバーが停止**していた。加えて `_isRunning` が ViewModel 独自の `MutableStateFlow(false)` だったため、画面を開き直すと起動中でも「停止中」と表示されていた。
+  - Foreground Service 化は**していない**。常時稼働は前提とせず、「起動したら画面遷移では死なない」だけを保証する(設計判断の経緯は `docs/walkthrough63.md`)。
 - プラグイン構成: `ContentNegotiation`(JSON, `ignoreUnknownKeys=true`, `encodeDefaults=true`) + `Authentication`(Bearer "token-auth")。**`CORSプラグイン未導入**(依存・install共になし)。ブラウザ→8080の `Authorization` 付き要求はプリフライトで失敗し得る(§13 #1)。
 - **`/health` のみ認証なし**、他は `/api` 配下に8登録・全22エンドポイント (`LocalServer.kt:62-85`)。
 - 設計書 §10.1「ルーティング分割アーキテクチャ」: エンドポイント実装は `server/routes/`、DTO は `server/dto/` に集約。新ルート追加は「登録行を1行足すだけ」。

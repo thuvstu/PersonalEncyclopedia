@@ -19,6 +19,9 @@ import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.response.respond
 import io.ktor.server.routing.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,11 +37,17 @@ class LocalServer @Inject constructor(
 ) {
     private var server: EmbeddedServer<*, *>? = null
 
-    var isRunning = false
-        private set
+    private val _isRunning = MutableStateFlow(false)
+
+    /**
+     * ★寿命分離: 稼働状態の唯一のソース。
+     * 画面スコープの ViewModel が独自の Boolean を持つと、画面遷移だけで状態がズレる。
+     * UI はこの Flow を購読するだけにする(SettingsScreen → ServerViewModel.isRunning)。
+     */
+    val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
 
     fun start(port: Int = 8080) {
-        if (isRunning) return
+        if (_isRunning.value) return
 
         server = embeddedServer(Netty, port = port) {
             // ★#S2: CORS導入。LAN内ブラウザ（Vite dev等）からの Authorization 付きfetchを通す。
@@ -102,13 +111,13 @@ class LocalServer @Inject constructor(
             }
         }.also {
             it.start(wait = false)
-            isRunning = true
+            _isRunning.value = true
         }
     }
 
     fun stop() {
         server?.stop(1000, 2000)
         server = null
-        isRunning = false
+        _isRunning.value = false
     }
 }
