@@ -698,3 +698,216 @@ th {
 .conn-chip.strong { background: rgba(37,99,235,0.12); border-color: rgba(37,99,235,0.35); }
 .conn-chip.more { border-style: dashed; }
 .conn-note { font-size: 10px; opacity: 0.65; }
+
+/* ── ★wt64 レスポンシブ（スマホ幅対応） ──
+ * 幅ベースの @media が無く、.main-split が横並び固定だったため、
+ * 390px幅では詳細欄が70〜130pxしか残らなかった。
+ * 760px以下では「一覧 → タップで詳細 → 戻る」の master-detail に切り替える。
+ * PC側のレイアウトは一切変更しない（既定ルールは上にそのまま残す）。
+ */
+
+/* PCでは戻るボタンを出さない */
+.back-to-list {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  /* モバイルブラウザのアドレスバー伸縮に追従（未対応ブラウザは height:100% のまま） */
+  .app {
+    height: 100dvh;
+  }
+
+  /* ── 接続バー: 縦詰めして入力欄を幅いっぱいに ── */
+  .connection-bar {
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .connection-bar .brand {
+    flex-basis: 100%;
+    margin-right: 0;
+    font-size: 13px;
+  }
+
+  .connection-bar label {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+  }
+
+  .connection-bar input {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
+
+  .connection-bar input.port-input {
+    width: 56px;
+    flex: none;
+  }
+
+  .conn-status {
+    flex-basis: 100%;
+    font-size: 12px;
+  }
+
+  /* ── タブ: 折返さず横スクロール（縦スペースを食わない） ── */
+  .tabs {
+    padding: 6px 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    flex: none;
+    padding: 8px 12px;
+    white-space: nowrap;
+  }
+
+  /* ── 一覧/詳細: master-detail ── */
+  .main-split {
+    flex-direction: column;
+  }
+
+  .entry-pane {
+    width: 100%;
+    min-width: 0;
+    border-right: none;
+    /* 縦積みでは flex アイテムの min-height:auto がコンテンツ高に固定され、
+     * 一覧が長いと overflow:hidden で切られて下部に到達できなくなる。
+     * 0 にして縮ませ、内部の .entry-list(flex:1/overflow-y:auto) にスクロールを任せる。 */
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* 選択中は詳細だけを見せる。EntryList は mounted のままなので検索状態が保持される */
+  .main-split.has-selection .entry-pane {
+    display: none;
+  }
+
+  .main-split:not(.has-selection) .right-column {
+    display: none;
+  }
+
+  .back-to-list {
+    display: block;
+    flex: none;
+    margin: 0;
+    padding: 10px 12px;
+    text-align: left;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: var(--bg-panel);
+    color: var(--accent);
+    font-size: 14px;
+  }
+
+  .detail-pane {
+    flex: 1 1 auto;
+    padding: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  /* グラフは固定高さにして詳細を圧迫しない */
+  .graph-pane {
+    flex: 0 0 200px;
+    min-height: 0;
+  }
+
+  /* ── パネル共通 ── */
+  .panel {
+    padding: 12px;
+  }
+
+  .form-grid label {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .panel input,
+  .panel textarea,
+  .panel select {
+    max-width: 100%;
+  }
+
+  .tiptap-wrap {
+    padding: 8px 10px;
+    min-height: 180px;
+  }
+
+  .tiptap-wrap .tiptap {
+    min-height: 160px;
+  }
+
+  /* ── ヒートマップ: 90日でも横溢れさせない ── */
+  .heatmap {
+    gap: 1px;
+    max-width: 100%;
+  }
+
+  .heatmap-cell {
+    min-width: 0;
+  }
+
+  /* ── タップ領域を広げる ── */
+  button {
+    padding: 8px 12px;
+  }
+
+  .item {
+    padding: 12px 10px;
+  }
+
+  .chip {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .srs-grades {
+    flex-wrap: wrap;
+  }
+
+  .srs-card,
+  .quiz-card {
+    padding: 12px;
+    max-width: 100%;
+  }
+
+  .quiz-choices {
+    align-items: stretch;
+  }
+
+  .quiz-choice {
+    width: 100%;
+  }
+}
+
+/* ── ★wt65 詳細のアクション（お気に入り・削除） ── */
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+button.danger {
+  color: var(--error-text);
+  border-color: var(--error-text);
+}
+
+button.danger:hover:not(:disabled) {
+  background: var(--error-bg);
+}
+
+@media (max-width: 760px) {
+  .detail-actions button {
+    flex: 1 1 auto;
+  }
+}

@@ -156,6 +156,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ type, title, content }),
     }),
+  // ★wt65: サーバ実装済みだが client.ts に関数が無かった導線
+  // favorite はサーバ側でトグルする契約(EntriesRoutes.kt:94-101)。戻り値を正とする。
+  toggleFavorite: (id: string) =>
+    request<{ isFavorite: boolean }>(`/api/entries/${id}/favorite`, { method: "PATCH" }),
+  // softDelete して 204 を返す(EntriesRoutes.kt:87-92)。request が 204 を吸収する。
+  deleteEntry: (id: string) => request<void>(`/api/entries/${id}`, { method: "DELETE" }),
   search: (q: string, limit = 20, type?: string) =>
     request<Entry[]>(
       `/api/search?q=${encodeURIComponent(q)}&limit=${limit}${
