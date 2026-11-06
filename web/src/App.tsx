@@ -78,8 +78,10 @@ export default function App() {
       {navError && <div className="error banner">{navError}</div>}
       {tab === "entries" && (
         <div className={selectedId ? "main-split has-selection" : "main-split"}>
+          {/* ★wt65: key ではなく refreshKey で再読込する。key だと再マウントになり
+              検索語・型フィルタ・スクロール位置が飛んでいた。 */}
           <EntryList
-            key={reloadKey}
+            refreshKey={reloadKey}
             selectedId={selectedId}
             onSelect={setSelectedId}
           />
@@ -88,7 +90,16 @@ export default function App() {
             <button className="back-to-list" onClick={() => setSelectedId(null)}>
               ← 一覧に戻る
             </button>
-            <EntryDetail entryId={selectedId} onNavigate={(t) => void navigateToTitle(t)} />
+            <EntryDetail
+              entryId={selectedId}
+              onNavigate={(t) => void navigateToTitle(t)}
+              onChanged={() => setReloadKey((k) => k + 1)}
+              onDeleted={() => {
+                // ★wt65: 削除済みのエントリを詳細に残さない
+                setSelectedId(null);
+                setReloadKey((k) => k + 1);
+              }}
+            />
             <GraphView entryId={selectedId} />
           </div>
         </div>

@@ -5,9 +5,11 @@ import { ENTRY_TYPES, typeInfo, formatDate } from "../lib/entryTypes";
 interface Props {
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** ★wt65: 値が変わったら現在の検索語・型フィルタのまま再読込する(再マウントしない) */
+  refreshKey?: number;
 }
 
-export function EntryList({ selectedId, onSelect }: Props) {
+export function EntryList({ selectedId, onSelect, refreshKey = 0 }: Props) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState<string>("");
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -32,8 +34,10 @@ export function EntryList({ selectedId, onSelect }: Props) {
   };
 
   useEffect(() => {
-    void load("", "");
-  }, []);
+    // ★wt65: refreshKey が変わったときも現在の検索語・型フィルタのまま再読込する。
+    // 初回は query="" / type="" なので従来どおり全件読込になる。
+    void load(query, type);
+  }, [refreshKey]);
 
   const typeNames = Object.keys(ENTRY_TYPES);
 

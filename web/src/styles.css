@@ -887,3 +887,27 @@ th {
     width: 100%;
   }
 }
+
+/* ── ★wt65 詳細のアクション（お気に入り・削除） ── */
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+button.danger {
+  color: var(--error-text);
+  border-color: var(--error-text);
+}
+
+button.danger:hover:not(:disabled) {
+  background: var(--error-bg);
+}
+
+@media (max-width: 760px) {
+  .detail-actions button {
+    flex: 1 1 auto;
+  }
+}

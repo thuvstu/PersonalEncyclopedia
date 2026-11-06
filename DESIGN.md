@@ -561,16 +561,18 @@ DAO 8個 + `QuizGraderService` + `StickyNoteRepository`(wt56) を束ねて各ル
 ### 8.2 画面構成 (App.tsx の6タブ)
 | タブ | コンポーネント | 機能 | 備考 |
 |---|---|---|---|
-| エントリ | `EntryList` + `EntryDetail` + `GraphView` | 3ペイン分割。検索+型チップ絞り込み、Markdown描画、グラフ表示。**760px以下では master-detail に切替**(★wt64) | 型チップはクライアント側フィルタ |
+| エントリ | `EntryList` + `EntryDetail` + `GraphView` | 3ペイン分割。検索+型チップ絞り込み、Markdown描画、グラフ表示。**760px以下では master-detail に切替**(★wt64)。**お気に入りトグル・削除**(★wt65) | 型チップはクライアント側フィルタ。一覧は `refreshKey` で再読込(再マウントしない) |
 | つながり | `ConnectPanel` | 接続CRUD・候補approve/reject・ヒートマップ(90日)・SRS残件数 | `client.ts` の該当関数はすべて呼出済み |
 | 作成 | `EditorPanel` | Tiptapで新規エントリ作成(`api.createEntry`) | **更新はできない**(更新API自体が未実装。§13 G3) |
 | 単語帳 | `SrsPanel` | 復習カード → 答え表示 → grade 0-5 → 次カード | |
 | クイズ | `QuizPanel` | 形式チップはカタログ8種。MCQ/正誤ボタン、複数選択トグル、対応づけ左右タップ、並べ替えタップ、穴埋め欄、記述。**経過時間計測**、`__UNLEARNED__` 対応、正解+解説 | |
 | Ollama | `OllamaPanel` | LAN内Ollamaへ**直接** `/v1/chat/completions`。設定はlocalStorage。Android起動不要で補助AI使用可能(§7.7) | Ktorを経由しない |
 
-**Web導線の実測(★wt64)**: `client.ts` の27メソッドのうち**呼出0件は `getRecentStickyNotes` のみ**。接続CRUD・候補approve/reject・ヒートマップ(90日)・SRS残件数は**すべて `ConnectPanel` で配線済み**(旧記述「Web導線なし」は誤り)。
+**Web導線の実測(★wt65)**: `client.ts` の29メソッドのうち**呼出0件は `getRecentStickyNotes` のみ**。接続CRUD・候補approve/reject・ヒートマップ(90日)・SRS残件数は**すべて `ConnectPanel` で配線済み**(旧記述「Web導線なし」は誤り)。
 
-**サーバにあるが `client.ts` に関数自体がない** (次実装の余地。§15 #W1): `DELETE /api/entries/{id}`・`PATCH /api/entries/{id}/favorite`・`GET /api/quiz/{id}`・`GET /api/quiz/count`・`GET /api/plugins`。なお**エントリ更新はサーバ側にも存在しない**(§13 G3)。
+**★wt65で配線済み**: `PATCH /api/entries/{id}/favorite`(お気に入りトグル)・`DELETE /api/entries/{id}`(削除)。詳細ペインの `.detail-actions` から操作する。favorite はサーバ側でトグルする契約なので**戻り値 `{isFavorite}` を正**とし、削除は確認ダイアログを経て親が選択を解除する。
+
+**サーバにあるが `client.ts` に関数自体がない** (次実装の余地。§15 #W1): `GET /api/quiz/{id}`・`GET /api/quiz/count`・`GET /api/plugins`。なお**エントリ更新はサーバ側にも存在しない**(§13 G3)。
 
 ### 8.3 GraphView — React Flow による知識グラフ
 1. `/api/graph` でエッジ取得 → **N+1 で各ノードを `/api/entries/{id}` で並列フェッチ**(失敗時はID表示でフォールバック)。50k件規模では悪化するため、将来はサーバ側でノード同梱のAPI拡張が候補(§15 #W2)。
@@ -814,7 +816,7 @@ MainActivity.onCreate → handleIncomingIntent (共有 / PROCESS_TEXT / ショ�
 | C2 | △ | `UiSchemaRenderer.kt:13` | 定義のみ・参照ゼロ。プラグイン `renderSchema` 将来用 | 温存 |
 | C3 | △ | `RichText.kt:31 MarkdownText` | 定義のみ・参照ゼロ。WebView版に敗北 | 温存 |
 | C4 | △ | `EntryTypeSections.kt` | `EntryDetailScreen` から使用。wt49で死んでいた definition 分岐を RichContentView 版に一本化 | 済(wt49) |
-| C5 | △ | `web/src` 未配線群 | ★wt64 実測: 呼出0件は `getRecentStickyNotes` のみ。接続CRUD・候補承認・ヒートマップ・SRS件数は**配線済み**。未定義はお気に入り/削除/プラグイン一覧/quiz単体・件数 | → §15 #W1 |
+| C5 | △ | `web/src` 未配線群 | ★wt65: お気に入り/削除を配線済み。呼出0件は `getRecentStickyNotes` のみ。未定義はプラグイン一覧/quiz単体・件数 | → §15 #W1 |
 
 #### D. 乖離・陳腐化 (ドキュメントと実装の差)
 | # | 深刻度 | 対象 | 内容 | 着手点 |
@@ -911,7 +913,7 @@ Macrobenchmarkは個人開発1人で回すには複雑すぎる(Gradle Managed D
 |---|---|---|---|---|---|---|
 | ~~#S1~~ | ✅解決済み(★wt64): `quiz/count` は既に `/{id}` より前に定義 | — | — | `server/routes/QuizRoutes.kt:31,36` | 実機での200確認のみ残る | `/api/quiz/count` が200を返す |
 | #D1 | schemas再生成 + 9→10テスト (§13 D1) | マイグレーション保証の回復 | 小〜中 | `app/schemas/`、`androidTest/.../MigrationTest.kt` | `exportSchema` 再ビルドで3/4/5.json生成→`migrate9To10`/`migrate1To10`追加 | `./gradlew connectedAndroidTest` 緑 |
-| #W1 | Web未配線の導線追加 (§13 C5) | PC閲覧の実用化 | 中(1機能ずつ) | `web/src/api/client.ts`、`web/src/components/*` | ★wt64: CORSは導入済み。残るは お気に入り/削除/プラグイン一覧/quiz件数 の関数追加 | 追加機能が実機APIで動く |
+| #W1 | Web未配線の導線追加 (§13 C5) | PC閲覧の実用化 | 中(1機能ずつ) | `web/src/api/client.ts`、`web/src/components/*` | ★wt65: CORS導入済み・お気に入り/削除も配線済み。残るは プラグイン一覧/quiz単体・件数 | 追加機能が実機APIで動く |
 | ~~#S2~~ | ✅解決済み(★wt64): `install(CORS)` + 依存が共に存在 | — | — | `server/LocalServer.kt:55-64` | `anyHost()` のまま。実機でのPOST確認は未実施 | Vite(5173)→Ktor(8080)のPOSTが通る |
 | #S3 | トークン暗号化 (§13 B2) | 両端の平文保管を解消 | 中 | `server/TokenManager.kt`、`SettingsRepository` | EncryptedSharedPreferences移行+既存平文のワンタイム移行。PC側は運用注意喚起 | 再発行後も接続が維持される |
 | #I1 | Obsidian重複検査の修正 (§13 A2) | 再インポート複製の防止 | 小 | `importer/ObsidianImporter.kt:46` | title→ID解決クエリの追加。`DuplicateDetector` と重複しない範囲で | 同一Vault二重投入で件数不変 |
